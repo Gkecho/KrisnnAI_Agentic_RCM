@@ -25,6 +25,7 @@ include = ["krisnai*"]
 testpaths = ["tests"]
 
 [tool.ruff]
+extend-exclude = ["migrations/versions"]
 line-length = 100
 target-version = "py312"
 
@@ -33,3 +34,5 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]
+"krisnai/model/**" = ["E501"]
+"migrations/**" = ["E501"]

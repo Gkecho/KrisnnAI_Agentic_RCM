@@ -1,1 +1,15 @@
+"""Core data model. Importing this package registers every table on `Base.metadata`."""
 
+from krisnai.model.base import Base, Scoped
+from krisnai.model.claims import Ack277Ca, Ack999, Claim, ClaimDx, ClaimLine
+from krisnai.model.ingest import Event, SourceFile, Tenant
+from krisnai.model.reference import FeeSchedule, PatientRef, Payer, Provider
+from krisnai.model.remits import Adjustment, Payment, PlbAdjustment, Remit, RemitLine, RemitRemark
+from krisnai.model.scoping import tenant_session
+from krisnai.model.snapshots import ArSnapshot
+
+__all__ = [
+    "Ack277Ca", "Ack999", "Adjustment", "ArSnapshot", "Base", "Claim", "ClaimDx", "ClaimLine",
+    "Event", "FeeSchedule", "PatientRef", "Payer", "Payment", "PlbAdjustment", "Provider", "Remit",
+    "RemitLine", "RemitRemark", "Scoped", "SourceFile", "Tenant", "tenant_session",
+]  # fmt: skip
