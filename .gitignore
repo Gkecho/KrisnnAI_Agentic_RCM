@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+# Never commit real data or generated output
+/data/
+/out/
+*.bak
+*.mdf
+*.ldf

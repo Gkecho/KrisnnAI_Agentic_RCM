@@ -1,0 +1,35 @@
+[project]
+name = "krisnai"
+version = "0.0.1"
+description = "KrisnAI RCM - intelligence layer above PM/EHR and clearinghouse"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.110",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pyodbc>=5.0",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["krisnai*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
