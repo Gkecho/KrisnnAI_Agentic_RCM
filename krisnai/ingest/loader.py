@@ -299,6 +299,33 @@ def _write_fee_schedule(s: Session, sf: int, rows: list[dict]) -> int:
     return len(rows)
 
 
+def ingest_parsed(
+    engine: Engine, tenant_id: int, name: str, fingerprint: str, file_type: str, parsed: list, size: int = 0
+) -> IngestResult:
+    """Load already-parsed transactions that did not come from file bytes (e.g. the Valley database).
+
+    `fingerprint` plays the role of the file hash: loading the same fingerprint twice is a no-op.
+    """
+    sha = hashlib.sha256(fingerprint.encode()).hexdigest()
+    with tenant_session(engine, tenant_id) as s:
+        existing = s.scalars(select(SourceFile).where(SourceFile.file_sha256 == sha)).first()
+        if existing is not None:
+            return IngestResult(name, "skipped", file_type, f"already loaded as source_file {existing.id}")
+        sf = SourceFile(file_name=name[:500], file_sha256=sha, file_type=file_type, byte_size=size, status="loaded")
+        s.add(sf)
+        s.flush()
+        try:
+            n = _write_x12(s, sf.id, parsed)
+            if n == 0:
+                s.rollback()
+                return IngestResult(name, "skipped", file_type, "same transactions already loaded")
+            s.commit()
+        except Exception:
+            s.rollback()
+            raise
+        return IngestResult(name, "loaded", file_type, events=n)
+
+
 def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> IngestResult:
     raw = path.read_bytes()
     sha = hashlib.sha256(raw).hexdigest()

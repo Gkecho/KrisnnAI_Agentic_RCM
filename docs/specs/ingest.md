@@ -40,3 +40,28 @@ claim.
 
 ## Not done here
 Matching claim to remit (M3, `match_method` stays NULL), KPIs (M4), 837I/837D, 270/271.
+
+## Valley Wellness loader (`krisnai load-valley`)
+Source: the fabricated PostgreSQL database `valleywellnessedi` (read-only session; Valley is never written).
+`--files N` loads the first N 837P files (about 860 claims each, ordered by file name) plus the 835 files that
+remit those claims (`--max-remit-files`, default 500). Each Valley source file becomes one `source_file`
+(fingerprint `valley:<type>:<source_file>`), so reloading is a no-op.
+
+| KrisnAI | Valley table(s) | Join |
+|---|---|---|
+| claim | edi_837p_claims + _header (control numbers) | per source_file |
+| provider / payer / patient | _billing_provider, _payer, _subscriber | billing_hl_id / subscriber_hl_id |
+| claim_line, claim_dx | _service_lines, _diagnosis_codes | (source_file, claim_number) |
+| payment, plb | edi_835_payment_header, _payer, _provider_adjustments | one payment per source_file |
+| remit, remit_line | edi_835_claims, _service_payments | (source_file, claim_number, line_seq) |
+| adjustment, remark | edi_835_adjustments (reason, RARC) | line_seq (all Valley adjustments are line level) |
+| allowed amount | edi_835_amounts qualifier B6 | line_seq |
+| patient hash | edi_835_claim_parties role QC (835), subscriber member_id (837) | same salted hash |
+
+Valley stores amounts and dates as text. Conversion is exact (`Decimal`, CCYYMMDD); a row that cannot be converted
+or joined is skipped and counted in the report, never guessed. Orphan remits (835 claims with no 837 claim loaded)
+are kept, since leakage analysis needs them.
+
+First live check (1 837P file, 11 remit files): 10 claims, 103 remits, 201 remit lines; every line balances
+(charge = paid + adjustments), every remit's totals equal its lines, and each payment equals the sum of its
+claim payments less its PLB.
