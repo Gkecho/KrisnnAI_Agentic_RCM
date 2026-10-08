@@ -1,0 +1,1196 @@
+# valleywellnessedi (AWS RDS PostgreSQL) - column names and types only, no data
+# table.column  type  nullable
+
+[atb_detail]
+id  bigint  NOT NULL
+source_file  text  NULL
+account_number  text  NULL
+patient_name  text  NULL
+patient_last_name  text  NULL
+patient_first_name  text  NULL
+patient_dob  text  NULL
+payer_name  text  NULL
+payer_id  text  NULL
+financial_class  text  NULL
+claim_number  text  NULL
+date_of_service  text  NULL
+billing_provider  text  NULL
+rendering_provider  text  NULL
+total_charges  numeric  NULL
+total_payments  numeric  NULL
+total_adjustments  numeric  NULL
+total_balance  numeric  NULL
+insurance_balance  numeric  NULL
+patient_balance  numeric  NULL
+aging_0_30  numeric  NULL
+aging_31_60  numeric  NULL
+aging_61_90  numeric  NULL
+aging_91_120  numeric  NULL
+aging_121_150  numeric  NULL
+aging_151_180  numeric  NULL
+aging_180_plus  numeric  NULL
+last_payment_date  text  NULL
+last_payment_amount  numeric  NULL
+last_billed_date  text  NULL
+claim_status  text  NULL
+aging_bucket_sum  numeric  NULL
+balance_variance  numeric  NULL
+is_balanced  boolean  NULL
+content_hash  text  NULL
+imported_at  timestamp without time zone  NULL
+dos_date  date  NULL
+last_billed_date_parsed  date  NULL
+tenant_id  bigint  NULL
+
+[dc_claim_year_shift_20260918]
+claim_number  text  NULL
+orig_dos  date  NULL
+shift_years  integer  NULL
+
+[dc_don_cp]
+claim_number  text  NULL
+source_file  text  NULL
+payer_code  text  NULL
+rn_payer  bigint  NULL
+rn_file  bigint  NULL
+rn_all  bigint  NULL
+
+[dc_don_file_cnt]
+source_file  text  NOT NULL
+cnt  integer  NULL
+
+[dc_don_payer_cnt]
+payer_code  text  NOT NULL
+cnt  integer  NULL
+
+[dc_dos_pool]
+idx  integer  NOT NULL
+dos  date  NULL
+
+[dc_lag_pool]
+name  text  NOT NULL
+idx  integer  NOT NULL
+lag  integer  NULL
+
+[dc_lag_pool_n]
+name  text  NOT NULL
+n  integer  NULL
+
+[dc_restore_ctx]
+hl_id  text  NULL
+cn  text  NULL
+new_dos  date  NULL
+source_file  text  NULL
+payer_name  text  NULL
+payer_code  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+dob  text  NULL
+member_id  text  NULL
+donor_cn  text  NULL
+prov_donor_cn  text  NULL
+donor_id  bigint  NULL
+donor_dos  date  NULL
+span  integer  NULL
+billing_hl  text  NULL
+txn_date  date  NULL
+
+[dc_restore_donor]
+hl_id  text  NULL
+new_claim_number  text  NULL
+donor_cn  text  NULL
+prov_donor_cn  text  NULL
+
+[dc_restore_map]
+hl_id  text  NULL
+source_file  text  NULL
+pid  bigint  NULL
+last_name  text  NULL
+first_name  text  NULL
+dob  text  NULL
+member_id  text  NULL
+payer_name  text  NULL
+payer_code  text  NULL
+rn  bigint  NULL
+new_claim_number  text  NULL
+new_dos  date  NULL
+
+[dc_spike_claims]
+claim_number  text  NULL
+id  bigint  NULL
+old_dos  date  NULL
+old_end_txt  text  NULL
+old_end  text  NULL
+old_txn  date  NULL
+
+[dc_spike_new]
+claim_number  text  NULL
+id  bigint  NULL
+old_dos  date  NULL
+old_txn  date  NULL
+span  integer  NULL
+new_dos  date  NULL
+
+[denial_risk_cpt_global]
+procedure_code  text  NOT NULL
+claim_count  integer  NOT NULL
+denied_count  integer  NOT NULL
+denial_rate  numeric  NOT NULL
+computed_at  timestamp without time zone  NOT NULL
+
+[denial_risk_payer_cpt]
+payer_name  text  NOT NULL
+procedure_code  text  NOT NULL
+claim_count  integer  NOT NULL
+denied_count  integer  NOT NULL
+raw_denial_rate  numeric  NOT NULL
+blended_denial_rate  numeric  NOT NULL
+is_low_volume  boolean  NOT NULL
+computed_at  timestamp without time zone  NOT NULL
+
+[denial_risk_payer_cpt_icd]
+payer_name  text  NOT NULL
+procedure_code  text  NOT NULL
+diagnosis_code  text  NOT NULL
+claim_count  integer  NOT NULL
+denied_count  integer  NOT NULL
+raw_denial_rate  numeric  NOT NULL
+blended_denial_rate  numeric  NOT NULL
+is_low_volume  boolean  NOT NULL
+computed_at  timestamp without time zone  NOT NULL
+
+[denial_risk_scored_claims]
+claim_number  text  NULL
+payer_name  text  NULL
+procedure_code  text  NULL
+diagnosis_code  text  NULL
+rate  numeric  NULL
+backing_claim_count  integer  NULL
+is_low_volume  boolean  NULL
+grain  text  NULL
+
+[edi_835_adjustments]
+id  bigint  NOT NULL
+source_file  text  NULL
+level  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+group_code  text  NULL
+group_label  text  NULL
+reason_code  text  NULL
+amount  text  NULL
+quantity  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+amount_num  numeric  NULL
+tenant_id  bigint  NULL
+remark_code  text  NULL
+remark_code_2  text  NULL
+remark_qualifier  text  NULL
+
+[edi_835_amounts]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+amount  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_claim_parties]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+role_code  text  NULL
+role  text  NULL
+last_name_or_org  text  NULL
+first_name  text  NULL
+id_qualifier  text  NULL
+id_code  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_claims]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+claim_status_code  text  NULL
+total_charge_amount  text  NULL
+total_paid_amount  text  NULL
+patient_responsibility_amount  text  NULL
+claim_filing_indicator_code  text  NULL
+payer_claim_control_number  text  NULL
+facility_type_code  text  NULL
+claim_frequency_code  text  NULL
+patient_status_code  text  NULL
+drg_code  text  NULL
+drg_weight  text  NULL
+discharge_fraction  text  NULL
+moa_mia_raw  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+total_paid_amount_num  numeric  NULL
+tenant_id  bigint  NULL
+last_payment_date  date  NULL
+
+[edi_835_dates]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+raw_value  text  NULL
+formatted  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_payee]
+id  bigint  NOT NULL
+source_file  text  NULL
+name  text  NULL
+id_qualifier  text  NULL
+npi_or_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+tax_id  text  NULL
+contact_name  text  NULL
+contact_phone  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_payer]
+id  bigint  NOT NULL
+source_file  text  NULL
+name  text  NULL
+id_qualifier  text  NULL
+payer_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+contact_name  text  NULL
+contact_phone  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_payment_header]
+id  bigint  NOT NULL
+source_file  text  NULL
+sender_id  text  NULL
+receiver_id  text  NULL
+interchange_date  text  NULL
+interchange_time  text  NULL
+interchange_control_number  text  NULL
+functional_id  text  NULL
+application_sender  text  NULL
+application_receiver  text  NULL
+group_date  text  NULL
+group_control_number  text  NULL
+version  text  NULL
+transaction_set_id  text  NULL
+transaction_control_number  text  NULL
+total_payment_amount  text  NULL
+credit_debit_flag  text  NULL
+payment_method  text  NULL
+payment_format  text  NULL
+sender_bank_id  text  NULL
+sender_account_number  text  NULL
+receiver_bank_id  text  NULL
+receiver_account_number  text  NULL
+payment_date  text  NULL
+trace_type  text  NULL
+trace_number  text  NULL
+payer_id  text  NULL
+currency_entity  text  NULL
+currency_code  text  NULL
+production_date  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_provider_adjustments]
+id  bigint  NOT NULL
+source_file  text  NULL
+provider_id  text  NULL
+fiscal_period_date  text  NULL
+adjustment_reason_code  text  NULL
+reference_id  text  NULL
+amount  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_quantities]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+quantity  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_raw_segments]
+id  bigint  NOT NULL
+source_file  text  NULL
+segment_seq  integer  NULL
+segment_id  text  NULL
+hl_id  text  NULL
+hl_level  text  NULL
+loop_name  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+element_pos  integer  NULL
+component_pos  integer  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_references]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_835_service_payments]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+procedure_qualifier  text  NULL
+procedure_code  text  NULL
+modifiers  text  NULL
+line_charge_amount  text  NULL
+line_paid_amount  text  NULL
+revenue_code  text  NULL
+units_paid  text  NULL
+original_procedure_code  text  NULL
+original_units  text  NULL
+service_date  text  NULL
+line_control_number  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+line_paid_amount_num  numeric  NULL
+line_charge_amount_allocated  numeric  NULL
+tenant_id  bigint  NULL
+transaction_date  date  NULL
+
+[edi_837d_billing_provider]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+last_name_or_org  text  NULL
+npi  text  NULL
+tax_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+taxonomy_code  text  NULL
+pay_to_name  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_claim_providers]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+role_code  text  NULL
+role  text  NULL
+last_name_or_org  text  NULL
+first_name  text  NULL
+npi  text  NULL
+taxonomy_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_claims]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+billing_hl_id  text  NULL
+subscriber_hl_id  text  NULL
+patient_hl_id  text  NULL
+total_charge_amount  text  NULL
+place_of_service_code  text  NULL
+facility_qualifier  text  NULL
+frequency_code  text  NULL
+provider_signature_on_file  text  NULL
+assignment_of_benefits  text  NULL
+benefits_assignment_cert  text  NULL
+release_of_info_code  text  NULL
+onset_date  text  NULL
+accident_date  text  NULL
+other_claim_number  text  NULL
+orthodontic_months_remaining  text  NULL
+orthodontic_treatment_indicator  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_dates]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+raw_value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_diagnosis_codes]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+sequence  integer  NULL
+qualifier  text  NULL
+category  text  NULL
+code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_header]
+id  bigint  NOT NULL
+source_file  text  NULL
+sender_id  text  NULL
+receiver_id  text  NULL
+interchange_date  text  NULL
+interchange_time  text  NULL
+interchange_control_number  text  NULL
+functional_id  text  NULL
+application_sender  text  NULL
+application_receiver  text  NULL
+group_date  text  NULL
+group_control_number  text  NULL
+version  text  NULL
+transaction_set_id  text  NULL
+transaction_control_number  text  NULL
+transaction_purpose  text  NULL
+reference_id  text  NULL
+transaction_date  text  NULL
+transaction_time  text  NULL
+transaction_type  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_patient]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+subscriber_hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_payer]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_context_hl_id  text  NULL
+name  text  NULL
+payer_id_qualifier  text  NULL
+payer_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_raw_segments]
+id  bigint  NOT NULL
+source_file  text  NULL
+segment_seq  integer  NULL
+segment_id  text  NULL
+hl_id  text  NULL
+hl_level  text  NULL
+loop_name  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+element_pos  integer  NULL
+component_pos  integer  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_references]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_service_lines]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+line_number  text  NULL
+procedure_qualifier  text  NULL
+procedure_code  text  NULL
+modifiers  text  NULL
+line_charge_amount  text  NULL
+oral_cavity_code  text  NULL
+prosthesis_code  text  NULL
+quantity  text  NULL
+diagnosis_pointers  text  NULL
+service_date  text  NULL
+service_date_from  text  NULL
+service_date_to  text  NULL
+line_control_number  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_subscriber]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_tooth_information]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+qualifier  text  NULL
+system  text  NULL
+tooth_code  text  NULL
+surfaces  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837d_tooth_status]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+tooth_code  text  NULL
+tooth_status_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_billing_provider]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+last_name_or_org  text  NULL
+npi  text  NULL
+tax_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+taxonomy_code  text  NULL
+pay_to_name  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_claim_providers]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+role_code  text  NULL
+role  text  NULL
+last_name_or_org  text  NULL
+first_name  text  NULL
+npi  text  NULL
+taxonomy_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_claims]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+billing_hl_id  text  NULL
+subscriber_hl_id  text  NULL
+patient_hl_id  text  NULL
+total_charge_amount  text  NULL
+facility_type_code  text  NULL
+facility_qualifier  text  NULL
+frequency_code  text  NULL
+provider_signature_on_file  text  NULL
+assignment_of_benefits  text  NULL
+benefits_assignment_cert  text  NULL
+release_of_info_code  text  NULL
+admission_type_code  text  NULL
+admission_source_code  text  NULL
+patient_status_code  text  NULL
+statement_from  text  NULL
+statement_to  text  NULL
+admission_date  text  NULL
+discharge_hour  text  NULL
+other_claim_number  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_dates]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+raw_value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_diagnosis_codes]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+sequence  integer  NULL
+qualifier  text  NULL
+category  text  NULL
+code  text  NULL
+extra_value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_header]
+id  bigint  NOT NULL
+source_file  text  NULL
+sender_id  text  NULL
+receiver_id  text  NULL
+interchange_date  text  NULL
+interchange_time  text  NULL
+interchange_control_number  text  NULL
+functional_id  text  NULL
+application_sender  text  NULL
+application_receiver  text  NULL
+group_date  text  NULL
+group_control_number  text  NULL
+version  text  NULL
+transaction_set_id  text  NULL
+transaction_control_number  text  NULL
+transaction_purpose  text  NULL
+reference_id  text  NULL
+transaction_date  text  NULL
+transaction_time  text  NULL
+transaction_type  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_patient]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+subscriber_hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_payer]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_context_hl_id  text  NULL
+name  text  NULL
+payer_id_qualifier  text  NULL
+payer_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_raw_segments]
+id  bigint  NOT NULL
+source_file  text  NULL
+segment_seq  integer  NULL
+segment_id  text  NULL
+hl_id  text  NULL
+hl_level  text  NULL
+loop_name  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+element_pos  integer  NULL
+component_pos  integer  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_references]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_service_lines]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+line_number  text  NULL
+revenue_code  text  NULL
+procedure_code  text  NULL
+procedure_qualifier  text  NULL
+modifiers  text  NULL
+line_charge_amount  text  NULL
+unit_measure  text  NULL
+service_units  text  NULL
+service_date  text  NULL
+service_date_from  text  NULL
+service_date_to  text  NULL
+line_control_number  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837i_subscriber]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_billing_provider]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+last_name_or_org  text  NULL
+npi  text  NULL
+tax_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+taxonomy_code  text  NULL
+pay_to_name  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_claim_providers]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+role_code  text  NULL
+role  text  NULL
+last_name_or_org  text  NULL
+first_name  text  NULL
+npi  text  NULL
+taxonomy_code  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_claims]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+billing_hl_id  text  NULL
+subscriber_hl_id  text  NULL
+patient_hl_id  text  NULL
+total_charge_amount  text  NULL
+place_of_service_code  text  NULL
+facility_qualifier  text  NULL
+frequency_code  text  NULL
+provider_signature_on_file  text  NULL
+assignment_of_benefits  text  NULL
+benefits_assignment_cert  text  NULL
+release_of_info_code  text  NULL
+onset_date  text  NULL
+accident_date  text  NULL
+initial_treatment_date  text  NULL
+other_claim_number  text  NULL
+claim_service_date_start  text  NULL
+claim_service_date_end  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+total_charge_amount_num  numeric  NULL
+claim_dos_fallback  date  NULL
+transaction_date  date  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_dates]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+raw_value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_diagnosis_codes]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+sequence  integer  NULL
+qualifier  text  NULL
+category  text  NULL
+code  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_header]
+id  bigint  NOT NULL
+source_file  text  NULL
+sender_id  text  NULL
+receiver_id  text  NULL
+interchange_date  text  NULL
+interchange_time  text  NULL
+interchange_control_number  text  NULL
+functional_id  text  NULL
+application_sender  text  NULL
+application_receiver  text  NULL
+group_date  text  NULL
+group_control_number  text  NULL
+version  text  NULL
+transaction_set_id  text  NULL
+transaction_control_number  text  NULL
+transaction_purpose  text  NULL
+reference_id  text  NULL
+transaction_date  text  NULL
+transaction_time  text  NULL
+transaction_type  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_patient]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+subscriber_hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_payer]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_context_hl_id  text  NULL
+name  text  NULL
+payer_id_qualifier  text  NULL
+payer_id  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_raw_segments]
+id  bigint  NOT NULL
+source_file  text  NULL
+segment_seq  integer  NULL
+segment_id  text  NULL
+hl_id  text  NULL
+hl_level  text  NULL
+loop_name  text  NULL
+claim_seq  integer  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+element_pos  integer  NULL
+component_pos  integer  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_references]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  text  NULL
+qualifier  text  NULL
+label  text  NULL
+value  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_service_lines]
+id  bigint  NOT NULL
+source_file  text  NULL
+claim_number  text  NULL
+line_seq  integer  NULL
+line_number  text  NULL
+procedure_qualifier  text  NULL
+procedure_code  text  NULL
+modifiers  text  NULL
+line_charge_amount  text  NULL
+unit_measure  text  NULL
+service_units  text  NULL
+place_of_service  text  NULL
+diagnosis_pointers  text  NULL
+diagnosis_pointer_codes  text  NULL
+emergency_indicator  text  NULL
+service_date  text  NULL
+service_date_from  text  NULL
+service_date_to  text  NULL
+line_control_number  text  NULL
+rendering_provider_npi  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+line_charge_amount_num  numeric  NULL
+service_date_parsed  date  NULL
+transaction_date  date  NULL
+tenant_id  bigint  NULL
+
+[edi_837p_subscriber]
+id  bigint  NOT NULL
+source_file  text  NULL
+hl_id  text  NULL
+billing_hl_id  text  NULL
+last_name  text  NULL
+first_name  text  NULL
+member_id  text  NULL
+group_number  text  NULL
+address  text  NULL
+city  text  NULL
+state  text  NULL
+zip  text  NULL
+dob  text  NULL
+gender  text  NULL
+payer_responsibility  text  NULL
+relationship_code  text  NULL
+claim_filing_code  text  NULL
+source_row_id  text  NULL
+imported_at  timestamp without time zone  NULL
+tenant_id  bigint  NULL
+
+[opportunity_action_item]
+id  bigint  NOT NULL
+finding_id  bigint  NOT NULL
+owner  text  NULL
+status  text  NOT NULL
+dependency_notes  text  NULL
+updated_by  text  NULL
+created_at  timestamp without time zone  NOT NULL
+updated_at  timestamp without time zone  NOT NULL
+
+[opportunity_action_item_history]
+id  bigint  NOT NULL
+finding_id  bigint  NOT NULL
+previous_owner  text  NULL
+new_owner  text  NULL
+previous_status  text  NULL
+new_status  text  NULL
+previous_dependency_notes  text  NULL
+new_dependency_notes  text  NULL
+updated_by  text  NULL
+created_at  timestamp without time zone  NOT NULL
+
+[opportunity_finding]
+id  bigint  NOT NULL
+engagement_id  text  NULL
+rule_id  text  NOT NULL
+rule_version  integer  NOT NULL
+finding_category  text  NOT NULL
+title  text  NOT NULL
+description  text  NOT NULL
+finding_count  integer  NOT NULL
+related_claim_ids  ARRAY  NOT NULL
+payer_name  text  NULL
+provider_name  text  NULL
+facility_name  text  NULL
+cpt_code  text  NULL
+financial_basis_type  text  NOT NULL
+financial_value  numeric  NULL
+financial_value_low  numeric  NULL
+financial_value_high  numeric  NULL
+confidence_level  smallint  NOT NULL
+evidence_basis  text  NOT NULL
+evidence_completeness  text  NOT NULL
+confidence_explanation  text  NOT NULL
+recoverability  text  NOT NULL
+effort  text  NOT NULL
+time_sensitivity  text  NOT NULL
+recommended_action  text  NOT NULL
+validation_status  text  NOT NULL
+validated_amount  numeric  NULL
+validation_rationale  text  NULL
+sme_identity  text  NULL
+reviewed_at  timestamp without time zone  NULL
+created_at  timestamp without time zone  NOT NULL
+calculation_run_id  text  NOT NULL
+source_lineage  jsonb  NOT NULL
+exclusion_status  boolean  NOT NULL
+exclusion_reason  text  NULL
+dedup_key  text  NOT NULL
+tenant_id  bigint  NULL
+
+[opportunity_finding_validation_history]
+id  bigint  NOT NULL
+finding_id  bigint  NOT NULL
+action  text  NOT NULL
+sme_identity  text  NOT NULL
+rationale  text  NULL
+previous_validation_status  text  NULL
+new_validation_status  text  NOT NULL
+previous_amount  numeric  NULL
+new_amount  numeric  NULL
+evidence_requested  text  NULL
+exclusion_reason  text  NULL
+comments  text  NULL
+rule_version_reviewed  integer  NOT NULL
+created_at  timestamp without time zone  NOT NULL
+
+[opportunity_rule]
+rule_id  text  NOT NULL
+name  text  NOT NULL
+description  text  NULL
+category  text  NOT NULL
+method_type  text  NOT NULL
+owner  text  NULL
+version  integer  NOT NULL
+effective_date  date  NOT NULL
+evidence_basis  text  NULL
+enabled  boolean  NOT NULL
+configuration  jsonb  NOT NULL
+created_at  timestamp without time zone  NOT NULL
+updated_at  timestamp without time zone  NOT NULL
+
+[opportunity_rule_history]
+id  bigint  NOT NULL
+rule_id  text  NOT NULL
+version  integer  NOT NULL
+snapshot  jsonb  NOT NULL
+changed_by  text  NULL
+changed_at  timestamp without time zone  NOT NULL
+
+[payer_crosswalk]
+tenant_id  bigint  NOT NULL
+raw_payer_name  text  NOT NULL
+canonical_payer_name  text  NOT NULL
+is_valid_payer  boolean  NOT NULL
+match_method  text  NOT NULL
+match_score  numeric  NULL
+raw_claim_count  integer  NOT NULL
+built_at  timestamp without time zone  NOT NULL
+
+[payer_filing_deadlines]
+payer_name  text  NOT NULL
+filing_days  integer  NOT NULL
+appeal_days  integer  NOT NULL
+updated_at  timestamp without time zone  NOT NULL
+
+[payment_prediction_cpt_global]
+procedure_code  text  NOT NULL
+claim_count  integer  NOT NULL
+total_charge  numeric  NOT NULL
+total_paid  numeric  NOT NULL
+paid_ratio  numeric  NOT NULL
+computed_at  timestamp without time zone  NOT NULL
+
+[payment_prediction_payer_cpt]
+payer_name  text  NOT NULL
+procedure_code  text  NOT NULL
+claim_count  integer  NOT NULL
+total_charge  numeric  NOT NULL
+total_paid  numeric  NOT NULL
+raw_paid_ratio  numeric  NOT NULL
+blended_paid_ratio  numeric  NOT NULL
+is_low_volume  boolean  NOT NULL
+computed_at  timestamp without time zone  NOT NULL
+
+[tenants]
+id  bigint  NOT NULL
+name  text  NOT NULL
+slug  text  NOT NULL
+status  text  NOT NULL
+mfa_required  boolean  NOT NULL
+created_by  text  NULL
+created_at  timestamp without time zone  NOT NULL
+updated_at  timestamp without time zone  NOT NULL
+data_retention_days  integer  NOT NULL
