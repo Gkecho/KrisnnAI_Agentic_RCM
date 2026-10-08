@@ -39,9 +39,7 @@ class SourceFile(Scoped, Base):
 
     file_name: Mapped[str] = col(String(500), "file name as received (no PHI in names)")
     file_sha256: Mapped[str] = col(CHAR(64), "SHA-256 of the file bytes")
-    file_type: Mapped[str] = col(
-        String(20), "837P | 835 | 999 | 277CA | fee_schedule | ar_snapshot"
-    )
+    file_type: Mapped[str] = col(String(20), "837P | 835 | 999 | 277CA | fee_schedule | ar_snapshot")
     byte_size: Mapped[int] = col(BigInteger, "file size in bytes")
     status: Mapped[str] = col(String(20), "loaded | failed")
     failure_reason: Mapped[str | None] = col(String(1000), "parser error text when status = failed")
@@ -56,14 +54,10 @@ class Event(Scoped, FromFile, Base):
     __tablename__ = "event"
     __table_args__ = scoped(unique=[("source_file_id", "isa13", "gs06", "st02", "seq_in_file")])
 
-    event_type: Mapped[str] = col(
-        String(40), "837P.claim | 835.remit | 999.ack | 277CA.claim_status | ..."
-    )
+    event_type: Mapped[str] = col(String(40), "837P.claim | 835.remit | 999.ack | 277CA.claim_status | ...")
     isa13: Mapped[str] = col(String(9), "ISA13 interchange control number")
     gs06: Mapped[str] = col(String(9), "GS06 group control number")
     st02: Mapped[str] = col(String(9), "ST02 transaction set control number")
     seq_in_file: Mapped[int] = col(Integer, "position of this event within its transaction set")
     known_at: Mapped[datetime] = col(DateTime, "when the data became known (point-in-time key)")
-    payload: Mapped[str] = col(
-        Text, "raw segments of the event as JSON, PHI-bearing, stays in DB only"
-    )
+    payload: Mapped[str] = col(Text, "the parsed record as JSON; patient identifiers are already hashed, so no PHI")

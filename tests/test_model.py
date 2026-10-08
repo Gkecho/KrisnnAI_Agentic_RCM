@@ -48,9 +48,7 @@ def engine():
 
 def load_file(eng, tenant_id, sha="a" * 64):
     with tenant_session(eng, tenant_id) as s:
-        f = m.SourceFile(
-            file_name="x.x12", file_sha256=sha, file_type="837P", byte_size=1, status="loaded"
-        )
+        f = m.SourceFile(file_name="x.x12", file_sha256=sha, file_type="837P", byte_size=1, status="loaded")
         s.add(f)
         s.commit()
         return f.id
@@ -79,9 +77,7 @@ def test_no_float_columns_and_dates_are_dates():
 
 
 def test_no_raw_phi_columns():
-    banned = re.compile(
-        r"(first|last|full)_?name|patient_name|dob|birth|ssn|member_?id|address|phone"
-    )
+    banned = re.compile(r"(first|last|full)_?name|patient_name|dob|birth|ssn|member_?id|address|phone")
     for t in TABLES.values():
         for c in t.columns:
             assert not banned.search(c.name), f"{t.name}.{c.name} looks like raw PHI"
@@ -143,10 +139,7 @@ def test_cross_tenant_leak_every_scoped_model_returns_only_own_rows(engine):
             for model in (m.SourceFile, m.Payer, m.Provider, m.PatientRef):
                 rows = s.scalars(select(model)).all()
                 assert len(rows) == 1 and rows[0].tenant_id == tid, model.__name__
-            assert (
-                s.scalars(select(m.Payer).where(m.Payer.payer_id_code == f"PAY{3 - tid}")).first()
-                is None
-            )
+            assert s.scalars(select(m.Payer).where(m.Payer.payer_id_code == f"PAY{3 - tid}")).first() is None
 
 
 def test_every_scoped_model_query_is_filtered_by_tenant_in_sql(engine):
@@ -156,11 +149,7 @@ def test_every_scoped_model_query_is_filtered_by_tenant_in_sql(engine):
     def _capture(_conn, _cur, statement, _params, _ctx, _many):
         seen.append(statement)
 
-    models = [
-        c
-        for c in vars(m).values()
-        if isinstance(c, type) and issubclass(c, m.Scoped) and c is not m.Scoped
-    ]
+    models = [c for c in vars(m).values() if isinstance(c, type) and issubclass(c, m.Scoped) and c is not m.Scoped]
     assert len(models) == len(EXPECTED_TABLES) - 1  # every table except tenant
     with tenant_session(engine, 1) as s:
         for model in models:
@@ -211,9 +200,7 @@ def test_adjustment_group_code_is_constrained(engine):
 
 def _alembic_cfg(buffer=None):
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-    cfg.set_main_option(
-        "script_location", os.path.join(os.path.dirname(__file__), "..", "migrations")
-    )
+    cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "migrations"))
     if buffer is not None:
         cfg.output_buffer = buffer
     return cfg
@@ -244,16 +231,12 @@ def test_migration_matches_models_on_a_real_database(tmp_path, monkeypatch):
     command.upgrade(_alembic_cfg(), "head")
     eng = create_engine(url)
     with eng.connect() as conn:
-        diff = compare_metadata(
-            MigrationContext.configure(conn, opts={"compare_type": False}), Base.metadata
-        )
+        diff = compare_metadata(MigrationContext.configure(conn, opts={"compare_type": False}), Base.metadata)
     assert diff == []
     command.downgrade(_alembic_cfg(), "base")
 
 
-@pytest.mark.skipif(
-    not os.environ.get("KRISNAI_TEST_ALEMBIC_URL"), reason="needs a SQL Server test DB"
-)
+@pytest.mark.skipif(not os.environ.get("KRISNAI_TEST_ALEMBIC_URL"), reason="needs a SQL Server test DB")
 def test_real_sql_server_upgrade_downgrade_and_append_only_trigger(monkeypatch):
     monkeypatch.setenv("KRISNAI_ALEMBIC_URL", os.environ["KRISNAI_TEST_ALEMBIC_URL"])
     cfg = _alembic_cfg()

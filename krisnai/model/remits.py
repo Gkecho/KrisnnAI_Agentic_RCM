@@ -41,7 +41,7 @@ class Remit(Scoped, FromFile, Base):
     __table_args__ = scoped(
         [("event_id", "event"), ("payment_id", "payment"), ("claim_id", "claim"),
          ("patient_ref_id", "patient_ref")],
-        unique=[("payment_id", "claim_submitter_id", "payer_claim_control_number")],
+        unique=[("event_id",)],
     )  # fmt: skip
 
     event_id: Mapped[int] = fk("event this row was built from")
@@ -49,18 +49,14 @@ class Remit(Scoped, FromFile, Base):
     claim_id: Mapped[int | None] = fk("matched claim (set by M3 matching, null until then)")
     patient_ref_id: Mapped[int | None] = fk("NM1*QC member id, hashed to patient_ref.id")
     claim_submitter_id: Mapped[str] = col(String(38), "CLP01 patient control number (= CLM01)")
-    claim_status_code: Mapped[str] = col(
-        String(2), "CLP02 (1 processed primary, 4 denied, 22 reversal)"
-    )
+    claim_status_code: Mapped[str] = col(String(2), "CLP02 (1 processed primary, 4 denied, 22 reversal)")
     total_charge: Mapped[Decimal] = col(Money, "CLP03 total claim charge")
     total_paid: Mapped[Decimal] = col(Money, "CLP04 claim payment amount")
     patient_responsibility: Mapped[Decimal] = col(Money, "CLP05 patient responsibility amount")
     filing_indicator: Mapped[str | None] = col(String(2), "CLP06 claim filing indicator code")
     payer_claim_control_number: Mapped[str] = col(String(50), "CLP07 payer claim control number")
     service_date: Mapped[date | None] = col(Date, "DTM*232 claim statement period start")
-    match_method: Mapped[str | None] = col(
-        String(30), "rule that linked this remit to a claim (M3)"
-    )
+    match_method: Mapped[str | None] = col(String(30), "rule that linked this remit to a claim (M3)")
 
 
 class RemitLine(Scoped, FromFile, Base):
@@ -85,9 +81,7 @@ class RemitLine(Scoped, FromFile, Base):
     units: Mapped[Decimal | None] = col(Units, "SVC05 units paid")
     allowed_amount: Mapped[Decimal | None] = col(Money, "AMT*B6 allowed amount")
     service_date: Mapped[date | None] = col(Date, "DTM*472 line service date")
-    match_method: Mapped[str | None] = col(
-        String(30), "rule that linked this line to a claim line (M3)"
-    )
+    match_method: Mapped[str | None] = col(String(30), "rule that linked this line to a claim line (M3)")
 
 
 class Adjustment(Scoped, FromFile, Base):

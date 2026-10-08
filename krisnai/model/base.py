@@ -103,9 +103,7 @@ class Scoped:
     """Mixin: tenant + lineage columns shared by every tenant table except `source_file`."""
 
     id: Mapped[int] = mapped_column(PK, primary_key=True, autoincrement=True, sort_order=-3)
-    tenant_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("tenant.tenant_id"), sort_order=-2
-    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.tenant_id"), sort_order=-2)
     loaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=UtcNow(), sort_order=100)
 
 
@@ -130,15 +128,9 @@ def scoped(
     """
     args: list = [UniqueConstraint("tenant_id", "id")]
     if from_file:
-        args.append(
-            ForeignKeyConstraint(
-                ["tenant_id", "source_file_id"], ["source_file.tenant_id", "source_file.id"]
-            )
-        )
+        args.append(ForeignKeyConstraint(["tenant_id", "source_file_id"], ["source_file.tenant_id", "source_file.id"]))
     for column, parent in refs:
-        args.append(
-            ForeignKeyConstraint(["tenant_id", column], [f"{parent}.tenant_id", f"{parent}.id"])
-        )
+        args.append(ForeignKeyConstraint(["tenant_id", column], [f"{parent}.tenant_id", f"{parent}.id"]))
     for columns in unique:
         args.append(UniqueConstraint("tenant_id", *columns))
     for name, sql in checks:

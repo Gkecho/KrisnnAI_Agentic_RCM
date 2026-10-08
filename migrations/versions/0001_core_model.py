@@ -554,16 +554,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_remit")),
         sa.UniqueConstraint("tenant_id", "id", name=op.f("uq_remit_tenant_id_id")),
-        sa.UniqueConstraint(
-            "tenant_id",
-            "payment_id",
-            "claim_submitter_id",
-            "payer_claim_control_number",
-            name=op.f(
-                "uq_remit_tenant_id_payment_id_claim_submitter_id_payer_claim_control_number"
-            ),
+        sa.UniqueConstraint("tenant_id", "event_id", name=op.f("uq_remit_tenant_id_event_id")),
         ),
-    )
     op.create_table(
         "remit_line",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),

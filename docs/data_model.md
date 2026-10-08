@@ -92,7 +92,7 @@ Unique keys (idempotency): `(tenant_id, source_file_id, isa13, gs06, st02, seq_i
 | `st02` | VARCHAR(9) | no | ST02 transaction set control number |
 | `seq_in_file` | INTEGER | no | position of this event within its transaction set |
 | `known_at` | DATETIME2(0) | no | when the data became known (point-in-time key) |
-| `payload` | NVARCHAR(MAX) | no | raw segments of the event as JSON, PHI-bearing, stays in DB only |
+| `payload` | NVARCHAR(MAX) | no | the parsed record as JSON; patient identifiers are already hashed, so no PHI |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `patient_ref`
@@ -303,7 +303,7 @@ Unique keys (idempotency): `(tenant_id, payment_id, seq)`
 
 ### `remit`
 
-Unique keys (idempotency): `(tenant_id, payment_id, claim_submitter_id, payer_claim_control_number)`
+Unique keys (idempotency): `(tenant_id, event_id)`
 
 | Column | Type | Null | Source |
 |---|---|---|---|

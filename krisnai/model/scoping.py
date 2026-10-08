@@ -26,9 +26,7 @@ def tenant_session(bind: Engine, tenant_id: int) -> Session:
     def _filter(state: ORMExecuteState) -> None:
         if state.is_select and not state.is_column_load and not state.is_relationship_load:
             state.statement = state.statement.options(
-                with_loader_criteria(
-                    Scoped, lambda cls: cls.tenant_id == tenant_id, include_aliases=True
-                )
+                with_loader_criteria(Scoped, lambda cls: cls.tenant_id == tenant_id, include_aliases=True)
             )
 
     @event.listens_for(session, "before_flush")

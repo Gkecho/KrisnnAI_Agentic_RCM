@@ -50,6 +50,5 @@ class DbSettings:
             user=env.get("KRISNAI_DB_USER") or None,
             password=env.get("KRISNAI_DB_PASSWORD") or None,
             driver=env.get("KRISNAI_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
-            trust_server_certificate=env.get("KRISNAI_DB_TRUST_CERT", "").lower()
-            in ("1", "true", "yes"),
+            trust_server_certificate=env.get("KRISNAI_DB_TRUST_CERT", "").lower() in ("1", "true", "yes"),
         )

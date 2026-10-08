@@ -315,9 +315,7 @@ def _envelope(
     )  # fmt: skip
     st = _seg("ST", st_code, "0001", st_version)
     se = _seg("SE", len(body) + 2, "0001")
-    gs = _seg(
-        "GS", gs_code, sender, receiver, when.strftime("%Y%m%d"), "1200", ctrl, "X", gs_version
-    )
+    gs = _seg("GS", gs_code, sender, receiver, when.strftime("%Y%m%d"), "1200", ctrl, "X", gs_version)
     segs = [isa, gs, st, *body, se, _seg("GE", 1, ctrl), _seg("IEA", 1, f"{ctrl:09d}")]
     return "".join(s + "~\n" for s in segs)
 

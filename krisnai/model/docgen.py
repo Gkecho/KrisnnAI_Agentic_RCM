@@ -81,15 +81,10 @@ def render() -> str:
         uniques = [
             ", ".join(c.name for c in u.columns)
             for u in t.constraints
-            if u.__class__.__name__ == "UniqueConstraint"
-            and [c.name for c in u.columns] != ["tenant_id", "id"]
+            if u.__class__.__name__ == "UniqueConstraint" and [c.name for c in u.columns] != ["tenant_id", "id"]
         ]
         if uniques:
-            out.append(
-                "Unique keys (idempotency): "
-                + "; ".join(f"`({u})`" for u in sorted(uniques))
-                + "\n"
-            )
+            out.append("Unique keys (idempotency): " + "; ".join(f"`({u})`" for u in sorted(uniques)) + "\n")
         out.append("| Column | Type | Null | Source |")
         out.append("|---|---|---|---|")
         for c in t.columns:

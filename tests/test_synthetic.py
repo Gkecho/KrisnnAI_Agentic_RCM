@@ -176,20 +176,14 @@ def test_rejections_have_no_835_but_a_277ca_rejection(synth):
                 trn = s[2]
             elif s[0] == "STC" and s[1].startswith("A3"):
                 rejected.add(trn)
-    planted = {
-        r["claim_id"] for r in read_csv(out / "ground_truth.csv") if r["issue_type"] == "rejection"
-    }
+    planted = {r["claim_id"] for r in read_csv(out / "ground_truth.csv") if r["issue_type"] == "rejection"}
     assert rejected == planted and planted.isdisjoint(c835)
 
 
 def test_unbilled_visits_have_no_claim(synth):
     out, files = synth
     visits = read_csv(out / "visits.csv")
-    planted = {
-        r["visit_id"]
-        for r in read_csv(out / "ground_truth.csv")
-        if r["issue_type"] == "unbilled_visit"
-    }
+    planted = {r["visit_id"] for r in read_csv(out / "ground_truth.csv") if r["issue_type"] == "unbilled_visit"}
     assert planted == {v["visit_id"] for v in visits}
     # visits are separate from the billed set: no visit id looks like a claim id
     assert not any(v["visit_id"] in claims_in_837(files) for v in visits)
@@ -207,9 +201,7 @@ def test_deterministic_for_same_seed(tmp_path):
 def test_different_seed_differs(tmp_path):
     ms.generate(tmp_path / "a", seed=7, n_claims=60)
     ms.generate(tmp_path / "b", seed=8, n_claims=60)
-    assert (tmp_path / "a/ground_truth.csv").read_bytes() != (
-        tmp_path / "b/ground_truth.csv"
-    ).read_bytes()
+    assert (tmp_path / "a/ground_truth.csv").read_bytes() != (tmp_path / "b/ground_truth.csv").read_bytes()
 
 
 def test_small_run_still_has_every_issue_type(tmp_path):

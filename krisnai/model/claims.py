@@ -37,9 +37,7 @@ class Claim(Scoped, FromFile, Base):
     total_charge: Mapped[Decimal] = col(Money, "CLM02 total claim charge")
     place_of_service: Mapped[str | None] = col(String(2), "CLM05-1 facility code")
     frequency_code: Mapped[str] = col(String(1), "CLM05-3 (1 original, 7 replacement, 8 void)")
-    payer_claim_control_number: Mapped[str | None] = col(
-        String(50), "REF*F8 original reference number"
-    )
+    payer_claim_control_number: Mapped[str | None] = col(String(50), "REF*F8 original reference number")
     service_date: Mapped[date | None] = col(Date, "DTP*472 / DTP*434 earliest service date")
     submitted_on: Mapped[date | None] = col(Date, "BHT04 transaction creation date")
 
@@ -82,9 +80,7 @@ class Ack999(Scoped, FromFile, Base):
     acked_gs06: Mapped[str] = col(String(9), "AK1-02 group control number being acknowledged")
     acked_st02: Mapped[str] = col(String(9), "AK2-02 transaction set control number acknowledged")
     transaction_set: Mapped[str] = col(String(3), "AK2-01 (837)")
-    transaction_status: Mapped[str] = col(
-        String(1), "IK5-01 (A accepted, E accepted with errors, R rejected)"
-    )
+    transaction_status: Mapped[str] = col(String(1), "IK5-01 (A accepted, E accepted with errors, R rejected)")
     group_status: Mapped[str | None] = col(String(1), "AK9-01")
     error_codes: Mapped[str | None] = col(String(100), "IK5-02..06 / IK4-03 joined with commas")
 
@@ -93,16 +89,12 @@ class Ack277Ca(Scoped, FromFile, Base):
     """Claim-level acknowledgement from the payer or clearinghouse."""
 
     __tablename__ = "ack_277ca"
-    __table_args__ = scoped(
-        [("event_id", "event"), ("claim_id", "claim")], unique=[("event_id", "claim_submitter_id")]
-    )
+    __table_args__ = scoped([("event_id", "event"), ("claim_id", "claim")], unique=[("event_id", "claim_submitter_id")])
 
     event_id: Mapped[int] = fk("event this row was built from")
     claim_id: Mapped[int | None] = fk("matched claim (set by matching, null until then)")
     claim_submitter_id: Mapped[str] = col(String(38), "TRN02 (echo of CLM01)")
-    status_category: Mapped[str] = col(
-        String(5), "STC01-1 (A1 received, A2 accepted, A3 returned, A4 not found)"
-    )
+    status_category: Mapped[str] = col(String(5), "STC01-1 (A1 received, A2 accepted, A3 returned, A4 not found)")
     status_code: Mapped[str | None] = col(String(5), "STC01-2")
     entity_code: Mapped[str | None] = col(String(5), "STC01-3")
     status_date: Mapped[date | None] = col(Date, "STC02")

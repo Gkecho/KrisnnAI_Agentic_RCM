@@ -40,9 +40,7 @@ class FeeSchedule(Scoped, FromFile, Base):
     """Contracted allowed amount per payer + CPT + modifier, valid for a date range."""
 
     __tablename__ = "fee_schedule"
-    __table_args__ = scoped(
-        [("payer_id", "payer")], unique=[("payer_id", "cpt", "modifier", "effective_date")]
-    )
+    __table_args__ = scoped([("payer_id", "payer")], unique=[("payer_id", "cpt", "modifier", "effective_date")])
 
     payer_id: Mapped[int] = fk("fee schedule CSV payer_id, resolved to payer.id")
     cpt: Mapped[str] = col(String(5), "fee schedule CSV cpt (matches SV1-01-2 / SVC01-2)")

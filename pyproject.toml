@@ -14,6 +14,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
 
+[project.scripts]
+krisnai = "krisnai.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -26,7 +29,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 extend-exclude = ["migrations/versions"]
-line-length = 100
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
