@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
+valley = ["psycopg2-binary>=2.9"]
 
 [project.scripts]
 krisnai = "krisnai.cli:main"
