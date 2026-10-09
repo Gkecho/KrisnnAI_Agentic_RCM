@@ -71,7 +71,9 @@ def read_csv(path):
 def test_every_file_loaded_without_failures(world):
     statuses = {r.status for r in world["results"]}
     assert statuses == {"loaded"}, [r for r in world["results"] if r.status != "loaded"]
-    assert len(world["results"]) == sum(len(v) for v in world["files"].values()) - 2  # visits + ground truth skipped
+    assert (
+        len(world["results"]) == sum(len(v) for v in world["files"].values()) - 1
+    )  # ground truth skipped (visits.csv is loaded since M5)
 
 
 def test_row_counts_equal_what_the_generator_wrote(world):
@@ -428,3 +430,20 @@ def test_x12_error_is_the_only_failure_mode_for_bad_input():
     for junk in ("", "ISA", "ISA*" + "x" * 200, "hello world"):
         with pytest.raises(X12Error):
             read_transactions(junk)
+
+
+def test_visits_csv_is_loaded_hashed_and_idempotent(world):
+    eng = world["engine"]
+    rows = list(csv.DictReader(open(world["data"] / "visits.csv", newline="", encoding="utf8")))
+    assert count(eng, m.Visit) == len(rows) > 0
+    with tenant_session(eng, 1) as s:
+        v = s.scalars(select(m.Visit).order_by(m.Visit.visit_ref)).first()
+        assert v.visit_ref == rows[0]["visit_id"] or v.visit_ref == min(r["visit_id"] for r in rows)
+        # the member id is stored only as the salted hash shared with claims and remits
+        ref = s.get(m.PatientRef, v.patient_ref_id)
+        assert ref.ref_hash == hashing.patient_hash(
+            SALT, next(r["patient_ref"] for r in rows if r["visit_id"] == v.visit_ref)
+        )
+    again = ingest_path(eng, 1, world["data"] / "visits.csv", SALT)
+    assert [r.status for r in again] == ["skipped"]
+    assert count(eng, m.Visit) == len(rows)

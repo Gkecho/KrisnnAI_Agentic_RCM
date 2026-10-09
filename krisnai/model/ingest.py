@@ -39,7 +39,7 @@ class SourceFile(Scoped, Base):
 
     file_name: Mapped[str] = col(String(500), "file name as received (no PHI in names)")
     file_sha256: Mapped[str] = col(CHAR(64), "SHA-256 of the file bytes")
-    file_type: Mapped[str] = col(String(20), "837P | 835 | 999 | 277CA | fee_schedule | ar_snapshot")
+    file_type: Mapped[str] = col(String(20), "837P | 835 | 999 | 277CA | fee_schedule | visits | ar_snapshot")
     byte_size: Mapped[int] = col(BigInteger, "file size in bytes")
     status: Mapped[str] = col(String(20), "loaded | failed")
     failure_reason: Mapped[str | None] = col(String(1000), "parser error text when status = failed")

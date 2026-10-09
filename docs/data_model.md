@@ -37,12 +37,15 @@ erDiagram
     event ||--o{ remit : has
     patient_ref ||--o{ claim : has
     patient_ref ||--o{ remit : has
+    patient_ref ||--o{ visit : has
     payer ||--o{ claim : has
     payer ||--o{ fee_schedule : has
     payer ||--o{ payment : has
+    payer ||--o{ visit : has
     payment ||--o{ plb_adjustment : has
     payment ||--o{ remit : has
     provider ||--o{ claim : has
+    provider ||--o{ visit : has
     remit ||--o{ adjustment : has
     remit ||--o{ remit_line : has
     remit ||--o{ remit_remark : has
@@ -71,7 +74,7 @@ Unique keys (idempotency): `(tenant_id, file_sha256)`
 | `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
 | `file_name` | VARCHAR(500) | no | file name as received (no PHI in names) |
 | `file_sha256` | CHAR(64) | no | SHA-256 of the file bytes |
-| `file_type` | VARCHAR(20) | no | 837P | 835 | 999 | 277CA | fee_schedule | ar_snapshot |
+| `file_type` | VARCHAR(20) | no | 837P | 835 | 999 | 277CA | fee_schedule | visits | ar_snapshot |
 | `byte_size` | BIGINT | no | file size in bytes |
 | `status` | VARCHAR(20) | no | loaded | failed |
 | `failure_reason` | VARCHAR(1000) | yes | parser error text when status = failed |
@@ -207,6 +210,24 @@ Unique keys (idempotency): `(tenant_id, event_id)`
 | `credit_debit` | VARCHAR(1) | no | BPR03 (C credit, D debit) |
 | `payment_method` | VARCHAR(3) | no | BPR04 (ACH, CHK, NON) |
 | `payment_date` | DATE | no | BPR16 check issue / EFT effective date |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `visit`
+
+Unique keys (idempotency): `(tenant_id, visit_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `visit_ref` | VARCHAR(40) | no | visits CSV visit_id (the PM system's own visit number) |
+| `payer_id` | BIGINT | no | visits CSV payer_id, resolved to payer.id |
+| `provider_id` | BIGINT | no | visits CSV provider_npi, resolved to provider.id |
+| `patient_ref_id` | BIGINT | no | visits CSV patient_ref (member id), hashed to patient_ref.id |
+| `service_date` | DATE | no | visits CSV dos |
+| `cpt` | VARCHAR(5) | no | visits CSV cpt |
+| `units` | NUMERIC(9, 2) | no | visits CSV units |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `ack_277ca`

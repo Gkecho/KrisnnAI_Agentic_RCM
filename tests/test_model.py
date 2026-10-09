@@ -26,7 +26,7 @@ TABLES = Base.metadata.tables
 EXPECTED_TABLES = {
     "tenant", "source_file", "event", "payer", "provider", "patient_ref", "claim", "claim_line",
     "claim_dx", "ack_999", "ack_277ca", "remit", "remit_line", "adjustment", "remit_remark",
-    "plb_adjustment", "payment", "fee_schedule", "ar_snapshot",
+    "plb_adjustment", "payment", "fee_schedule", "ar_snapshot", "visit",
 }  # fmt: skip
 
 

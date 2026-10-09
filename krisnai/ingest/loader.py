@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from krisnai.ingest import acks, p837, r835
+from krisnai.ingest import acks, hashing, p837, r835
 from krisnai.ingest.records import (
     Ack277Rec,
     Ack999Rec,
@@ -47,6 +47,7 @@ from krisnai.model import (
     RemitLine,
     RemitRemark,
     SourceFile,
+    Visit,
     tenant_session,
 )  # fmt: skip
 
@@ -299,6 +300,39 @@ def _write_fee_schedule(s: Session, sf: int, rows: list[dict]) -> int:
     return len(rows)
 
 
+def parse_visits(text: str, salt: str) -> list[dict]:
+    """CSV columns: visit_id, payer_id, provider_npi, patient_ref (member id), dos, cpt, units. Hashes the member id."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"visit_id", "payer_id", "provider_npi", "patient_ref", "dos", "cpt", "units"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"visits CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            rows.append({
+                "ref": r["visit_id"].strip(), "payer": r["payer_id"].strip(), "npi": r["provider_npi"].strip(),
+                "patient": hashing.patient_hash(salt, r["patient_ref"]),
+                "dos": date.fromisoformat(r["dos"]), "cpt": r["cpt"].strip(), "units": Decimal(r["units"]),
+            })  # fmt: skip
+        except (InvalidOperation, ValueError, KeyError) as e:
+            raise X12Error(f"visits line {n}: {e}") from None
+    if not rows:
+        raise X12Error("visits CSV has no rows")
+    return rows
+
+
+def _write_visits(s: Session, sf: int, rows: list[dict]) -> int:
+    lk = Lookups(s, sf)
+    for r in rows:
+        s.add(Visit(
+            source_file_id=sf, visit_ref=r["ref"], payer_id=lk.payer(r["payer"], r["payer"]),
+            provider_id=lk.provider(r["npi"], "", None), patient_ref_id=lk.patient(r["patient"]),
+            service_date=r["dos"], cpt=r["cpt"], units=r["units"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
 def ingest_parsed(
     engine: Engine, tenant_id: int, name: str, fingerprint: str, file_type: str, parsed: list, size: int = 0
 ) -> IngestResult:
@@ -336,7 +370,8 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                                 f"already ingested as source_file {existing.id} ({existing.status})")  # fmt: skip
 
         is_csv = path.suffix.lower() == ".csv"
-        file_type = "fee_schedule" if is_csv else "unknown"
+        is_visits = is_csv and "visit" in path.name.lower()
+        file_type = ("visits" if is_visits else "fee_schedule") if is_csv else "unknown"
         try:
             text = raw.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -344,7 +379,9 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
         try:
             if text is None:
                 raise X12Error("file is not UTF-8 text")
-            if is_csv:
+            if is_visits:
+                parsed, payload = "visits", parse_visits(text, salt)
+            elif is_csv:
                 parsed, payload = "fee_schedule", parse_fee_schedule(text)
             else:
                 file_type, payload = parse_x12(text, salt)
@@ -360,7 +397,10 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
         s.add(sf)
         s.flush()
         try:
-            n = _write_fee_schedule(s, sf.id, payload) if is_csv else _write_x12(s, sf.id, payload)
+            if is_visits:
+                n = _write_visits(s, sf.id, payload)
+            else:
+                n = _write_fee_schedule(s, sf.id, payload) if is_csv else _write_x12(s, sf.id, payload)
             if n == 0:  # every transaction in this file was already loaded from another file
                 s.rollback()
                 return IngestResult(str(path), "skipped", parsed,
@@ -379,6 +419,6 @@ def ingest_path(engine: Engine, tenant_id: int, path: Path, salt: str) -> list[I
     files = sorted(
         p for p in path.rglob("*")
         if p.is_file() and (p.suffix.lower() in X12_SUFFIXES or p.suffix.lower() == ".csv")
-        and (p.suffix.lower() != ".csv" or "fee" in p.name.lower())  # only fee schedules from CSVs
+        and (p.suffix.lower() != ".csv" or "fee" in p.name.lower() or "visit" in p.name.lower())  # fee / visits
     )  # fmt: skip
     return [ingest_file(engine, tenant_id, p, salt) for p in files]
