@@ -5,6 +5,7 @@
     krisnai ingest PATH --tenant ID          load X12 files / fee schedule CSVs (idempotent)
     krisnai load-valley --tenant ID --valley-config FILE   load a sample of the Valley Wellness database
     krisnai metrics --tenant ID --as-of DATE [--kpi NAME] [--json]   compute KPIs as of a date
+    krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth CSV]   leakage diagnostic (read-only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -18,6 +19,7 @@ import json
 import os
 import sys
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import select
@@ -65,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
     kp.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
     kp.add_argument("--kpi", help="one KPI name; default all")
     kp.add_argument("--json", action="store_true")
+    a = sub.add_parser("a15", help="A15-lite revenue leakage diagnostic (read-only; run match first)")
+    a.add_argument("--tenant", type=int, required=True)
+    a.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a.add_argument("--out", type=Path, required=True, help="folder for a15_lite.json and a15_lite.xlsx")
+    a.add_argument("--ground-truth", type=Path, help="synthetic ground_truth.csv to score the findings against")
+    a.add_argument("--g0-tolerance", type=Decimal, default=Decimal("0.01"), help="largest accepted reconciliation gap")
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -120,6 +128,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{kpi} (as of {args.as_of})")
                 for row in rows:
                     print("   " + ", ".join(f"{k}={v}" for k, v in row.items()))
+    elif args.cmd == "a15":
+        from krisnai.agents.a15_lite import A15Config, G0Error, format_scores, run_a15
+
+        try:
+            res = run_a15(engine, args.tenant, args.as_of, args.out, A15Config(g0_tolerance=args.g0_tolerance),
+                          args.ground_truth)  # fmt: skip
+        except G0Error as e:
+            print(f"STOPPED: {e}", file=sys.stderr)
+            return 2
+        s = res.report["summary"]
+        print(f"{s['findings']} findings detected: recoverable {s['recoverable']}, structural {s['structural']}")
+        for kind, v in s["by_type"].items():
+            rec, struct = v["recoverable"], v["structural"]
+            print(f"   {kind:24s} {v['findings']:4d}   recoverable {rec:>10}   structural {struct:>10}")
+        print(f"wrote {res.json_path} and {res.xlsx_path}")
+        if res.scores:
+            print(format_scores(res.scores))
     return 0
 
 
