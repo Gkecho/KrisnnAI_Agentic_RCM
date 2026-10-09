@@ -4,6 +4,7 @@
     krisnai tenant-create NAME --salt-key K  register a tenant and print its id
     krisnai ingest PATH --tenant ID          load X12 files / fee schedule CSVs (idempotent)
     krisnai load-valley --tenant ID --valley-config FILE   load a sample of the Valley Wellness database
+    krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
 Use --db-url (or KRISNAI_DB_URL) for a non-SQL-Server database such as sqlite:///dev.db.
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -52,6 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--valley-config", type=Path, required=True, help="KEY=VALUE file with PGHOST, PGDATABASE, ...")
     v.add_argument("--files", type=int, default=2, help="837P files to load (about 860 claims each)")
     v.add_argument("--max-remit-files", type=int, default=500)
+    mt = sub.add_parser("match", help="claim/remit/payment matching and match quality report")
+    mt.add_argument("--tenant", type=int, required=True)
+    mt.add_argument("--as-of", type=datetime.fromisoformat, help="only use data known by this timestamp")
+    mt.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -87,6 +93,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{report.count('loaded')} loaded, {report.count('skipped')} skipped")
         for reason, n in report.skipped_rows.most_common():
             print(f"  skipped rows: {n} x {reason}")
+    elif args.cmd == "match":
+        from krisnai.match import run_matching
+
+        report = run_matching(engine, args.tenant, args.as_of)
+        print(report.to_json() if args.json else report.to_text())
     return 0
 
 
