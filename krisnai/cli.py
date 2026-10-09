@@ -6,6 +6,7 @@
     krisnai load-valley --tenant ID --valley-config FILE   load a sample of the Valley Wellness database
     krisnai metrics --tenant ID --as-of DATE [--kpi NAME] [--json]   compute KPIs as of a date
     krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth CSV]   leakage diagnostic (read-only)
+    krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -73,6 +74,12 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--out", type=Path, required=True, help="folder for a15_lite.json and a15_lite.xlsx")
     a.add_argument("--ground-truth", type=Path, help="synthetic ground_truth.csv to score the findings against")
     a.add_argument("--g0-tolerance", type=Decimal, default=Decimal("0.01"), help="largest accepted reconciliation gap")
+    a8 = sub.add_parser("a8", help="A8 denial and appeal agent, shadow mode only")
+    a8_sub = a8.add_subparsers(dest="a8_cmd", required=True)
+    seed_help = "load the default CARC routing table for a tenant"
+    replay_help = "replay A8 over the tenant's history in shadow mode and print the summary"
+    for name, text in (("seed", seed_help), ("replay", replay_help)):
+        a8_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -145,6 +152,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {res.json_path} and {res.xlsx_path}")
         if res.scores:
             print(format_scores(res.scores))
+    elif args.cmd == "a8":
+        from krisnai.agents.a8_denial import A8DenialAgent, format_summary, seed_defaults, summarize
+        from krisnai.engine import replay
+        from krisnai.model import tenant_session
+
+        if args.a8_cmd == "seed":
+            with tenant_session(engine, args.tenant) as s:
+                added = seed_defaults(s)
+                s.commit()
+            print(f"{added} routing rows added")
+        else:
+            items = replay(engine, args.tenant, A8DenialAgent())
+            print(f"replayed {len(items)} events (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
     return 0
 
 
