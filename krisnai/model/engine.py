@@ -82,3 +82,33 @@ class ApprovalRequest(Scoped, Base):
     decided_by: Mapped[str | None] = col(String(100), "who approved or rejected")
     decided_at: Mapped[datetime | None] = col(DateTime, "when they decided")
     reason: Mapped[str | None] = col(String(500), "rejection reason (required when rejecting)")
+
+
+class CarcRoute(Scoped, Base):
+    """Denial routing table (A8): who owns a claim adjustment reason code and what kind of fix it needs."""
+
+    __tablename__ = "carc_route"
+    __table_args__ = scoped(
+        unique=[("carc_code",)],
+        checks=[
+            ("owner", "owner IN ('front_desk', 'coding', 'billing')"),
+            ("disposition", "disposition IN ('correctable', 'appealable', 'write_off_review')"),
+        ],
+        from_file=False,
+    )
+
+    carc_code: Mapped[str] = col(String(5), "CAS reason code (CARC) this row routes")
+    category: Mapped[str] = col(String(40), "routing config: denial category, e.g. coverage or missing_information")
+    owner: Mapped[str] = col(String(20), "routing config: front_desk, coding or billing")
+    disposition: Mapped[str] = col(String(30), "routing config: correctable, appealable or write_off_review")
+    description: Mapped[str] = col(String(200), "routing config: what the code means, for the person reading the task")
+
+
+class PayerAppealWindow(Scoped, Base):
+    """Days a payer allows for an appeal, counted from the payment date. No row means the agent default."""
+
+    __tablename__ = "payer_appeal_window"
+    __table_args__ = scoped([("payer_id", "payer")], unique=[("payer_id",)], from_file=False)
+
+    payer_id: Mapped[int] = fk("payer this window applies to")
+    appeal_days: Mapped[int] = col(Integer, "routing config: appeal window in days from the payment date")

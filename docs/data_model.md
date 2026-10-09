@@ -42,6 +42,7 @@ erDiagram
     patient_ref ||--o{ visit : has
     payer ||--o{ claim : has
     payer ||--o{ fee_schedule : has
+    payer ||--o{ payer_appeal_window : has
     payer ||--o{ payment : has
     payer ||--o{ visit : has
     payment ||--o{ plb_adjustment : has
@@ -65,6 +66,21 @@ erDiagram
 | `name` | VARCHAR(200) | no | client-provided practice name |
 | `patient_salt_key` | VARCHAR(100) | no | name of the env/secret-store key holding this tenant's patient-hash salt |
 | `created_at` | DATETIME2(0) | no | server UTC time the tenant was created |
+
+### `carc_route`
+
+Unique keys (idempotency): `(tenant_id, carc_code)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `carc_code` | VARCHAR(5) | no | CAS reason code (CARC) this row routes |
+| `category` | VARCHAR(40) | no | routing config: denial category, e.g. coverage or missing_information |
+| `owner` | VARCHAR(20) | no | routing config: front_desk, coding or billing |
+| `disposition` | VARCHAR(30) | no | routing config: correctable, appealable or write_off_review |
+| `description` | VARCHAR(200) | no | routing config: what the code means, for the person reading the task |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `policy`
 
@@ -241,6 +257,18 @@ Unique keys (idempotency): `(tenant_id, payer_id, cpt, modifier, effective_date)
 | `allowed_amount` | NUMERIC(18, 2) | no | fee schedule CSV allowed_amount |
 | `effective_date` | DATE | no | fee schedule CSV effective_date |
 | `end_date` | DATE | yes | fee schedule CSV end_date, null = open ended |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `payer_appeal_window`
+
+Unique keys (idempotency): `(tenant_id, payer_id)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `payer_id` | BIGINT | no | payer this window applies to |
+| `appeal_days` | INTEGER | no | routing config: appeal window in days from the payment date |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `payment`
