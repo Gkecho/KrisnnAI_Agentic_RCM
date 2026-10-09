@@ -18,6 +18,7 @@ Service date for C1-C5 is 2026-01-10 and for C6 2026-07-01. Dates are 2026.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -48,10 +49,12 @@ class Book:
         self.s.flush()
         return row
 
-    def event(self, known: date, event_type: str = "t", st02: str = "1", gs06: str = "1") -> int:
+    def event(
+        self, known: date, event_type: str = "t", st02: str = "1", gs06: str = "1", payload: dict | None = None
+    ) -> int:
         self.seq += 1
         e = self._add(m.Event(event_type=event_type, isa13="1", gs06=gs06, st02=st02, seq_in_file=self.seq,
-                              known_at=datetime.combine(known, datetime.min.time()), payload="{}"))  # fmt: skip
+                              known_at=datetime.combine(known, datetime.min.time()), payload=json.dumps(payload or {})))  # fmt: skip
         return e.id
 
     def payer(self, code: str) -> m.Payer:
@@ -87,10 +90,26 @@ class Book:
         self._add(m.Ack999(event_id=self.event(known, "999.ack"), acked_gs06=sid, acked_st02=sid,
                            transaction_set="837", transaction_status=status))  # fmt: skip
 
-    def payment(self, payer: str, known: date, trace: str, amount: str) -> m.Payment:
-        return self._add(m.Payment(event_id=self.event(known, "835.payment"), payer_id=self.payer(payer).id,
-                                   trace_number=trace, payment_amount=D(amount), credit_debit="C",
-                                   payment_method="ACH", payment_date=known))  # fmt: skip
+    def payment(self, payer: str, known: date, trace: str, amount: str, plb: list[tuple[str, str]] | None = None):
+        """`plb` is a list of (reason, amount) provider-level adjustments."""
+        payload = {"plb": [{"reason_code": r, "amount": a} for r, a in (plb or [])]}
+        pay = self._add(
+            m.Payment(
+                event_id=self.event(known, "835.payment", payload=payload),
+                payer_id=self.payer(payer).id,
+                trace_number=trace,
+                payment_amount=D(amount),
+                credit_debit="C",
+                payment_method="ACH",
+                payment_date=known,
+            )
+        )
+        for seq, (reason, amt) in enumerate(plb or [], start=1):
+            self._add(
+                m.PlbAdjustment(payment_id=pay.id, seq=seq, provider_ref="1000000001", fiscal_period_date=known,
+                                reason_code=reason, reference_id=None, amount=D(amt))
+            )  # fmt: skip
+        return pay
 
     def remit(
         self,
@@ -102,20 +121,47 @@ class Book:
         cas: list[tuple[str, str, str]],
         cpt: str = "99213",
         known: date | None = None,
+        lines: list[tuple[str, str, str, list[tuple[str, str, str]]]] | None = None,
     ) -> m.Remit:
-        """One CLP with one SVC. `cas` is (group, reason, amount) at line level."""
+        """One CLP. By default one SVC with `cas` as (group, reason, amount) at line level; or give `lines` as
+        (cpt, charge, paid, cas) tuples for several service lines."""
         known = known or payment.payment_date
-        r = self._add(m.Remit(event_id=self.event(known, "835.remit"), payment_id=payment.id, claim_id=claim.id,
-                              claim_submitter_id=claim.claim_submitter_id, claim_status_code=status,
-                              total_charge=claim.total_charge, total_paid=D(paid), patient_responsibility=D(pr),
-                              payer_claim_control_number="PCN" + claim.claim_submitter_id, service_date=claim.service_date,
-                              match_method="clp01"))  # fmt: skip
-        line = self._add(m.RemitLine(remit_id=r.id, claim_line_id=None, line_number=1, cpt=cpt,
-                                     charge=claim.total_charge, paid=D(paid), units=D(1),
-                                     service_date=claim.service_date, match_method=None))  # fmt: skip
-        for seq, (group, reason, amount) in enumerate(cas, start=1):
-            self._add(m.Adjustment(remit_id=r.id, remit_line_id=line.id, seq=seq, group_code=group,
-                                   reason_code=reason, amount=D(amount)))  # fmt: skip
+        specs = lines or [(cpt, str(claim.total_charge), paid, cas)]
+        payload = {
+            "status_code": status,
+            "lines": [
+                {
+                    "paid": ln_paid,
+                    "adjustments": [{"group_code": g, "reason_code": r, "amount": a} for g, r, a in ln_cas],
+                }
+                for _, _, ln_paid, ln_cas in specs
+            ],
+        }
+        r = self._add(
+            m.Remit(
+                event_id=self.event(known, "835.remit", payload=payload),
+                payment_id=payment.id,
+                claim_id=claim.id,
+                claim_submitter_id=claim.claim_submitter_id,
+                claim_status_code=status,
+                total_charge=claim.total_charge,
+                total_paid=D(paid),
+                patient_responsibility=D(pr),
+                payer_claim_control_number="PCN" + claim.claim_submitter_id,
+                service_date=claim.service_date,
+                match_method="clp01",
+            )
+        )
+        for n, (ln_cpt, ln_charge, ln_paid, ln_cas) in enumerate(specs, start=1):
+            line = self._add(
+                m.RemitLine(remit_id=r.id, claim_line_id=None, line_number=n, cpt=ln_cpt, charge=D(ln_charge),
+                            paid=D(ln_paid), units=D(1), service_date=claim.service_date, match_method=None)
+            )  # fmt: skip
+            for seq, (group, reason, amount) in enumerate(ln_cas, start=1):
+                self._add(
+                    m.Adjustment(remit_id=r.id, remit_line_id=line.id, seq=seq, group_code=group,
+                                 reason_code=reason, amount=D(amount))
+                )  # fmt: skip
         return r
 
     def commit(self) -> None:
