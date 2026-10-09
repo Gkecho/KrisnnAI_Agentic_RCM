@@ -63,12 +63,20 @@ class Book:
         self._add(m.FeeSchedule(payer_id=self.payer(payer).id, cpt=cpt, modifier="", allowed_amount=D(allowed),
                                 effective_date=effective))  # fmt: skip
 
-    def claim(self, sid: str, payer: str, charge: str, dos: date, submitted: date, known: date | None = None):
+    def claim(self, sid: str, payer: str, charge: str, dos: date, submitted: date, known: date | None = None,
+              cpt: str = "99213"):  # fmt: skip
         c = m.Claim(event_id=self.event(known or submitted, "837P.claim", st02=sid, gs06=sid),
                     payer_id=self.payer(payer).id, provider_id=self.provider.id, patient_ref_id=self.patient.id,
                     claim_submitter_id=sid, total_charge=D(charge), place_of_service="11", frequency_code="1",
                     service_date=dos, submitted_on=submitted)  # fmt: skip
-        return self._add(c)
+        self._add(c)
+        self._add(m.ClaimLine(claim_id=c.id, line_number=1, cpt=cpt, charge=D(charge), units=D(1), unit_basis="UN",
+                              service_date=dos))  # fmt: skip
+        return c
+
+    def visit(self, ref: str, payer: str, dos: date, cpt: str = "99213", patient: m.PatientRef | None = None) -> None:
+        self._add(m.Visit(visit_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider.id,
+                          patient_ref_id=(patient or self.patient).id, service_date=dos, cpt=cpt, units=D(1)))  # fmt: skip
 
     def ack_277ca(self, claim: m.Claim, category: str, known: date) -> None:
         self._add(m.Ack277Ca(event_id=self.event(known, "277CA.claim_status"), claim_id=claim.id,
