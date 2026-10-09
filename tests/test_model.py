@@ -23,10 +23,12 @@ from krisnai.model.base import Base
 from krisnai.model.scoping import TenantMismatchError, tenant_session
 
 TABLES = Base.metadata.tables
+ENGINE_TABLES = ("policy", "decision_record", "approval_request")
 EXPECTED_TABLES = {
     "tenant", "source_file", "event", "payer", "provider", "patient_ref", "claim", "claim_line",
     "claim_dx", "ack_999", "ack_277ca", "remit", "remit_line", "adjustment", "remit_remark",
     "plb_adjustment", "payment", "fee_schedule", "ar_snapshot", "visit",
+    "policy", "decision_record", "approval_request",
 }  # fmt: skip
 
 
@@ -64,7 +66,10 @@ def test_every_table_is_tenant_scoped_with_lineage():
             continue
         cols = set(t.columns.keys())
         assert {"tenant_id", "loaded_at"} <= cols, name
-        if name != "source_file":
+        if name not in (
+            "source_file",
+            *ENGINE_TABLES,
+        ):  # engine tables are produced by the engine, not loaded from a file
             assert "source_file_id" in cols, name
 
 

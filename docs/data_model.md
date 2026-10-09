@@ -30,9 +30,11 @@ erDiagram
     claim ||--o{ claim_line : has
     claim ||--o{ remit : has
     claim_line ||--o{ remit_line : has
+    decision_record ||--o{ approval_request : has
     event ||--o{ ack_277ca : has
     event ||--o{ ack_999 : has
     event ||--o{ claim : has
+    event ||--o{ decision_record : has
     event ||--o{ payment : has
     event ||--o{ remit : has
     patient_ref ||--o{ claim : has
@@ -63,6 +65,22 @@ erDiagram
 | `name` | VARCHAR(200) | no | client-provided practice name |
 | `patient_salt_key` | VARCHAR(100) | no | name of the env/secret-store key holding this tenant's patient-hash salt |
 | `created_at` | DATETIME2(0) | no | server UTC time the tenant was created |
+
+### `policy`
+
+Unique keys (idempotency): `(tenant_id, action_type)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `action_type` | VARCHAR(50) | no | engine config: the action this policy governs |
+| `allowed` | BIT | no | engine config: false = the action is denied and never executes |
+| `autonomy_level` | INTEGER | no | engine config: 0 observe, 1 assist, 2 prepare, 3 approve-and-run, 4 bounded |
+| `mode` | VARCHAR(10) | no | engine config: shadow (record only) or live |
+| `max_amount` | NUMERIC(18, 2) | yes | engine config: L4 may run alone only up to this materiality |
+| `approver_role` | VARCHAR(50) | yes | engine config: role that must approve at L2 / L3 |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `source_file`
 
@@ -177,6 +195,37 @@ Unique keys (idempotency): `(tenant_id, event_id)`
 | `submitted_on` | DATE | yes | BHT04 transaction creation date |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `decision_record`
+
+Unique keys (idempotency): `(tenant_id, event_id, agent_id, action_type)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `agent_id` | VARCHAR(50) | no | agent run: which agent decided |
+| `agent_version` | VARCHAR(20) | no | agent run: version of that agent |
+| `event_id` | BIGINT | no | event that triggered the run |
+| `trigger_type` | VARCHAR(40) | no | event.event_type of the trigger |
+| `input_snapshot` | NVARCHAR(MAX) | no | context pack as JSON with source lineage (files, events, as-of) |
+| `rules_fired` | NVARCHAR(MAX) | no | deterministic checks as JSON: rule id + result |
+| `model_id` | VARCHAR(100) | yes | model provider id when a model was used |
+| `model_version` | VARCHAR(50) | yes | model version when a model was used |
+| `prompt_hash` | CHAR(64) | yes | SHA-256 of the prompt sent to the model |
+| `confidence` | NUMERIC(5, 4) | yes | agent confidence 0-1 |
+| `materiality_amount` | NUMERIC(18, 2) | no | financial materiality of the proposed action, in dollars |
+| `action_type` | VARCHAR(50) | no | proposed action, or no_action |
+| `action_payload` | NVARCHAR(MAX) | no | proposed action parameters as JSON |
+| `autonomy_level` | INTEGER | no | autonomy level applied from policy (0-4) |
+| `mode` | VARCHAR(10) | no | shadow or live, from policy |
+| `outcome` | VARCHAR(30) | no | policy outcome: denied | shadow | observed | pending_approval | executed | ... |
+| `approver` | VARCHAR(100) | yes | named approver for L2 / L3 actions |
+| `approved_at` | DATETIME2(0) | yes | when the approval or rejection was recorded |
+| `execution_result` | VARCHAR(500) | yes | what the adapter reported, or why nothing ran |
+| `verification_condition` | VARCHAR(500) | yes | what must be true afterwards for the action to count as done |
+| `verification_result` | VARCHAR(500) | yes | whether that condition held |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `fee_schedule`
 
 Unique keys (idempotency): `(tenant_id, payer_id, cpt, modifier, effective_date)`
@@ -248,6 +297,22 @@ Unique keys (idempotency): `(tenant_id, event_id, claim_submitter_id)`
 | `status_date` | DATE | yes | STC02 |
 | `total_charge` | NUMERIC(18, 2) | yes | STC04 |
 | `payer_claim_number` | VARCHAR(50) | yes | REF*1K payer claim control number |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `approval_request`
+
+Unique keys (idempotency): `(tenant_id, decision_record_id)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `decision_record_id` | BIGINT | no | decision this request is about |
+| `status` | VARCHAR(10) | no | pending, approved or rejected |
+| `approver_role` | VARCHAR(50) | yes | role asked to decide, from policy |
+| `decided_by` | VARCHAR(100) | yes | who approved or rejected |
+| `decided_at` | DATETIME2(0) | yes | when they decided |
+| `reason` | VARCHAR(500) | yes | rejection reason (required when rejecting) |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `ar_snapshot`
