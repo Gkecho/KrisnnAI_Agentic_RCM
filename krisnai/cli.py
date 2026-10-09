@@ -4,6 +4,7 @@
     krisnai tenant-create NAME --salt-key K  register a tenant and print its id
     krisnai ingest PATH --tenant ID          load X12 files / fee schedule CSVs (idempotent)
     krisnai load-valley --tenant ID --valley-config FILE   load a sample of the Valley Wellness database
+    krisnai metrics --tenant ID --as-of DATE [--kpi NAME] [--json]   compute KPIs as of a date
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -13,9 +14,10 @@ Use --db-url (or KRISNAI_DB_URL) for a non-SQL-Server database such as sqlite://
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -58,6 +60,11 @@ def main(argv: list[str] | None = None) -> int:
     mt.add_argument("--tenant", type=int, required=True)
     mt.add_argument("--as-of", type=datetime.fromisoformat, help="only use data known by this timestamp")
     mt.add_argument("--json", action="store_true", help="print the report as JSON")
+    kp = sub.add_parser("metrics", help="compute KPIs (docs/metrics.md) as of a date; run match first")
+    kp.add_argument("--tenant", type=int, required=True)
+    kp.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    kp.add_argument("--kpi", help="one KPI name; default all")
+    kp.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -98,6 +105,21 @@ def main(argv: list[str] | None = None) -> int:
 
         report = run_matching(engine, args.tenant, args.as_of)
         print(report.to_json() if args.json else report.to_text())
+    elif args.cmd == "metrics":
+        from krisnai.metrics import compute, compute_all
+
+        result = (
+            {args.kpi: compute(engine, args.tenant, args.kpi, args.as_of)}
+            if args.kpi
+            else compute_all(engine, args.tenant, args.as_of)
+        )
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            for kpi, rows in result.items():
+                print(f"{kpi} (as of {args.as_of})")
+                for row in rows:
+                    print("   " + ", ".join(f"{k}={v}" for k, v in row.items()))
     return 0
 
 
