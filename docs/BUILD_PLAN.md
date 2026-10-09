@@ -1,5 +1,7 @@
 # KrisnAI RCM — build plan for Claude Code
 
+> **All 15 agents are planned in [docs/ROADMAP.md](ROADMAP.md)** (from the strategy v5 portfolio and release waves). This file details M0-M10 only.
+
 Goal of this plan: get from an empty repo to **A15-lite (read-only leakage diagnostic) working on synthetic data**, then the **decision engine** and the first agents running in **shadow mode**. Each milestone ends with tests that prove it works.
 
 Rule: finish a milestone, review, commit, then paste the next prompt. Don't skip ahead.

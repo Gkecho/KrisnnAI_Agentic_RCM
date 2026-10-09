@@ -34,15 +34,17 @@ AGENT_BY_TYPE = {
     UNBILLED_VISIT: "A3",  # charge capture (needs PM schedule and notes)
     UNEXPLAINED_ADJUSTMENT: "A7",  # AR next-best-action
 }
+# Agent numbers follow the strategy's portfolio (Section 3): A1 pre-visit clearance, A2 authorization,
+# A4 coding copilot, A5 claim prevention, A8 denial resolution. A2 and A4 are not built yet.
 AGENT_BY_CATEGORY = {
-    "coverage": "A1",  # eligibility / registration
+    "coverage": "A1",
+    "authorization": "A2",
+    "coding": "A4",
+    "bundling": "A4",
+    "missing_information": "A5",
     "duplicate": "A5",
-    "missing_information": "A8",
-    "coding": "A8",
-    "authorization": "A8",
-    "medical_necessity": "A8",
-    "bundling": "A8",
     "timely_filing": "A5",
+    "medical_necessity": "A8",  # appeal
     "other": "A8",
 }
 

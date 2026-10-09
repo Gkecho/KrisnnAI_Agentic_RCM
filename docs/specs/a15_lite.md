@@ -30,7 +30,7 @@ decision record (that starts with the decision engine, M6).
 ## Defaults awaiting sign-off (`config.py`)
 Appeal window 180 days and filing window 365 days for every payer (per-payer overrides exist); CARC categories
 (16 missing information, 18 duplicate, 50 medical necessity, 97 bundling, 27 / 31 coverage, 197 authorization, 4 coding, 29 timely
-filing); denial category to agent (coverage A1; duplicate and timely filing A5; everything else A8); G0 tolerance 0.01.
+filing); denial category to the agent that would address it, using the strategy's numbering (coverage A1; authorization A2; coding and bundling A4; missing information, duplicate and timely filing A5; medical necessity and other A8; underpayment A10; rejection A6; unbilled visit A3; unexplained adjustment A7); G0 tolerance 0.01.
 
 ## Score on the synthetic set
 `--ground-truth` prints precision, recall and "right dollars + status" per issue type. On the 200-claim synthetic set every

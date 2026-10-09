@@ -1,0 +1,61 @@
+# KrisnAI RCM roadmap: all 15 agents
+
+Source: `KrisnnAI_RCM_Strategy_v5_Redline.docx` (Section 3 portfolio and release waves, Section 10 MVP, Section 11 180-day roadmap,
+Appendix A spec template). `docs/BUILD_PLAN.md` was written earlier and only detailed M0-M10; this file covers every agent.
+Update the **Status** column as work lands. Milestones M0-M7 are done; M8 onward are proposed and need approval (plan mode first for each).
+
+## Rules from the strategy that apply to every agent
+- **Spec before build.** No agent is built or enabled without a completed Appendix A spec (24 fields, in `docs/specs/Ax.md`, drafted for all 15 agents). Thresholds are
+  fixed from baseline data *before* anyone reviews shadow results; they stay TBD until then.
+- **Goes live only** with a shadow-mode report meeting its exit criteria and a named business owner. An agent that misses its window moves to the next wave.
+- **One shared foundation** (data model, policy, decision records, replay, approvals); new agents add domain policies and adapters, not silos.
+- Autonomy is granted per action type, L0-L4, promoted only on evidence (Section 6 and 11B).
+
+## Agents
+
+| # | Agent | Phase / wave | Milestone | Status | Needs (data / dependency) |
+|---|---|---|---|---|---|
+| A15-lite | Leakage diagnostic (land motion) | MVP, foundation | M5 | **Done** | 837/835/PM visits. Agent map now follows the strategy numbering. |
+| A14 baseline | KPI and cash baseline | MVP, foundation | M4 | **Done** | claims, remits |
+| A8 | Denial Resolution & Appeal | MVP, Wave 1 | M7 | **Done, shadow** | Spec redone on Appendix A. Outcome tracking and evidence gathering still missing. |
+| A5 | Claim Prevention & Digital Twin | MVP, Wave 1 | M8 | Planned | payer-rule library v1, denial taxonomy, history for a calibrated model |
+| A7 | AR Next-Best-Action | MVP, Wave 1 | M9 | Planned | 276/277 status, payer history, balances |
+| A6 | Claim Submission & Response | MVP, Wave 1 | M10 | Planned | clearinghouse stub now; real partner API later |
+| A14 | RCM Control Tower (expanded) | MVP, Wave 1 | M11 | Planned | forecasting, backlog, payer slowdowns; needs the approvals API/UI |
+| A10 | Contract & Underpayment | MVP, Wave 2 | M12 | Planned | fee schedules (synthetic exists); real contracts; falls back to payer history |
+| A3 | Documentation Completeness | MVP, Wave 2 | M13 | Planned | EHR/PM note, charge and encounter data (not in the repo; needs a synthetic generator first) |
+| A1 | Pre-Visit Financial Clearance | MVP, Wave 2 | M14 | Planned | appointments, 270/271 eligibility (new parsers and synthetic data) |
+| A9 | Denial Prevention Learning | MVP+, Wave 3 | M15 | Planned | resolved-denial outcomes from A8/A7, outcome attribution |
+| A2 | Authorization Intelligence | MVP+, Wave 3 | M16 | Planned | authorization/referral data, payer auth rules |
+| A11 | Payment Posting & Reconciliation | MVP+, Wave 3 | M17 | Planned | bank/lockbox feed, ERA posting write-back (gated by accuracy) |
+| A4 | Coding & Charge Integrity Copilot | Phase 2 | M18 | Later | signed notes, NCCI/MUE tables |
+| A12 | Patient Financial Engagement | Phase 2 | M19 | Later | statements, channels, compliance review (TCPA, Reg F, state law) |
+| A13 | Credentialing & Enrollment | Phase 2 | M20 | Later | provider/payer enrollment data |
+| A15 full | Revenue Assurance Investigator | Phase 2 | M21 | Later | stable Waves 1-3; root-cause graph |
+
+## Order of work
+1. **M8a (done): specs.** `docs/specs/A1.md` ... `A15.md` drafted on the real Appendix A (24 fields each), thresholds TBD; `A8.md` redone on it. The A15-lite agent map now follows the strategy's numbering (authorization to A2, coding to A4, coverage to A1, claim defects to A5). Strategy document copied to `docs/strategy_v5.docx`.
+2. **Wave 1 (M8-M11):** A5, A7, A6, A14. Same pattern as A8: shadow mode, replay against synthetic ground truth.
+3. **Platform work that Wave 1 and 2 need** (the strategy lists these in Days 0-60; not built yet): approvals HTTP endpoints and a simple UI
+   (blocked: FastAPI cannot load on the dev PC, see below), identity resolution across systems, RBAC, a durable workflow engine decision (ADR-0003,
+   Temporal is the named candidate), value ledger / outcome attribution with a holdout design, first real EHR/PM adapter, real clearinghouse adapter, payer-rule library v1.
+4. **Wave 2 (M12-M14):** A10, A3, A1. A3 and A1 need new synthetic data first (notes/charges; appointments and eligibility).
+5. **Wave 3 (M15-M17):** A9, A2, A11, after Waves 1-2 have produced outcome history.
+6. **Phase 2 (M18-M21):** A4, A12, A13, full A15.
+
+## Known blockers and open decisions (from the strategy's Appendix B and this build)
+- **FastAPI cannot load** on the development PC (Windows Smart App Control blocks `pydantic-core`; no pure-Python build). The approval service functions exist and are tested; the HTTP layer waits on a different machine or a changed policy.
+- Open in the strategy: first EHR/PM adapter, first clearinghouse, workflow engine, model hosting with BAA, write-back actions permitted in the pilot, autonomy thresholds. None can be decided by code; each needs a named owner.
+- Data for A1, A2, A3, A11, A12, A13 does not exist in the repo yet; each of those milestones starts with a synthetic generator.
+- The Valley database run (matching, KPIs, A15, A8 on a larger data set) is still pending the AWS security-group change.
+
+## Engine gaps against the strategy (Section 8 guardrails, 11B build rules, 11C priorities)
+The M6 engine covers the decision record, policy table, idempotency, replay, approval queue and disabled/stub adapters. The strategy also asks for the
+following, none of which is built yet. They belong in the platform work before any agent leaves shadow mode:
+- **Kill switch** at tenant, workflow and agent level, and **blast-radius controls** (batch and rate limits, dry-run, canary cohorts, per-action dollar caps).
+- **Maker-checker**: the approver of an L3 action must differ from the initiator, approvals time-bound and logged.
+- **Versioned, effective-dated policy**: rules, prompts, models, thresholds and payer policies versioned and released by staged rollout with per-tenant feature flags.
+- **Before/after values and source evidence** on every write-back (today the adapters are stubs, so nothing writes back).
+- **Failure-injection tests** (duplicate events, retries, partial failures, outages, adversarial documents) before any action type reaches gate G3.
+- **Identity resolution** across systems, **value ledger / outcome attribution**, PHI masking in lower environments, log retention policy.
+- **Release-gate records** G0 to G5 with signed evidence packs (the strategy's gates are organisational, but the evidence packs come from the system).

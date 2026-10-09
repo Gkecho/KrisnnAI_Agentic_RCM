@@ -59,7 +59,7 @@ def test_every_finding_names_an_agent_a_basis_and_a_status(syn):
     res = run_a15(syn["engine"], 1, AS_OF, syn["root"] / "out2")
     assert res.findings
     for f in res.findings:
-        assert f.agent in {"A1", "A3", "A5", "A6", "A7", "A8", "A10"}
+        assert f.agent in {"A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A10"}
         assert f.basis == "fee_schedule" and f.status in ("recoverable", "structural") and f.expected_amount >= 0
     assert all(f.deadline is None for f in res.findings if f.type == "timely_filing")
 
@@ -187,7 +187,7 @@ def small(tmp_path):
 def test_denials_carry_category_agent_and_expected_payer_amount(small):
     f = by_key(detect(snapshot_of(small, date(2026, 3, 1))))
     d1 = f[("denial", "D1", None)]
-    assert (d1.carc, d1.category, d1.agent) == ("16", "missing_information", "A8")
+    assert (d1.carc, d1.category, d1.agent) == ("16", "missing_information", "A5")
     assert d1.expected_amount == D("90.00")  # 100 allowed less the 10% share learned from K1
     assert f[("denial", "D2", None)].agent == "A1"  # coverage goes to eligibility
     t = f[("timely_filing", "D3", None)]
