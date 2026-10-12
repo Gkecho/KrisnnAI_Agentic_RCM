@@ -9,6 +9,7 @@
     krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
+    krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -88,6 +89,12 @@ def main(argv: list[str] | None = None) -> int:
     a5_replay = "replay A5 over the tenant's claims in shadow mode and print the summary"
     for name, text in (("seed", a5_seed), ("replay", a5_replay)):
         a5_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a6 = sub.add_parser("a6", help="A6 claim submission and response agent (rejections), shadow mode only")
+    a6_sub = a6.add_subparsers(dest="a6_cmd", required=True)
+    a6_seed = "load the placeholder rejection routing rows for a tenant"
+    a6_replay = "replay A6 over the tenant's 999 / 277CA rejections in shadow mode and print the summary"
+    for name, text in (("seed", a6_seed), ("replay", a6_replay)):
+        a6_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
     a7 = sub.add_parser("a7", help="A7 AR next-best-action agent, shadow mode only")
     a7_sub = a7.add_subparsers(dest="a7_cmd", required=True)
     a7_sweep = a7_sub.add_parser("sweep", help="raise a follow-up event for each overdue unpaid claim")
@@ -198,6 +205,20 @@ def main(argv: list[str] | None = None) -> int:
         else:
             items = replay(engine, args.tenant, A5PreventionAgent())
             print(f"replayed {len(items)} claims (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a6":
+        from krisnai.agents.a6_submission import A6SubmissionAgent, format_summary, seed_defaults, summarize
+        from krisnai.engine import replay
+        from krisnai.model import tenant_session
+
+        if args.a6_cmd == "seed":
+            with tenant_session(engine, args.tenant) as s:
+                added = seed_defaults(s)
+                s.commit()
+            print(f"{added} routing rows added")
+        else:
+            items = replay(engine, args.tenant, A6SubmissionAgent())
+            print(f"replayed {len(items)} rejections (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
     elif args.cmd == "a7":
         from krisnai.agents.a7_ar import A7ArAgent, format_inbox, format_summary, inbox, summarize, sweep
