@@ -147,6 +147,21 @@ def test_duplicate_is_flagged_on_the_later_claim_only(book):
     assert recs["D3"].action_type == NO_ACTION
 
 
+def test_a_rejected_original_is_not_a_duplicate_of_its_correction(book):
+    first = add_claim(book, "J1", known=date(2026, 5, 10))
+    book.ack_277ca(first, "A3", date(2026, 5, 11), code="21")  # returned by the 277CA: never adjudicated
+    add_claim(book, "J2", known=date(2026, 5, 12))  # the corrected original, filed after the rejection
+    add_claim(book, "K1", dos=date(2026, 5, 2), known=date(2026, 5, 10))
+    book.ack_999("K1", "R", date(2026, 5, 11), errors="IK5:5")  # the 999 rejected K1's whole file
+    add_claim(book, "K2", dos=date(2026, 5, 2), known=date(2026, 5, 12))
+    add_claim(book, "L1", dos=date(2026, 5, 3), known=date(2026, 5, 10))
+    add_claim(book, "L2", dos=date(2026, 5, 3), known=date(2026, 5, 12))  # L1 was accepted, so L2 is a real duplicate
+    go(book)
+    recs = by_claim(book.engine)
+    assert recs["J2"].action_type == NO_ACTION and recs["K2"].action_type == NO_ACTION
+    assert recs["L2"].action_type == "a5_hold_review" and failed_rules(recs["L2"]) == {"duplicate_claim"}
+
+
 # --------------------------------------------------------------------------------- engine guarantees
 
 

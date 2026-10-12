@@ -6,7 +6,7 @@ is the tenant's policy; the default for every action type is shadow.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 
 import krisnai.model as m
 from krisnai.agents.a5_prevention import config, rules
+from krisnai.agents.rejections import rejection_sets
 from krisnai.engine import NO_ACTION, Agent, Context, Proposal, RuleResult
+from krisnai.engine.card import build_card
 from krisnai.engine.models import ModelResult
 
 AGENT_ID = "a5_prevention"
@@ -27,6 +29,7 @@ ACTION_TYPES = (FIX_TASK, HOLD_REVIEW)
 
 # A failed rule that means "do not release until a person looks": the claim would be denied or lost as it stands.
 HOLD_RULES = ("duplicate_claim", "timely_filing", "ncci_pair")
+RELEASE_FIX_DAYS = 2  # target days to fix a flagged claim before it is released; TBD at spec review
 OWNER = {
     "required_fields": "billing",
     "duplicate_claim": "billing",
@@ -44,6 +47,9 @@ class A5PreventionAgent(Agent):
     agent_id = AGENT_ID
     version = "0.1"
     trigger_types = (TRIGGER,)
+
+    def __init__(self):
+        self._rejections: dict[tuple[int, datetime], tuple] = {}  # bounced claims by tenant + as-of, reused in a run
 
     # --------------------------------------------------------------------------------- 2 context pack
     def context_pack(self, session: Session, event: m.Event, as_of: datetime) -> Context:
@@ -68,9 +74,16 @@ class A5PreventionAgent(Agent):
                 m.Claim.service_date == claim.service_date,
             )
         )
+        key = (session.info["tenant_id"], as_of)
+        if key not in self._rejections:  # a bounced claim never reached adjudication, so it cannot be a duplicate
+            self._rejections[key] = rejection_sets(session, as_of)
+        returned, rejected_files = self._rejections[key]
         duplicates = []
         for o in others:
             their = sorted(session.scalars(select(m.ClaimLine.cpt).where(m.ClaimLine.claim_id == o.id)))
+            ev = session.get(m.Event, o.event_id)
+            if o.claim_submitter_id in returned or (ev.gs06, ev.st02) in rejected_files:
+                continue
             if their == codes and o.frequency_code == claim.frequency_code == "1":
                 duplicates.append(o.claim_submitter_id)
         snapshot = {
@@ -112,6 +125,16 @@ class A5PreventionAgent(Agent):
             return Proposal(NO_ACTION, {"claim": d["claim"], "not_evaluated": d["not_evaluated"]})
         hold = any(c.rule_id in HOLD_RULES for c in failed)
         owner = "coding" if all(OWNER[c.rule_id] == "coding" for c in failed) else "billing"
+        amount = Decimal(d["total_charge"])
+        names = ", ".join(c.rule_id for c in failed)
+        card = build_card(
+            f"{'Hold' if hold else 'Fix'} claim {d['claim']} before release: {names}",
+            [f"{c.rule_id}: {c.detail}" for c in failed] + ["Checked before release; nothing has been sent"],
+            amount, amount, date.fromisoformat(d["as_of"]) + timedelta(days=RELEASE_FIX_DAYS), owner,
+            ["Fix the named defect in the PM system (a person edits; the agent never changes codes)",
+             "Re-check the claim, then release it"],
+            [{"rule": c.rule_id, "result": c.result, "detail": c.detail} for c in checks],
+        )  # fmt: skip
         payload = {
             "claim": d["claim"],
             "payer": d["payer"],
@@ -120,6 +143,7 @@ class A5PreventionAgent(Agent):
             "failed_rules": [{"rule": c.rule_id, "detail": c.detail, "owner": OWNER[c.rule_id]} for c in failed],
             "amount_at_risk": d["total_charge"],
             "not_evaluated": d["not_evaluated"],
+            "card": card,
         }
         return Proposal(
             HOLD_REVIEW if hold else FIX_TASK,
