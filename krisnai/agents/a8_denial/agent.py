@@ -16,9 +16,8 @@ from sqlalchemy.orm import Session
 
 import krisnai.model as m
 from krisnai.agents.a8_denial import history, routing
-from krisnai.agents.a15_lite.config import A15Config
-from krisnai.agents.a15_lite.expected import FEE, UNPRICED, Pricer, money, worst_basis
-from krisnai.agents.a15_lite.snapshot import load_snapshot
+from krisnai.agents.a15_lite.expected import money
+from krisnai.agents.a15_lite.pricing import ClaimPricer
 from krisnai.engine import Agent, Context, Proposal, RuleResult, Verification
 from krisnai.engine.models import ModelResult
 
@@ -68,7 +67,7 @@ class A8DenialAgent(Agent):
 
     def __init__(self, recoupment_reasons: tuple[str, ...] = RECOUPMENT_REASONS):
         self.recoupment_reasons = recoupment_reasons
-        self._pricing: dict[tuple[int, date], Pricer] = {}  # one snapshot per tenant + as-of date, reused across events
+        self._pricer = ClaimPricer()  # one A15 snapshot per tenant + as-of date, reused across events
 
     # ---------------------------------------------------------------------------------------- 1 trigger
     def wants(self, event: m.Event) -> bool:
@@ -183,27 +182,7 @@ class A8DenialAgent(Agent):
 
     def _dollars(self, session: Session, event, pay, payer, remit, lines) -> tuple[Decimal, str]:
         """Payer payment expected for the denied lines (A15 pricing as of the event date), else the billed charge."""
-        key = (session.info["tenant_id"], event.known_at.date())
-        if key not in self._pricing:
-            snap = load_snapshot(session.get_bind(), key[0], key[1])
-            self._pricing[key] = Pricer(snap, A15Config())
-        pricer = self._pricing[key]
-        total, bases = Decimal(0), []
-        for ln in lines:
-            value, basis = pricer.payer_expected(
-                payer.payer_id_code,
-                ln.cpt,
-                ln.modifier_1 or "",
-                ln.service_date or remit.service_date,
-                ln.units or Decimal(1),
-            )
-            if basis == UNPRICED:
-                value, basis = ln.charge, "billed_fallback"
-            total += value
-            bases.append(basis)
-        if "billed_fallback" in bases:
-            return money(total), "billed_fallback"
-        return money(total), (worst_basis(bases) if bases else FEE)
+        return self._pricer.price(session, event.known_at.date(), payer.payer_id_code, lines, remit.service_date)
 
     # --------------------------------------------------------------------------- 3 deterministic checks
     def deterministic_checks(self, ctx: Context) -> list[RuleResult]:

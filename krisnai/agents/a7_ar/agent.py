@@ -21,10 +21,10 @@ import krisnai.model as m
 from krisnai.agents.a5_prevention import config as a5_config
 from krisnai.agents.a7_ar import timing
 from krisnai.agents.a7_ar.sweep import EVENT_TYPE
-from krisnai.agents.a15_lite.config import A15Config
-from krisnai.agents.a15_lite.expected import UNPRICED, Pricer, money
-from krisnai.agents.a15_lite.snapshot import load_snapshot
+from krisnai.agents.a15_lite.expected import money
+from krisnai.agents.a15_lite.pricing import ClaimPricer
 from krisnai.engine import NO_ACTION, Agent, Context, Proposal, RuleResult
+from krisnai.engine.card import build_card
 from krisnai.engine.models import ModelResult
 
 AGENT_ID = "a7_ar"
@@ -72,7 +72,7 @@ class A7ArAgent(Agent):
     trigger_types = (EVENT_TYPE,)
 
     def __init__(self):
-        self._pricing: dict[tuple[int, date], Pricer] = {}  # one snapshot per tenant + as-of date, reused across events
+        self._pricer = ClaimPricer()  # one A15 snapshot per tenant + as-of date, reused across events
 
     # --------------------------------------------------------------------------------- 2 context pack
     def context_pack(self, session: Session, event: m.Event, as_of: datetime) -> Context:
@@ -126,23 +126,9 @@ class A7ArAgent(Agent):
 
     def _dollars(self, session: Session, event, payer, claim, lines) -> tuple[Decimal, str]:
         """Payer payment expected for the claim (A15 pricing as of the event date), else the billed charge."""
-        key = (session.info["tenant_id"], event.known_at.date())
-        if key not in self._pricing:
-            self._pricing[key] = Pricer(load_snapshot(session.get_bind(), key[0], key[1]), A15Config())
-        pricer = self._pricing[key]
-        total, bases = Decimal(0), []
-        for ln in lines:
-            value, basis = pricer.payer_expected(
-                payer.payer_id_code, ln.cpt, ln.modifier_1 or "", ln.service_date or claim.service_date,
-                ln.units or Decimal(1),
-            )  # fmt: skip
-            if basis == UNPRICED:
-                value, basis = ln.charge, "billed_fallback"
-            total += value
-            bases.append(basis)
-        if "billed_fallback" in bases or not bases:
-            return money(total or claim.total_charge), "billed_fallback"
-        return money(total), bases[0] if len(set(bases)) == 1 else "mixed"
+        return self._pricer.price(
+            session, event.known_at.date(), payer.payer_id_code, lines, claim.service_date, claim.total_charge
+        )
 
     @staticmethod
     def _age_text(d: dict) -> str:
@@ -192,16 +178,11 @@ class A7ArAgent(Agent):
         if filing_risk:
             why.append(f"Only {left} days left before the filing limit ({d['filing_deadline']})")
         deadline = min(follow_up_by, date.fromisoformat(d["filing_deadline"])) if d["filing_deadline"] else follow_up_by
-        card = {
-            "title": f"Chase {d['payer']} claim {d['claim']}: {d['amount']} unpaid {age} days",
-            "why": why,
-            "priority": str(priority),
-            "expected_value": str(money(amount * (1 - p))),
-            "deadline": deadline.isoformat(),
-            "owner": owner,
-            "next_steps": NEXT_STEPS[action],
-            "evidence": [{"rule": c.rule_id, "result": c.result, "detail": c.detail} for c in checks],
-        }
+        card = build_card(
+            f"Chase {d['payer']} claim {d['claim']}: {d['amount']} unpaid {age} days",
+            why, priority, money(amount * (1 - p)), deadline, owner, NEXT_STEPS[action],
+            [{"rule": c.rule_id, "result": c.result, "detail": c.detail} for c in checks],
+        )  # fmt: skip
         payload = {
             "claim": d["claim"], "payer": d["payer"], "issue": issue, "owner": owner, "age_days": age,
             "aging_bucket": aging_bucket(age), "expected_days": d["expected_days"],
