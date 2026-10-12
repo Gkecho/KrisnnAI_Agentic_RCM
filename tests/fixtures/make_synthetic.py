@@ -138,6 +138,7 @@ class Claim:
     remit_date: date | None = None
     shortfall_line: int | None = None
     shortfall: Decimal = Decimal("0")
+    submitted: date | None = None  # only the open-AR set carries its own submission date
 
     @property
     def billed(self) -> Decimal:
@@ -157,7 +158,7 @@ class Claim:
 
     @property
     def has_remit(self) -> bool:
-        return self.scenario != "rejection"
+        return self.scenario not in ("rejection", "open", "open_returned")
 
 
 @dataclass
@@ -280,6 +281,41 @@ def build_dataset(seed: int, n_claims: int) -> tuple[list[Claim], list[Visit]]:
     return claims, visits
 
 
+# Days each payer takes to pay in the open-AR set, so the payers differ and history means something.
+PAY_DAYS = {"SYNPAY01": 21, "SYNPAY02": 28, "SYNPAY03": 35, "SYNPAY04": 45}
+
+
+def build_open_claims(seed: int, n_open: int) -> list[Claim]:
+    """Claims with real submission dates, for the AR follow-up agent. Opt-in: `generate(n_open=0)` adds none.
+
+    Two kinds: `n_open` claims still unpaid at AS_OF (about one in eight returned by the 277CA), and `n_open` older
+    claims that were paid after their payer's usual number of days, so each payer has a payment history.
+    """
+    rng = random.Random(seed + 7)
+    patients = [
+        Patient(f"SYNO{i:06d}", f"SYNOLAST{i:03d}", f"SYNOFIRST{i:03d}", date(1950, 1, 1) + timedelta(days=97 * i),
+                "MF"[i % 2], PAYERS[i % len(PAYERS)])
+        for i in range(1, 13)
+    ]  # fmt: skip
+    claims: list[Claim] = []
+    for i in range(1, 2 * n_open + 1):
+        patient = rng.choice(patients)
+        paid_history = i > n_open
+        submitted = AS_OF - timedelta(days=rng.randint(95, 200) if paid_history else rng.randint(5, 150))
+        scenario = "paid_history" if paid_history else ("open_returned" if i % 8 == 0 else "open")
+        cpts = rng.sample(sorted(CPT_BASE_FEE), rng.randint(1, 2))
+        claim = Claim(
+            claim_id=f"SYNO{i:06d}", payer=patient.payer, provider_npi=rng.choice(PROVIDERS), patient=patient,
+            dos=submitted - timedelta(days=rng.randint(3, 20)), dx=rng.sample(DX_CODES, 1),
+            lines=[_make_line(rng, patient.payer, c) for c in cpts], scenario=scenario, submitted=submitted,
+            remit_date=submitted + timedelta(days=PAY_DAYS[patient.payer.payer_id] + rng.randint(-4, 4))
+            if paid_history else None,
+        )  # fmt: skip
+        _settle(claim)
+        claims.append(claim)
+    return claims
+
+
 # ----------------------------------------------------------------------------------- X12 writing
 
 
@@ -320,9 +356,9 @@ def _envelope(
     return "".join(s + "~\n" for s in segs)
 
 
-def write_837(payer: Payer, claims: list[Claim], ctrl: int) -> str:
+def write_837(payer: Payer, claims: list[Claim], ctrl: int, when: date = AS_OF) -> str:
     body = [
-        _seg("BHT", "0019", "00", f"SYN837{ctrl}", AS_OF.strftime("%Y%m%d"), "1200", "CH"),
+        _seg("BHT", "0019", "00", f"SYN837{ctrl}", when.strftime("%Y%m%d"), "1200", "CH"),
         _seg("NM1", "41", "2", "SYNTHETIC CLINIC", "", "", "", "", "46", "SYNSENDER"),
         _seg("PER", "IC", "SYNTHETIC BILLING", "TE", "5550000000"),
         _seg("NM1", "40", "2", payer.name, "", "", "", "", "46", payer.payer_id),
@@ -354,7 +390,7 @@ def write_837(payer: Payer, claims: list[Claim], ctrl: int) -> str:
             ]
     return _envelope(
         gs_code="HC", gs_version="005010X222A1", st_code="837", st_version="005010X222A1",
-        body=body, ctrl=ctrl, sender="SYNSENDER", receiver=payer.payer_id, when=AS_OF,
+        body=body, ctrl=ctrl, sender="SYNSENDER", receiver=payer.payer_id, when=when,
     )  # fmt: skip
 
 
@@ -371,9 +407,9 @@ def write_999(payer: Payer, ctrl_837: int, ctrl: int) -> str:
     )  # fmt: skip
 
 
-def write_277ca(payer: Payer, claims: list[Claim], ctrl: int) -> str:
+def write_277ca(payer: Payer, claims: list[Claim], ctrl: int, when: date = AS_OF) -> str:
     body = [
-        _seg("BHT", "0085", "08", f"SYN277{ctrl}", AS_OF.strftime("%Y%m%d"), "1200", "TH"),
+        _seg("BHT", "0085", "08", f"SYN277{ctrl}", when.strftime("%Y%m%d"), "1200", "TH"),
         _seg("HL", 1, "", "20", 1),
         _seg("NM1", "PR", "2", payer.name, "", "", "", "", "PI", payer.payer_id),
         _seg("HL", 2, 1, "21", 1),
@@ -382,19 +418,19 @@ def write_277ca(payer: Payer, claims: list[Claim], ctrl: int) -> str:
         _seg("NM1", "85", "2", "SYNTHETIC CLINIC", "", "", "", "", "XX", PROVIDERS[0]),
     ]
     for hl, c in enumerate(claims, start=4):
-        status = "A3:21:PR" if c.scenario == "rejection" else "A2:20:PR"  # A3 = returned/rejected
+        status = "A3:21:PR" if c.scenario in ("rejection", "open_returned") else "A2:20:PR"  # A3 = returned/rejected
         p = c.patient
         body += [
             _seg("HL", hl, 3, "22", 0),
             _seg("NM1", "IL", "1", p.last, p.first, "", "", "", "MI", p.ref),
             _seg("TRN", "2", c.claim_id),
-            _seg("STC", status, AS_OF.strftime("%Y%m%d"), "WQ", _amt(c.billed)),
+            _seg("STC", status, when.strftime("%Y%m%d"), "WQ", _amt(c.billed)),
             _seg("REF", "1K", c.payer_claim_no),
             _seg("DTP", "472", "D8", c.dos.strftime("%Y%m%d")),
         ]
     return _envelope(
         gs_code="HN", gs_version="005010X214", st_code="277", st_version="005010X214",
-        body=body, ctrl=ctrl, sender=payer.payer_id, receiver="SYNSENDER", when=AS_OF,
+        body=body, ctrl=ctrl, sender=payer.payer_id, receiver="SYNSENDER", when=when,
     )  # fmt: skip
 
 
@@ -504,7 +540,7 @@ def _write_csv(path: Path, columns: list[str], rows: list[dict[str, object]]) ->
         writer.writerows(rows)
 
 
-def generate(out_dir: Path, seed: int = 20260630, n_claims: int = 500) -> dict[str, list[Path]]:
+def generate(out_dir: Path, seed: int = 20260630, n_claims: int = 500, n_open: int = 0) -> dict[str, list[Path]]:
     """Write the full synthetic set into out_dir and return the files by kind."""
     out_dir.mkdir(parents=True, exist_ok=True)
     claims, visits = build_dataset(seed, n_claims)
@@ -530,6 +566,33 @@ def generate(out_dir: Path, seed: int = 20260630, n_claims: int = 500) -> dict[s
             ctrl += 1
             put("835", f"835_{payer.payer_id}_{remit_date:%Y%m%d}.x12",
                 write_835(payer, remit_date, by_remit[remit_date], ctrl + 3000))  # fmt: skip
+
+    if n_open:
+        open_claims = build_open_claims(seed, n_open)
+        ctrl = 20000
+        for payer in PAYERS:
+            mine = [c for c in open_claims if c.payer == payer]
+            for day in sorted({c.submitted for c in mine}):
+                batch = [c for c in mine if c.submitted == day]
+                ctrl += 1
+                put("837", f"837P_{payer.payer_id}_open_{day:%Y%m%d}.x12", write_837(payer, batch, ctrl, day))
+                put("277ca", f"277CA_{payer.payer_id}_open_{day:%Y%m%d}.x12",
+                    write_277ca(payer, batch, ctrl + 5000, day + timedelta(days=2)))  # fmt: skip
+            by_remit = {}
+            for c in mine:
+                if c.has_remit:
+                    by_remit.setdefault(c.remit_date, []).append(c)
+            for remit_date in sorted(by_remit):
+                ctrl += 1
+                put("835", f"835_{payer.payer_id}_open_{remit_date:%Y%m%d}.x12",
+                    write_835(payer, remit_date, by_remit[remit_date], ctrl + 10000))  # fmt: skip
+        truth = [
+            {"claim_id": c.claim_id, "payer_id": c.payer.payer_id, "submitted": c.submitted.isoformat(),
+             "billed": f"{c.billed:.2f}", "returned": "Y" if c.scenario == "open_returned" else "N"}
+            for c in open_claims if c.scenario != "paid_history"
+        ]  # fmt: skip
+        _write_csv(out_dir / "open_ar.csv", ["claim_id", "payer_id", "submitted", "billed", "returned"], truth)
+        written["csv"].append(out_dir / "open_ar.csv")
 
     fee_rows = [
         {"payer_id": p.payer_id, "cpt": cpt, "modifier": "", "allowed_amount": f"{fee(p, cpt):.2f}",
