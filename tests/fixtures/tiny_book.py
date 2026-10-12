@@ -81,14 +81,22 @@ class Book:
         self._add(m.Visit(visit_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider.id,
                           patient_ref_id=(patient or self.patient).id, service_date=dos, cpt=cpt, units=D(1)))  # fmt: skip
 
-    def ack_277ca(self, claim: m.Claim, category: str, known: date) -> None:
-        self._add(m.Ack277Ca(event_id=self.event(known, "277CA.claim_status"), claim_id=claim.id,
-                             claim_submitter_id=claim.claim_submitter_id, status_category=category))  # fmt: skip
+    def ack_277ca(self, claim: m.Claim, category: str, known: date, code: str | None = None,
+                  payer_claim_number: str | None = None) -> None:  # fmt: skip
+        payload = {"claim_submitter_id": claim.claim_submitter_id, "status_category": category, "status_code": code,
+                   "entity_code": None, "payer_claim_number": payer_claim_number}  # fmt: skip
+        self._add(m.Ack277Ca(event_id=self.event(known, "277CA.claim_status", payload=payload), claim_id=claim.id,
+                             claim_submitter_id=claim.claim_submitter_id, status_category=category, status_code=code,
+                             payer_claim_number=payer_claim_number))  # fmt: skip
 
-    def ack_999(self, sid: str, status: str, known: date) -> None:
-        """999 for the 837 transaction the claim `sid` travelled in (the book uses sid as ST02 and GS06)."""
-        self._add(m.Ack999(event_id=self.event(known, "999.ack"), acked_gs06=sid, acked_st02=sid,
-                           transaction_set="837", transaction_status=status))  # fmt: skip
+    def ack_999(self, sid: str, status: str, known: date, errors: str | None = None, gs06: str | None = None,
+                st02: str | None = None) -> None:  # fmt: skip
+        """999 for the 837 transaction the claim `sid` travelled in (by default the book uses sid as ST02 and GS06)."""
+        gs06, st02 = gs06 or sid, st02 or sid
+        payload = {"acked_gs06": gs06, "acked_st02": st02, "transaction_set": "837", "transaction_status": status,
+                   "group_status": None, "error_codes": errors}  # fmt: skip
+        self._add(m.Ack999(event_id=self.event(known, "999.ack", payload=payload), acked_gs06=gs06, acked_st02=st02,
+                           transaction_set="837", transaction_status=status, error_codes=errors))  # fmt: skip
 
     def payment(self, payer: str, known: date, trace: str, amount: str, plb: list[tuple[str, str]] | None = None):
         """`plb` is a list of (reason, amount) provider-level adjustments."""

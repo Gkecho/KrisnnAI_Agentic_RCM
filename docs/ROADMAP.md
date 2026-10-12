@@ -2,7 +2,7 @@
 
 Source: `KrisnnAI_RCM_Strategy_v5_Redline.docx` (Section 3 portfolio and release waves, Section 10 MVP, Section 11 180-day roadmap,
 Appendix A spec template). `docs/BUILD_PLAN.md` was written earlier and only detailed M0-M10; this file covers every agent.
-Update the **Status** column as work lands. Milestones M0-M9 are done; M10 onward are proposed and need approval (plan mode first for each).
+Update the **Status** column as work lands. Milestones M0-M10 are done; M11 onward are proposed and need approval (plan mode first for each).
 
 ## Rules from the strategy that apply to every agent
 - **Spec before build.** No agent is built or enabled without a completed Appendix A spec (24 fields, in `docs/specs/Ax.md`, drafted for all 15 agents). Thresholds are
@@ -20,7 +20,7 @@ Update the **Status** column as work lands. Milestones M0-M9 are done; M10 onwar
 | A8 | Denial Resolution & Appeal | MVP, Wave 1 | M7 | **Done, shadow** | Spec redone on Appendix A. Outcome tracking and evidence gathering still missing. |
 | A5 | Claim Prevention & Digital Twin | MVP, Wave 1 | M8 | **Done, shadow** | Five rules built; NCCI/MUE rows are synthetic stand-ins. Still needs CMS tables, payer-rule library v1, eligibility/auth data, and the calibrated denial model. |
 | A7 | AR Next-Best-Action | MVP, Wave 1 | M9 | **Done, shadow** | Sweeper + agent + ranked inbox cards. Still needs real 276/277 status (with A6), pending-claim (records request) detection, routing to registration/authorization. |
-| A6 | Claim Submission & Response | MVP, Wave 1 | M10 | Planned | clearinghouse stub now; real partner API later |
+| A6 | Claim Submission & Response | MVP, Wave 1 | M10 | **Done, shadow (response side)** | Rejection handling built. Still needs a release signal for the submission side, an X12 837 writer, the real partner adapter, 276/277 status, and signed-off technical rejection codes. |
 | A14 | RCM Control Tower (expanded) | MVP, Wave 1 | M11 | Planned | forecasting, backlog, payer slowdowns; needs the approvals API/UI |
 | A10 | Contract & Underpayment | MVP, Wave 2 | M12 | Planned | fee schedules (synthetic exists); real contracts; falls back to payer history |
 | A3 | Documentation Completeness | MVP, Wave 2 | M13 | Planned | EHR/PM note, charge and encounter data (not in the repo; needs a synthetic generator first) |
