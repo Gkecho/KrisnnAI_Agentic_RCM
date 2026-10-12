@@ -8,6 +8,7 @@
     krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth CSV]   leakage diagnostic (read-only)
     krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
+    krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -87,6 +88,17 @@ def main(argv: list[str] | None = None) -> int:
     a5_replay = "replay A5 over the tenant's claims in shadow mode and print the summary"
     for name, text in (("seed", a5_seed), ("replay", a5_replay)):
         a5_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a7 = sub.add_parser("a7", help="A7 AR next-best-action agent, shadow mode only")
+    a7_sub = a7.add_subparsers(dest="a7_cmd", required=True)
+    a7_sweep = a7_sub.add_parser("sweep", help="raise a follow-up event for each overdue unpaid claim")
+    a7_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a7_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a7_sweep.add_argument("--every-days", type=int, default=7)
+    a7_replay = a7_sub.add_parser("replay", help="replay A7 over the follow-up events in shadow mode")
+    a7_inbox = a7_sub.add_parser("inbox", help="print the ranked cards (latest per claim)")
+    a7_inbox.add_argument("--top", type=int, default=20)
+    for sp in (a7_sweep, a7_replay, a7_inbox):
+        sp.add_argument("--tenant", type=int, required=True)
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -187,6 +199,20 @@ def main(argv: list[str] | None = None) -> int:
             items = replay(engine, args.tenant, A5PreventionAgent())
             print(f"replayed {len(items)} claims (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a7":
+        from krisnai.agents.a7_ar import A7ArAgent, format_inbox, format_summary, inbox, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a7_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} follow-up events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        elif args.a7_cmd == "replay":
+            items = replay(engine, args.tenant, A7ArAgent())
+            print(f"replayed {len(items)} follow-ups (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+        else:
+            print(format_inbox(inbox(engine, args.tenant, args.top), args.tenant))
     return 0
 
 
