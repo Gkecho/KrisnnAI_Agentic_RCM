@@ -112,3 +112,40 @@ class PayerAppealWindow(Scoped, Base):
 
     payer_id: Mapped[int] = fk("payer this window applies to")
     appeal_days: Mapped[int] = col(Integer, "routing config: appeal window in days from the payment date")
+
+
+class NcciPair(Scoped, Base):
+    """Procedure pair that should not be billed together on one date of service (A5). Placeholder rows until CMS data."""
+
+    __tablename__ = "ncci_pair"
+    __table_args__ = scoped(
+        unique=[("cpt_a", "cpt_b")],
+        checks=[("indicator", "modifier_indicator IN ('0', '1')")],
+        from_file=False,
+    )
+
+    cpt_a: Mapped[str] = col(String(5), "prevention config: column 1 procedure code of the pair")
+    cpt_b: Mapped[str] = col(String(5), "prevention config: column 2 procedure code of the pair")
+    modifier_indicator: Mapped[str] = col(
+        String(1), "prevention config: 1 = a modifier may bypass the edit, 0 = never billable together"
+    )
+
+
+class MueLimit(Scoped, Base):
+    """Most units of one procedure per date of service (A5). Placeholder rows until CMS data."""
+
+    __tablename__ = "mue_limit"
+    __table_args__ = scoped(unique=[("cpt",)], from_file=False)
+
+    cpt: Mapped[str] = col(String(5), "prevention config: procedure code the limit applies to")
+    max_units: Mapped[int] = col(Integer, "prevention config: most units allowed per date of service")
+
+
+class PayerFilingWindow(Scoped, Base):
+    """Days a payer allows to file a claim, counted from the date of service. No row means the agent default."""
+
+    __tablename__ = "payer_filing_window"
+    __table_args__ = scoped([("payer_id", "payer")], unique=[("payer_id",)], from_file=False)
+
+    payer_id: Mapped[int] = fk("payer this window applies to")
+    filing_days: Mapped[int] = col(Integer, "prevention config: timely filing limit in days from the date of service")

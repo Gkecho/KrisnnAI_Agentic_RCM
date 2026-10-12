@@ -23,12 +23,16 @@ from krisnai.model.base import Base
 from krisnai.model.scoping import TenantMismatchError, tenant_session
 
 TABLES = Base.metadata.tables
-ENGINE_TABLES = ("policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window")
+ENGINE_TABLES = (
+    "policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window",
+    "ncci_pair", "mue_limit", "payer_filing_window",
+)  # fmt: skip
 EXPECTED_TABLES = {
     "tenant", "source_file", "event", "payer", "provider", "patient_ref", "claim", "claim_line",
     "claim_dx", "ack_999", "ack_277ca", "remit", "remit_line", "adjustment", "remit_remark",
     "plb_adjustment", "payment", "fee_schedule", "ar_snapshot", "visit",
     "policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window",
+    "ncci_pair", "mue_limit", "payer_filing_window",
 }  # fmt: skip
 
 

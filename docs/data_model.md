@@ -43,6 +43,7 @@ erDiagram
     payer ||--o{ claim : has
     payer ||--o{ fee_schedule : has
     payer ||--o{ payer_appeal_window : has
+    payer ||--o{ payer_filing_window : has
     payer ||--o{ payment : has
     payer ||--o{ visit : has
     payment ||--o{ plb_adjustment : has
@@ -80,6 +81,31 @@ Unique keys (idempotency): `(tenant_id, carc_code)`
 | `owner` | VARCHAR(20) | no | routing config: front_desk, coding or billing |
 | `disposition` | VARCHAR(30) | no | routing config: correctable, appealable or write_off_review |
 | `description` | VARCHAR(200) | no | routing config: what the code means, for the person reading the task |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `mue_limit`
+
+Unique keys (idempotency): `(tenant_id, cpt)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `cpt` | VARCHAR(5) | no | prevention config: procedure code the limit applies to |
+| `max_units` | INTEGER | no | prevention config: most units allowed per date of service |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `ncci_pair`
+
+Unique keys (idempotency): `(tenant_id, cpt_a, cpt_b)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `cpt_a` | VARCHAR(5) | no | prevention config: column 1 procedure code of the pair |
+| `cpt_b` | VARCHAR(5) | no | prevention config: column 2 procedure code of the pair |
+| `modifier_indicator` | VARCHAR(1) | no | prevention config: 1 = a modifier may bypass the edit, 0 = never billable together |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `policy`
@@ -269,6 +295,18 @@ Unique keys (idempotency): `(tenant_id, payer_id)`
 | `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
 | `payer_id` | BIGINT | no | payer this window applies to |
 | `appeal_days` | INTEGER | no | routing config: appeal window in days from the payment date |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `payer_filing_window`
+
+Unique keys (idempotency): `(tenant_id, payer_id)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `payer_id` | BIGINT | no | payer this window applies to |
+| `filing_days` | INTEGER | no | prevention config: timely filing limit in days from the date of service |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `payment`
