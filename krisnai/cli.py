@@ -10,6 +10,8 @@
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
+    krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
+    krisnai a14 sweep|replay --tenant ID                                  control tower agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -89,6 +91,19 @@ def main(argv: list[str] | None = None) -> int:
     a5_replay = "replay A5 over the tenant's claims in shadow mode and print the summary"
     for name, text in (("seed", a5_seed), ("replay", a5_replay)):
         a5_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    tw = sub.add_parser("tower", help="RCM control tower snapshot as of a date (read-only; run match first)")
+    tw.add_argument("--tenant", type=int, required=True)
+    tw.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    tw.add_argument("--backtest-weeks", type=int, default=8, help="past forecasts used to measure accuracy")
+    tw.add_argument("--json", action="store_true")
+    a14 = sub.add_parser("a14", help="A14 control tower agent, shadow mode only")
+    a14_sub = a14.add_subparsers(dest="a14_cmd", required=True)
+    a14_sweep = a14_sub.add_parser("sweep", help="raise one daily tower event per day")
+    a14_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a14_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a14_replay = a14_sub.add_parser("replay", help="replay A14 over the daily events in shadow mode")
+    for sp in (a14_sweep, a14_replay):
+        sp.add_argument("--tenant", type=int, required=True)
     a6 = sub.add_parser("a6", help="A6 claim submission and response agent (rejections), shadow mode only")
     a6_sub = a6.add_subparsers(dest="a6_cmd", required=True)
     a6_seed = "load the placeholder rejection routing rows for a tenant"
@@ -205,6 +220,23 @@ def main(argv: list[str] | None = None) -> int:
         else:
             items = replay(engine, args.tenant, A5PreventionAgent())
             print(f"replayed {len(items)} claims (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "tower":
+        from krisnai.agents.a14_tower import compute_tower, format_tower
+
+        tower = compute_tower(engine, args.tenant, args.as_of, args.backtest_weeks)
+        print(json.dumps(tower, default=str, indent=2) if args.json else format_tower(tower))
+    elif args.cmd == "a14":
+        from krisnai.agents.a14_tower import A14TowerAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a14_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end)
+            added = f"{res.events} daily tower events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A14TowerAgent())
+            print(f"replayed {len(items)} days (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
     elif args.cmd == "a6":
         from krisnai.agents.a6_submission import A6SubmissionAgent, format_summary, seed_defaults, summarize

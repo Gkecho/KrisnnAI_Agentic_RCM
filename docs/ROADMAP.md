@@ -2,7 +2,7 @@
 
 Source: `KrisnnAI_RCM_Strategy_v5_Redline.docx` (Section 3 portfolio and release waves, Section 10 MVP, Section 11 180-day roadmap,
 Appendix A spec template). `docs/BUILD_PLAN.md` was written earlier and only detailed M0-M10; this file covers every agent.
-Update the **Status** column as work lands. Milestones M0-M10 are done; M11 onward are proposed and need approval (plan mode first for each).
+Update the **Status** column as work lands. Milestones M0-M11 are done; M12 onward are proposed and need approval (plan mode first for each).
 
 ## Rules from the strategy that apply to every agent
 - **Spec before build.** No agent is built or enabled without a completed Appendix A spec (24 fields, in `docs/specs/Ax.md`, drafted for all 15 agents). Thresholds are
@@ -21,7 +21,7 @@ Update the **Status** column as work lands. Milestones M0-M10 are done; M11 onwa
 | A5 | Claim Prevention & Digital Twin | MVP, Wave 1 | M8 | **Done, shadow** | Five rules built; NCCI/MUE rows are synthetic stand-ins. Still needs CMS tables, payer-rule library v1, eligibility/auth data, and the calibrated denial model. |
 | A7 | AR Next-Best-Action | MVP, Wave 1 | M9 | **Done, shadow** | Sweeper + agent + ranked inbox cards. Still needs real 276/277 status (with A6), pending-claim (records request) detection, routing to registration/authorization. |
 | A6 | Claim Submission & Response | MVP, Wave 1 | M10 | **Done, shadow (response side)** | Rejection handling built. Still needs a release signal for the submission side, an X12 837 writer, the real partner adapter, 276/277 status, and signed-off technical rejection codes. |
-| A14 | RCM Control Tower (expanded) | MVP, Wave 1 | M11 | Planned | forecasting, backlog, payer slowdowns; needs the approvals API/UI |
+| A14 | RCM Control Tower (expanded) | MVP, Wave 1 | M11 | **Done, shadow** | Cross-agent inbox, cash forecast + measured accuracy, backlog, 4 signals, daily escalation review built. Still needs a UI (FastAPI blocked), productivity / staffing / load balancing (need task logs and staff data), a fitted forecast model. |
 | A10 | Contract & Underpayment | MVP, Wave 2 | M12 | Planned | fee schedules (synthetic exists); real contracts; falls back to payer history |
 | A3 | Documentation Completeness | MVP, Wave 2 | M13 | Planned | EHR/PM note, charge and encounter data (not in the repo; needs a synthetic generator first) |
 | A1 | Pre-Visit Financial Clearance | MVP, Wave 2 | M14 | Planned | appointments, 270/271 eligibility (new parsers and synthetic data) |
@@ -35,7 +35,7 @@ Update the **Status** column as work lands. Milestones M0-M10 are done; M11 onwa
 
 ## Order of work
 1. **M8a (done): specs.** `docs/specs/A1.md` ... `A15.md` drafted on the real Appendix A (24 fields each), thresholds TBD; `A8.md` redone on it. The A15-lite agent map now follows the strategy's numbering (authorization to A2, coding to A4, coverage to A1, claim defects to A5). Strategy document copied to `docs/strategy_v5.docx`.
-2. **Wave 1 (M8-M11):** A5, A7, A6, A14. Same pattern as A8: shadow mode, replay against synthetic ground truth.
+2. **Wave 1 (M8-M11): done.** A5, A7, A6, A14, same pattern as A8: shadow mode, replay against synthetic ground truth.
 3. **Platform work that Wave 1 and 2 need** (the strategy lists these in Days 0-60; not built yet): approvals HTTP endpoints and a simple UI
    (blocked: FastAPI cannot load on the dev PC, see below), identity resolution across systems, RBAC, a durable workflow engine decision (ADR-0003,
    Temporal is the named candidate), value ledger / outcome attribution with a holdout design, first real EHR/PM adapter, real clearinghouse adapter, payer-rule library v1.
