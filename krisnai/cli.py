@@ -7,6 +7,7 @@
     krisnai metrics --tenant ID --as-of DATE [--kpi NAME] [--json]   compute KPIs as of a date
     krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth CSV]   leakage diagnostic (read-only)
     krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
+    krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
 The patient-hash salt is read from the environment variable named by the tenant's salt key.
@@ -80,6 +81,12 @@ def main(argv: list[str] | None = None) -> int:
     replay_help = "replay A8 over the tenant's history in shadow mode and print the summary"
     for name, text in (("seed", seed_help), ("replay", replay_help)):
         a8_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a5 = sub.add_parser("a5", help="A5 claim prevention agent, shadow mode only")
+    a5_sub = a5.add_subparsers(dest="a5_cmd", required=True)
+    a5_seed = "load the placeholder NCCI and MUE rows for a tenant"
+    a5_replay = "replay A5 over the tenant's claims in shadow mode and print the summary"
+    for name, text in (("seed", a5_seed), ("replay", a5_replay)):
+        a5_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
     args = parser.parse_args(argv)
 
     engine = make_engine(args.db_url)
@@ -165,6 +172,20 @@ def main(argv: list[str] | None = None) -> int:
         else:
             items = replay(engine, args.tenant, A8DenialAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a5":
+        from krisnai.agents.a5_prevention import A5PreventionAgent, format_summary, seed_defaults, summarize
+        from krisnai.engine import replay
+        from krisnai.model import tenant_session
+
+        if args.a5_cmd == "seed":
+            with tenant_session(engine, args.tenant) as s:
+                added = seed_defaults(s)
+                s.commit()
+            print(f"{added} rule rows added")
+        else:
+            items = replay(engine, args.tenant, A5PreventionAgent())
+            print(f"replayed {len(items)} claims (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
     return 0
 
