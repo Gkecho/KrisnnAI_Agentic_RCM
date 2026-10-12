@@ -149,3 +149,26 @@ class PayerFilingWindow(Scoped, Base):
 
     payer_id: Mapped[int] = fk("payer this window applies to")
     filing_days: Mapped[int] = col(Integer, "prevention config: timely filing limit in days from the date of service")
+
+
+class RejectionRoute(Scoped, Base):
+    """Rejection routing table (A6): who owns a 999 / 277CA rejection and whether the fix is technical or business."""
+
+    __tablename__ = "rejection_route"
+    __table_args__ = scoped(
+        unique=[("source", "status_category", "status_code")],
+        checks=[
+            ("source", "source IN ('999', '277CA')"),
+            ("kind", "kind IN ('technical', 'business')"),
+            ("owner", "owner IN ('front_desk', 'coding', 'billing')"),
+        ],
+        from_file=False,
+    )
+
+    source: Mapped[str] = col(String(5), "routing config: which acknowledgement, 999 or 277CA")
+    status_category: Mapped[str] = col(String(5), "routing config: 999 IK5 status (R, E) or 277CA category (A3, A4)")
+    status_code: Mapped[str] = col(String(5), "routing config: 277CA status code, or * for any code")
+    category: Mapped[str] = col(String(40), "routing config: rejection category, e.g. edi_structure")
+    kind: Mapped[str] = col(String(10), "routing config: technical (fixable without judgement) or business")
+    owner: Mapped[str] = col(String(20), "routing config: front_desk, coding or billing")
+    description: Mapped[str] = col(String(200), "routing config: what the status means, for the person reading the task")

@@ -124,6 +124,23 @@ Unique keys (idempotency): `(tenant_id, action_type)`
 | `approver_role` | VARCHAR(50) | yes | engine config: role that must approve at L2 / L3 |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `rejection_route`
+
+Unique keys (idempotency): `(tenant_id, source, status_category, status_code)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source` | VARCHAR(5) | no | routing config: which acknowledgement, 999 or 277CA |
+| `status_category` | VARCHAR(5) | no | routing config: 999 IK5 status (R, E) or 277CA category (A3, A4) |
+| `status_code` | VARCHAR(5) | no | routing config: 277CA status code, or * for any code |
+| `category` | VARCHAR(40) | no | routing config: rejection category, e.g. edi_structure |
+| `kind` | VARCHAR(10) | no | routing config: technical (fixable without judgement) or business |
+| `owner` | VARCHAR(20) | no | routing config: front_desk, coding or billing |
+| `description` | VARCHAR(200) | no | routing config: what the status means, for the person reading the task |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `source_file`
 
 Unique keys (idempotency): `(tenant_id, file_sha256)`
