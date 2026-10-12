@@ -19,6 +19,7 @@ from krisnai.agents.a8_denial import history, routing
 from krisnai.agents.a15_lite.expected import money
 from krisnai.agents.a15_lite.pricing import ClaimPricer
 from krisnai.engine import Agent, Context, Proposal, RuleResult, Verification
+from krisnai.engine.card import build_card
 from krisnai.engine.models import ModelResult
 
 AGENT_ID = "a8_denial"
@@ -30,6 +31,16 @@ WRITE_OFF_REVIEW = "a8_write_off_review"
 TAKEBACK_REVIEW = "a8_takeback_review"
 RECOUPMENT_REVIEW = "a8_recoupment_review"
 ACTION_TYPES = (FIX_TASK, APPEAL_TASK, WRITE_OFF_REVIEW, TAKEBACK_REVIEW, RECOUPMENT_REVIEW)
+NEXT_STEPS = {
+    FIX_TASK: [
+        "Fix the cause named in the denial (a person edits; the agent never changes codes)",
+        "Resubmit the corrected claim",
+    ],
+    APPEAL_TASK: ["Review the draft appeal", "Gather the supporting records", "Send the appeal before the deadline"],
+    WRITE_OFF_REVIEW: ["A person decides whether this is still recoverable", "Any write-off needs a named approval"],
+    TAKEBACK_REVIEW: ["Confirm the payer reversal is valid", "Decide whether to dispute it"],
+    RECOUPMENT_REVIEW: ["Confirm the overpayment recovery is valid", "Decide whether to dispute it"],
+}
 ACTION_BY_DISPOSITION = {"correctable": FIX_TASK, "appealable": APPEAL_TASK, "write_off_review": WRITE_OFF_REVIEW}
 
 DENIAL, DENIAL_LINE, TAKEBACK, RECOUPMENT = "denial", "denial_line", "takeback", "recoupment"
@@ -221,6 +232,17 @@ class A8DenialAgent(Agent):
             action = RECOUPMENT_REVIEW
         else:
             action = ACTION_BY_DISPOSITION[d["disposition"]]
+        expected = money(at_risk * prob)
+        why = [
+            f"{d['category']} ({d['trigger']}): {d.get('description') or 'see the payer codes'}",
+            f"{at_risk} at risk ({d['pricing_basis']}); chance of recovery {prob.quantize(Decimal('0.01'))}",
+            f"Deadline {deadline.isoformat()}",
+        ]
+        card = build_card(
+            f"{d['category'].replace('_', ' ').title()}: {d['payer']} claim {d['claim'] or 'n/a'}, {at_risk} at risk",
+            why, expected, expected, deadline, d["owner"], NEXT_STEPS[action],
+            [{"rule": c.rule_id, "result": c.result, "detail": c.detail} for c in checks],
+        )  # fmt: skip
         payload = {
             "trigger": d["trigger"],
             "payer": d["payer"],
@@ -238,6 +260,7 @@ class A8DenialAgent(Agent):
             "expected_recovery": str(money(at_risk * prob)),
             "unrouted": d["unrouted"],
             "appeal_draft": model.text if model else None,
+            "card": card,
         }
         confidence = Decimal("0.95") if not d["unrouted"] else Decimal("0.50")
         return Proposal(

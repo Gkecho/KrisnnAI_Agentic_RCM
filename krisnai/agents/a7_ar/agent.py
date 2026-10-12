@@ -73,6 +73,7 @@ class A7ArAgent(Agent):
 
     def __init__(self):
         self._pricer = ClaimPricer()  # one A15 snapshot per tenant + as-of date, reused across events
+        self._timing: dict[tuple[int, int, datetime], tuple] = {}  # payer history by tenant + payer + as-of
 
     # --------------------------------------------------------------------------------- 2 context pack
     def context_pack(self, session: Session, event: m.Event, as_of: datetime) -> Context:
@@ -97,8 +98,13 @@ class A7ArAgent(Agent):
             .order_by(m.Event.known_at.desc(), m.Ack277Ca.id.desc())
         ).first()
         age = (as_of.date() - claim.submitted_on).days if claim.submitted_on else 0
-        expected, expected_basis = timing.expected_days(session, claim.payer_id, as_of)
-        paid, n = timing.paid_on_their_own(session, claim.payer_id, as_of)
+        key = (session.info["tenant_id"], claim.payer_id, as_of)
+        if key not in self._timing:
+            self._timing[key] = (
+                *timing.expected_days(session, claim.payer_id, as_of),
+                *timing.paid_on_their_own(session, claim.payer_id, as_of),
+            )
+        expected, expected_basis, paid, n = self._timing[key]
         rules = a5_config.load(session)
         filing_days = rules.filing_days.get(claim.payer_id, a5_config.DEFAULT_FILING_DAYS)
         filing_deadline = claim.service_date + timedelta(days=filing_days) if claim.service_date else None

@@ -30,6 +30,7 @@ include = ["krisnai*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: builds a large synthetic history (about a minute); skip with -m \"not slow\""]
 
 [tool.ruff]
 extend-exclude = ["migrations/versions"]

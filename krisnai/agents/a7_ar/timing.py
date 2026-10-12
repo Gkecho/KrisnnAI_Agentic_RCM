@@ -56,11 +56,25 @@ def _known_claims(session: Session, payer_id: int, as_of: date | datetime):
     return session.execute(stmt).all()
 
 
+def payment_days(session: Session, payer_id: int, as_of: date | datetime, mature_only: bool = False) -> list[int]:
+    """Sorted days from submission to first payment for this payer's claims paid by `as_of`.
+
+    `mature_only` keeps claims at least MATURE_DAYS old. Claims submitted recently only show up here if they paid
+    fast, which makes a payer look quicker than it is; a forecast needs the unbiased curve.
+    """
+    cutoff = _end_of(as_of).date().toordinal() - MATURE_DAYS
+    paid = first_payments(session, payer_id, as_of)
+    days = [
+        (paid[cid] - sub).days
+        for cid, sub in _known_claims(session, payer_id, as_of)
+        if cid in paid and (not mature_only or sub.toordinal() <= cutoff)
+    ]
+    return sorted(d for d in days if d >= 0)
+
+
 def expected_days(session: Session, payer_id: int, as_of: date | datetime) -> tuple[int, str]:
     """(days from submission to first payment, basis). The payer's median once it has MIN_HISTORY paid claims."""
-    paid = first_payments(session, payer_id, as_of)
-    days = [(paid[cid] - sub).days for cid, sub in _known_claims(session, payer_id, as_of) if cid in paid]
-    days = [d for d in days if d >= 0]
+    days = payment_days(session, payer_id, as_of)
     if len(days) >= MIN_HISTORY:
         return int(median(days)), f"history n={len(days)}"
     return DEFAULT_DAYS, f"default (history n={len(days)})"

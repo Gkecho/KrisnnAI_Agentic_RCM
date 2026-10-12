@@ -285,11 +285,16 @@ def build_dataset(seed: int, n_claims: int) -> tuple[list[Claim], list[Visit]]:
 PAY_DAYS = {"SYNPAY01": 21, "SYNPAY02": 28, "SYNPAY03": 35, "SYNPAY04": 45}
 
 
-def build_open_claims(seed: int, n_open: int) -> list[Claim]:
-    """Claims with real submission dates, for the AR follow-up agent. Opt-in: `generate(n_open=0)` adds none.
+STUCK_SHARE = 0.10  # share of open-AR-set claims the payer never pays (lost in the payer's system)
 
-    Two kinds: `n_open` claims still unpaid at AS_OF (about one in eight returned by the 277CA), and `n_open` older
-    claims that were paid after their payer's usual number of days, so each payer has a payment history.
+
+def build_open_claims(seed: int, n_open: int) -> list[Claim]:
+    """Claims with real submission dates, for the AR follow-up agent and the cash forecast. Opt-in: `n_open=0` adds none.
+
+    `2 * n_open` claims are submitted at random over the 200 days before AS_OF. Each payer pays after its usual number
+    of days (PAY_DAYS, plus or minus 4); a claim is still unpaid at AS_OF only because that time has not passed yet,
+    because it is one of the stuck claims the payer never pays, or because the 277CA returned it (about one in eight).
+    Nothing is chosen because it is unpaid, so a forecast made at an earlier date can be scored fairly.
     """
     rng = random.Random(seed + 7)
     patients = [
@@ -300,16 +305,18 @@ def build_open_claims(seed: int, n_open: int) -> list[Claim]:
     claims: list[Claim] = []
     for i in range(1, 2 * n_open + 1):
         patient = rng.choice(patients)
-        paid_history = i > n_open
-        submitted = AS_OF - timedelta(days=rng.randint(95, 200) if paid_history else rng.randint(5, 150))
-        scenario = "paid_history" if paid_history else ("open_returned" if i % 8 == 0 else "open")
+        submitted = AS_OF - timedelta(days=rng.randint(5, 200))
+        returned = i % 8 == 0
+        stuck = rng.random() < STUCK_SHARE
+        paid_on = submitted + timedelta(days=PAY_DAYS[patient.payer.payer_id] + rng.randint(-4, 4))
+        paid = not returned and not stuck and paid_on <= AS_OF
         cpts = rng.sample(sorted(CPT_BASE_FEE), rng.randint(1, 2))
         claim = Claim(
             claim_id=f"SYNO{i:06d}", payer=patient.payer, provider_npi=rng.choice(PROVIDERS), patient=patient,
             dos=submitted - timedelta(days=rng.randint(3, 20)), dx=rng.sample(DX_CODES, 1),
-            lines=[_make_line(rng, patient.payer, c) for c in cpts], scenario=scenario, submitted=submitted,
-            remit_date=submitted + timedelta(days=PAY_DAYS[patient.payer.payer_id] + rng.randint(-4, 4))
-            if paid_history else None,
+            lines=[_make_line(rng, patient.payer, c) for c in cpts],
+            scenario="paid_history" if paid else ("open_returned" if returned else "open"),
+            submitted=submitted, remit_date=paid_on if paid else None,
         )  # fmt: skip
         _settle(claim)
         claims.append(claim)
