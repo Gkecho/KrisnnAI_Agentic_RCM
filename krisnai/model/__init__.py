@@ -18,10 +18,10 @@ from krisnai.model.reference import FeeSchedule, PatientRef, Payer, Provider
 from krisnai.model.remits import Adjustment, Payment, PlbAdjustment, Remit, RemitLine, RemitRemark
 from krisnai.model.scoping import tenant_session
 from krisnai.model.snapshots import ArSnapshot
-from krisnai.model.visits import Visit
+from krisnai.model.visits import Charge, Visit, VisitNote
 
 __all__ = [
     "Ack277Ca", "Ack999", "Adjustment", "ApprovalRequest", "ArSnapshot", "CarcRoute", "DecisionRecord", "PayerAppealWindow", "Policy", "Base", "Claim", "ClaimDx", "ClaimLine",
     "Event", "FeeSchedule", "MueLimit", "NcciPair", "PatientRef", "Payer", "PayerFilingWindow", "Payment", "PlbAdjustment", "Provider", "Remit",
-    "RejectionRoute", "RemitLine", "RemitRemark", "Scoped", "SourceFile", "Tenant", "Visit", "tenant_session",
+    "RejectionRoute", "RemitLine", "RemitRemark", "Scoped", "SourceFile", "Tenant", "Visit", "VisitNote", "Charge", "tenant_session",
 ]  # fmt: skip

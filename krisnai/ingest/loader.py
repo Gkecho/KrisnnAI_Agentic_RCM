@@ -33,6 +33,7 @@ from krisnai.model import (
     Ack277Ca,
     Ack999,
     Adjustment,
+    Charge,
     Claim,
     ClaimDx,
     ClaimLine,
@@ -48,6 +49,7 @@ from krisnai.model import (
     RemitRemark,
     SourceFile,
     Visit,
+    VisitNote,
     tenant_session,
 )  # fmt: skip
 
@@ -333,6 +335,80 @@ def _write_visits(s: Session, sf: int, rows: list[dict]) -> int:
     return len(rows)
 
 
+def parse_notes(text: str) -> list[dict]:
+    """CSV columns: visit_id, note_date, signed_date (empty = unsigned), minutes (optional), elements (comma list)."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"visit_id", "note_date", "signed_date", "elements"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"notes CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            signed = (r["signed_date"] or "").strip()
+            minutes = (r.get("minutes") or "").strip()
+            rows.append({
+                "ref": r["visit_id"].strip(), "note_date": date.fromisoformat(r["note_date"]),
+                "signed": date.fromisoformat(signed) if signed else None,
+                "minutes": int(minutes) if minutes else None, "elements": ",".join(
+                    e.strip() for e in (r["elements"] or "").split(",") if e.strip()
+                ),
+            })  # fmt: skip
+        except (ValueError, KeyError) as e:
+            raise X12Error(f"notes line {n}: {e}") from None
+    if not rows:
+        raise X12Error("notes CSV has no rows")
+    return rows
+
+
+def _write_notes(s: Session, sf: int, rows: list[dict]) -> int:
+    for r in rows:
+        s.add(VisitNote(
+            source_file_id=sf, visit_ref=r["ref"], note_date=r["note_date"], signed_date=r["signed"],
+            minutes=r["minutes"], elements=r["elements"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
+def parse_charges(text: str) -> list[dict]:
+    """CSV columns: charge_id, visit_id, cpt, units, entered_date."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"charge_id", "visit_id", "cpt", "units", "entered_date"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"charges CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            rows.append({
+                "ref": r["charge_id"].strip(), "visit": r["visit_id"].strip(), "cpt": r["cpt"].strip(),
+                "units": Decimal(r["units"]), "entered": date.fromisoformat(r["entered_date"]),
+            })  # fmt: skip
+        except (InvalidOperation, ValueError, KeyError) as e:
+            raise X12Error(f"charges line {n}: {e}") from None
+    if not rows:
+        raise X12Error("charges CSV has no rows")
+    return rows
+
+
+def _write_charges(s: Session, sf: int, rows: list[dict]) -> int:
+    for r in rows:
+        s.add(Charge(
+            source_file_id=sf, charge_ref=r["ref"], visit_ref=r["visit"], cpt=r["cpt"], units=r["units"],
+            entered_date=r["entered"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
+def csv_kind(name: str) -> str:
+    """Which CSV this is, from its file name: charges, notes, visits, else a fee schedule."""
+    low = name.lower()
+    for kind in ("charge", "note", "visit"):
+        if kind in low:
+            return {"charge": "charges", "note": "notes", "visit": "visits"}[kind]
+    return "fee_schedule"
+
+
 def ingest_parsed(
     engine: Engine, tenant_id: int, name: str, fingerprint: str, file_type: str, parsed: list, size: int = 0
 ) -> IngestResult:
@@ -370,8 +446,8 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                                 f"already ingested as source_file {existing.id} ({existing.status})")  # fmt: skip
 
         is_csv = path.suffix.lower() == ".csv"
-        is_visits = is_csv and "visit" in path.name.lower()
-        file_type = ("visits" if is_visits else "fee_schedule") if is_csv else "unknown"
+        kind = csv_kind(path.name) if is_csv else ""
+        file_type = kind if is_csv else "unknown"
         try:
             text = raw.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -379,8 +455,12 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
         try:
             if text is None:
                 raise X12Error("file is not UTF-8 text")
-            if is_visits:
+            if kind == "visits":
                 parsed, payload = "visits", parse_visits(text, salt)
+            elif kind == "notes":
+                parsed, payload = "notes", parse_notes(text)
+            elif kind == "charges":
+                parsed, payload = "charges", parse_charges(text)
             elif is_csv:
                 parsed, payload = "fee_schedule", parse_fee_schedule(text)
             else:
@@ -397,8 +477,12 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
         s.add(sf)
         s.flush()
         try:
-            if is_visits:
+            if kind == "visits":
                 n = _write_visits(s, sf.id, payload)
+            elif kind == "notes":
+                n = _write_notes(s, sf.id, payload)
+            elif kind == "charges":
+                n = _write_charges(s, sf.id, payload)
             else:
                 n = _write_fee_schedule(s, sf.id, payload) if is_csv else _write_x12(s, sf.id, payload)
             if n == 0:  # every transaction in this file was already loaded from another file
@@ -419,6 +503,6 @@ def ingest_path(engine: Engine, tenant_id: int, path: Path, salt: str) -> list[I
     files = sorted(
         p for p in path.rglob("*")
         if p.is_file() and (p.suffix.lower() in X12_SUFFIXES or p.suffix.lower() == ".csv")
-        and (p.suffix.lower() != ".csv" or "fee" in p.name.lower() or "visit" in p.name.lower())  # fee / visits
+        and (p.suffix.lower() != ".csv" or any(k in p.name.lower() for k in ("fee", "visit", "note", "charge")))
     )  # fmt: skip
     return [ingest_file(engine, tenant_id, p, salt) for p in files]

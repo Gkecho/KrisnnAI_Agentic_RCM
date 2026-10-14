@@ -81,6 +81,14 @@ class Book:
         self._add(m.Visit(visit_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider.id,
                           patient_ref_id=(patient or self.patient).id, service_date=dos, cpt=cpt, units=D(1)))  # fmt: skip
 
+    def note(self, ref: str, note_date: date, signed: date | None = None, elements: str = "assessment,plan",
+             minutes: int | None = None) -> None:  # fmt: skip
+        self._add(m.VisitNote(visit_ref=ref, note_date=note_date, signed_date=signed, minutes=minutes,
+                              elements=elements))  # fmt: skip
+
+    def charge(self, ref: str, visit_ref: str, entered: date, cpt: str = "99213") -> None:
+        self._add(m.Charge(charge_ref=ref, visit_ref=visit_ref, cpt=cpt, units=D(1), entered_date=entered))
+
     def ack_277ca(self, claim: m.Claim, category: str, known: date, code: str | None = None,
                   payer_claim_number: str | None = None) -> None:  # fmt: skip
         payload = {"claim_submitter_id": claim.claim_submitter_id, "status_category": category, "status_code": code,

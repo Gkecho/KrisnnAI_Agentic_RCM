@@ -9,6 +9,7 @@
     krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
     krisnai a10 replay|patterns --tenant ID                               underpayment agent (shadow only)
+    krisnai a3 sweep|replay --tenant ID                                   documentation agent (shadow only)
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
@@ -93,6 +94,16 @@ def main(argv: list[str] | None = None) -> int:
     a10_patterns = "list payer-wide short-payment patterns (one dispute each) from the replay"
     for name, text in (("replay", a10_replay), ("patterns", a10_patterns)):
         a10_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a3 = sub.add_parser("a3", help="A3 documentation completeness agent, shadow mode only")
+    a3_sub = a3.add_subparsers(dest="a3_cmd", required=True)
+    a3_sweep = a3_sub.add_parser("sweep", help="raise a documentation check event for each visit with a gap")
+    a3_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a3_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a3_sweep.add_argument("--every-days", type=int, default=7)
+    a3_replay = a3_sub.add_parser("replay", help="replay A3 over the check events in shadow mode")
+    a3_replay.add_argument("--as-of", type=date.fromisoformat, help="date for the charge-lag KPI")
+    for sp in (a3_sweep, a3_replay):
+        sp.add_argument("--tenant", type=int, required=True)
     a5 = sub.add_parser("a5", help="A5 claim prevention agent, shadow mode only")
     a5_sub = a5.add_subparsers(dest="a5_cmd", required=True)
     a5_seed = "load the placeholder NCCI and MUE rows for a tenant"
@@ -144,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     sy_build.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
     sy_build.add_argument("--seed", type=int, default=7)
     sy_build.add_argument("--lookback-days", type=int, default=548, help="drop visits older than this")
+    sy_build.add_argument("--documentation", action="store_true",
+                          help="also write notes.csv, charges.csv, all visits and doc_truth.csv (planted defects)")
     sy_build.add_argument("--rate-cut", action="append", default=[], metavar="PAYER:CPT:YYYY-MM-DD:PCT",
                           help="a payer pays PCT%% less on a CPT from a date (repeatable); planted underpayment")
     args = parser.parse_args(argv)
@@ -160,7 +173,9 @@ def main(argv: list[str] | None = None) -> int:
                 print("nothing run (add --yes to download the jar, pull the image and run)")
                 return 0
             return runner.run(p)
-        report = synthea_build(args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut)
+        report = synthea_build(
+            args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut, args.documentation
+        )
         print(json.dumps(report, indent=2))
         return 0
 
@@ -248,6 +263,18 @@ def main(argv: list[str] | None = None) -> int:
             items = replay(engine, args.tenant, A8DenialAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a3":
+        from krisnai.agents.a3_documentation import A3DocumentationAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a3_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} documentation check events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A3DocumentationAgent())
+            print(f"replayed {len(items)} checks (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant, args.as_of)))
     elif args.cmd == "a10":
         from krisnai.agents.a10_underpay import (
             A10UnderpaymentAgent,

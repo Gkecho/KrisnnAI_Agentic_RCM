@@ -19,7 +19,7 @@ import krisnai.model as m
 from krisnai.engine import NO_ACTION
 from krisnai.model import tenant_session
 
-AGENTS = ("a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay")
+AGENTS = ("a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay", "a3_documentation")
 AGE_BUCKETS = ((7, "0-7"), (14, "8-14"), (30, "15-30"))  # days since the card was raised
 DUE_SOON_DAYS = 7  # an item due within this many days counts as deadline-critical; TBD at spec review
 
@@ -34,6 +34,8 @@ def age_bucket(age_days: int) -> str:
 def _claims_of(agent_id: str, p: dict) -> list[str]:
     if agent_id == "a6_submission":
         return list(p["claims"])
+    if agent_id == "a3_documentation":  # a visit, not a claim
+        return [p["visit"]] if p.get("visit") else []
     return [p["claim"]] if p.get("claim") else []
 
 

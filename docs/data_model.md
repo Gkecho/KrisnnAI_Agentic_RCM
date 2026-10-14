@@ -157,6 +157,22 @@ Unique keys (idempotency): `(tenant_id, file_sha256)`
 | `failure_reason` | VARCHAR(1000) | yes | parser error text when status = failed |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `charge`
+
+Unique keys (idempotency): `(tenant_id, charge_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `charge_ref` | VARCHAR(40) | no | charges CSV charge_id (the PM system's own charge number) |
+| `visit_ref` | VARCHAR(40) | no | charges CSV visit_id (matches visit.visit_ref) |
+| `cpt` | VARCHAR(5) | no | charges CSV cpt |
+| `units` | NUMERIC(9, 2) | no | charges CSV units |
+| `entered_date` | DATE | no | charges CSV entered_date: when the charge was keyed |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `event`
 
 Unique keys (idempotency): `(tenant_id, source_file_id, isa13, gs06, st02, seq_in_file)`
@@ -212,6 +228,22 @@ Unique keys (idempotency): `(tenant_id, npi)`
 | `npi` | VARCHAR(10) | no | NM109 where NM108 = XX (billing / pay-to NPI) |
 | `name` | VARCHAR(200) | no | NM103 organization or provider name |
 | `tax_id` | VARCHAR(9) | yes | REF*EI (employer identification number) |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `visit_note`
+
+Unique keys (idempotency): `(tenant_id, visit_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `visit_ref` | VARCHAR(40) | no | notes CSV visit_id (matches visit.visit_ref) |
+| `note_date` | DATE | no | notes CSV note_date: when the note was started |
+| `signed_date` | DATE | yes | notes CSV signed_date, empty = not signed |
+| `minutes` | INTEGER | yes | notes CSV minutes, empty = no time documented |
+| `elements` | VARCHAR(200) | no | notes CSV elements: comma list of documented element names |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `ack_999`

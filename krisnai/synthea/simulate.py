@@ -16,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from krisnai.synthea.crosswalk import CPT_BASE_FEE
+from krisnai.synthea.documentation import CHARGE_COLUMNS, NOTE_COLUMNS, TRUTH_COLUMNS, DocPlan
 from krisnai.synthea.types import (
     BILLED_MARKUP,
     PATIENT_SHARE,
@@ -203,8 +204,13 @@ def _write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
         w.writerows(rows)
 
 
-def write_dir(claims: list[SimClaim], visits: list[SimVisit], out_dir: Path, as_of: date) -> dict[str, int]:
-    """Write 837 / 999 / 277CA / 835 files plus fee_schedule.csv, visits.csv, ground_truth.csv and open_ar.csv."""
+def write_dir(
+    claims: list[SimClaim], visits: list[SimVisit], out_dir: Path, as_of: date, doc: DocPlan | None = None
+) -> dict[str, int]:
+    """Write 837 / 999 / 277CA / 835 files plus fee_schedule.csv, visits.csv, ground_truth.csv and open_ar.csv.
+
+    With a documentation plan, visits.csv lists every billed service too, and notes.csv, charges.csv and
+    doc_truth.csv are written."""
     out_dir.mkdir(parents=True, exist_ok=True)
     counts: Counter = Counter()
     ctrl = 1000
@@ -245,7 +251,7 @@ def write_dir(claims: list[SimClaim], visits: list[SimVisit], out_dir: Path, as_
         {"visit_id": v.visit_id, "payer_id": v.payer.payer_id, "provider_npi": v.provider_npi,
          "patient_ref": v.patient.ref, "dos": v.dos.isoformat(), "cpt": v.cpt, "units": v.units}
         for v in visits
-    ]  # fmt: skip
+    ] if doc is None else doc.visit_rows  # fmt: skip
     open_rows = [
         {"claim_id": c.claim_id, "payer_id": c.payer.payer_id, "submitted": c.submitted.isoformat(),
          "billed": f"{c.billed:.2f}", "returned": "Y" if c.scenario == "rejection" else "N"}
@@ -259,4 +265,12 @@ def write_dir(claims: list[SimClaim], visits: list[SimVisit], out_dir: Path, as_
     ):  # fmt: skip
         _write_csv(out_dir / name, cols, rows)
         counts["csv"] += 1
+    if doc is not None:
+        for name, cols, rows in (
+            ("notes.csv", NOTE_COLUMNS, doc.note_rows),
+            ("charges.csv", CHARGE_COLUMNS, doc.charge_rows),
+            ("doc_truth.csv", TRUTH_COLUMNS, doc.truth_rows),
+        ):  # fmt: skip
+            _write_csv(out_dir / name, cols, rows)
+            counts["csv"] += 1
     return dict(counts)

@@ -32,6 +32,13 @@ Planted: denial, timely_filing, underpayment, rejection, unbilled_visit, plus cl
 `ground_truth.csv` lists each planted problem; `open_ar.csv` lists unpaid claims. Nothing is chosen because it is
 unpaid: payment timing decides what is open at `--as-of`.
 
+## Documentation feed (`--documentation`)
+
+Adds `visits.csv` with every billed service (one visit per claim line), `notes.csv`, `charges.csv` and `doc_truth.csv`. Planted: missing note (5%), unsigned note
+(6%), missing required element (6%), charge keyed 4+ days late (8%), and the unbilled visits get a signed note and no charge. Defects go only on visits at least 10
+days old at `--as-of`. It has its own random stream, so the claims and payer behaviour are unchanged. Synthea itself has no note, signature or charge-entry data;
+those fields are simulated.
+
 ## Payer rate cuts
 
 `krisnai synthea build ... --rate-cut PAYER:CPT:YYYY-MM-DD:PCT` (repeatable) makes a payer pay PCT% under the contract on one CPT from a date. Each affected
