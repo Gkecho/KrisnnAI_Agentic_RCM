@@ -11,6 +11,7 @@
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
+    krisnai synthea run|build                                             Synthea patients -> billed claims + truth
     krisnai a14 sweep|replay --tenant ID                                  control tower agent (shadow only)
     krisnai match --tenant ID [--as-of ISO] [--json]       link remits to claims, print the match report
 
@@ -121,7 +122,36 @@ def main(argv: list[str] | None = None) -> int:
     a7_inbox.add_argument("--top", type=int, default=20)
     for sp in (a7_sweep, a7_replay, a7_inbox):
         sp.add_argument("--tenant", type=int, required=True)
+    sy = sub.add_parser("synthea", help="generate Synthea patients and turn them into billed, paid, denied claims")
+    sy_sub = sy.add_subparsers(dest="synthea_cmd", required=True)
+    sy_run = sy_sub.add_parser("run", help="run Synthea in Docker (prints the plan; add --yes to run it)")
+    sy_run.add_argument("--out", type=Path, default=Path("out/synthea"))
+    sy_run.add_argument("--cache", type=Path, default=Path("out/synthea_cache"))
+    sy_run.add_argument("--population", type=int, default=300)
+    sy_run.add_argument("--seed", type=int, default=7)
+    sy_run.add_argument("--state", default="Massachusetts")
+    sy_run.add_argument("--yes", action="store_true", help="download the jar / pull the image and run")
+    sy_build = sy_sub.add_parser("build", help="Synthea CSV folder -> X12 files + fee schedule + ground truth")
+    sy_build.add_argument("--in", dest="src", type=Path, required=True, help="Synthea output (or its csv folder)")
+    sy_build.add_argument("--out", type=Path, required=True)
+    sy_build.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    sy_build.add_argument("--seed", type=int, default=7)
     args = parser.parse_args(argv)
+
+    if args.cmd == "synthea":
+        from krisnai.synthea import build as synthea_build
+        from krisnai.synthea import runner
+
+        if args.synthea_cmd == "run":
+            p = runner.plan(args.out, args.cache, args.population, args.seed, args.state)
+            print("download jar: " + " ".join(p.download))
+            print("run synthea:  " + " ".join(p.docker))
+            if not args.yes:
+                print("nothing run (add --yes to download the jar, pull the image and run)")
+                return 0
+            return runner.run(p)
+        print(json.dumps(synthea_build(args.src, args.out, args.as_of, args.seed), indent=2))
+        return 0
 
     engine = make_engine(args.db_url)
     if args.cmd == "init-db":

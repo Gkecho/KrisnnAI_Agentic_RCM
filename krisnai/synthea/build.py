@@ -1,0 +1,25 @@
+"""Synthea CSV folder -> X12 files, fee schedule, visits and ground truth that `krisnai ingest` already reads."""
+
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
+
+from krisnai.synthea.bundles import build_bundles
+from krisnai.synthea.reader import read_dir
+from krisnai.synthea.simulate import simulate, write_dir
+
+
+def build(synthea_dir: Path, out_dir: Path, as_of: date, seed: int = 7) -> dict:
+    """Return a report: what Synthea gave us, what was billable, what the simulator planted, what was written."""
+    data = read_dir(synthea_dir)
+    bundles, report = build_bundles(data, as_of)
+    claims, visits = simulate(bundles, as_of, seed)
+    written = write_dir(claims, visits, out_dir, as_of)
+    planted: dict[str, int] = {}
+    for c in claims:
+        planted[c.scenario] = planted.get(c.scenario, 0) + 1
+    return {
+        "as_of": as_of.isoformat(), "seed": seed, "synthea": report, "claims_billed": len(claims),
+        "unbilled_visits": len(visits), "claims_by_scenario": planted, "files": written,
+    }  # fmt: skip
