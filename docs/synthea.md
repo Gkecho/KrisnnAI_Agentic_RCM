@@ -44,3 +44,16 @@ unpaid: payment timing decides what is open at `--as-of`.
 - The test suite uses a hand-made folder with Synthea's file and column names (`tests/fixtures/synthea_mini.py`).
   A real Synthea run is a manual step; the column names are from the Synthea CSV data dictionary and were not yet
   checked against a real run on this PC.
+
+## First real Synthea run (2026-10-14, 300 patients, seed 7, Massachusetts)
+
+The reader's column names matched Synthea's real CSVs on the first run. Two things the mini folder could not show:
+- Synthea writes a whole lifetime of claims (back to 1929): the build keeps the last 18 months (`--lookback-days`).
+- 73% of claims shared a patient and a day with another claim (one visit recorded as several encounters). Billed
+  separately, A5 flagged 40% of claims as duplicates. They are now merged into one claim per patient, day and payer
+  (1,789 merges). That was a bundler flaw, not an A5 flaw.
+
+Result on the merged book (1,776 claims, 435 planted problems): all five Wave 1 agents ran in shadow, 0 executed;
+the leakage diagnostic found 435 of 435. A5 flagged 65 claims (44 late filings, 21 NCCI pairs on merged visits).
+The forecast backtest over 8 past dates had WAPE 6.7% with the actual value inside the range 6 times in 8.
+Unmapped: 9,749 procedure codes and 1,309 diagnoses fall back to generic codes (crosswalk is a stand-in).

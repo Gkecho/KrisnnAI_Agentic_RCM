@@ -181,3 +181,17 @@ def test_cli_run_without_yes_only_prints_the_plan(tmp_path, capsys):
     argv = ["synthea", "run", "--out", str(tmp_path / "o"), "--cache", str(tmp_path / "c")]
     assert cli.main(argv) == 0
     assert "nothing run" in capsys.readouterr().out and not (tmp_path / "o").exists()
+
+
+def test_several_encounters_for_one_patient_on_one_day_become_one_claim(tmp_path):
+    root = synthea_mini.write(tmp_path / "s", n_claims=300, seed=3, n_patients=6)  # few patients: many same-day visits
+    bundles, report = build_bundles(read_dir(root), AS_OF)
+    assert report["merged_same_day"] > 0
+    keys = [(b.patient.ref, b.dos, b.payer.payer_id) for b in bundles]
+    assert len(keys) == len(set(keys))
+    assert all(len({c for c, _ in b.cpts}) == len(b.cpts) for b in bundles)  # no repeated CPT on a claim
+
+
+def test_old_visits_outside_the_lookback_window_are_not_billed(mini):
+    _, report = build_bundles(read_dir(mini), AS_OF, lookback_days=90)
+    assert report["skipped_before_window"] > 0

@@ -96,7 +96,10 @@ def simulate(bundles: list[Bundle], as_of: date, seed: int) -> tuple[list[SimCla
             if name == "timely_filing":
                 if (as_of - c.dos).days < LATE_SUBMIT_DAYS + 10:
                     continue
-            elif name != "rejection" and c.submitted + timedelta(days=c.payer.pay_days + 4) > as_of:
+            elif name == "rejection":
+                if c.submitted + timedelta(days=2) > as_of:
+                    continue  # the 277CA that rejects it is not back yet, so nobody knows
+            elif c.submitted + timedelta(days=c.payer.pay_days + 4) > as_of:
                 continue  # a denial or underpayment needs a payment that already happened
             eligible.append(idx)
         for idx in eligible[:cnt]:

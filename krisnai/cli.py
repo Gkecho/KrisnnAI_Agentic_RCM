@@ -136,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     sy_build.add_argument("--out", type=Path, required=True)
     sy_build.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
     sy_build.add_argument("--seed", type=int, default=7)
+    sy_build.add_argument("--lookback-days", type=int, default=548, help="drop visits older than this")
     args = parser.parse_args(argv)
 
     if args.cmd == "synthea":
@@ -150,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("nothing run (add --yes to download the jar, pull the image and run)")
                 return 0
             return runner.run(p)
-        print(json.dumps(synthea_build(args.src, args.out, args.as_of, args.seed), indent=2))
+        print(json.dumps(synthea_build(args.src, args.out, args.as_of, args.seed, args.lookback_days), indent=2))
         return 0
 
     engine = make_engine(args.db_url)

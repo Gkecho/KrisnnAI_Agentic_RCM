@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from krisnai.synthea.crosswalk import CONDITION_ICD10, EM_BY_CLASS, FALLBACK_ICD10, PROCEDURE_CPT
@@ -15,6 +15,8 @@ from krisnai.synthea.types import Bundle, PayerInfo, Person
 BILLING_PROVIDERS = tuple(f"18888888{n:02d}" for n in range(5))
 MAX_EXTRA_LINES = 2
 MAX_DX = 3
+MAX_CLAIM_LINES = 4
+MAX_CLAIM_DX = 4
 NO_COVERAGE = {"NO_INSURANCE", "NONE", ""}
 X12_BAD = re.compile(r"[^A-Za-z0-9 .\-]")
 
@@ -60,9 +62,18 @@ def _em_code(klass: str, enc_id: str, age: int) -> str | None:
     return options[_digest(enc_id) % len(options)]
 
 
-def build_bundles(data: SyntheaData, as_of: date) -> tuple[list[Bundle], dict[str, int]]:
-    """Return (bundles sorted by date of service, build report). Claims dated after `as_of` are dropped."""
+LOOKBACK_DAYS = 548  # Synthea writes a whole lifetime of claims; a practice has about 18 months of open work
+
+
+def build_bundles(
+    data: SyntheaData, as_of: date, lookback_days: int = LOOKBACK_DAYS
+) -> tuple[list[Bundle], dict[str, int]]:
+    """Return (bundles sorted by date of service, build report).
+
+    Claims dated after `as_of`, or more than `lookback_days` before it, are dropped (and counted).
+    """
     report: Counter = Counter()
+    since = as_of - timedelta(days=lookback_days)
     payers = payer_infos(data)
     patients = {p["id"]: p for p in data.patients}
     encounters = {e["id"]: e for e in data.encounters}
@@ -87,6 +98,9 @@ def build_bundles(data: SyntheaData, as_of: date) -> tuple[list[Bundle], dict[st
             continue
         if dos > as_of:
             report["skipped_after_as_of"] += 1
+            continue
+        if dos < since:
+            report["skipped_before_window"] += 1
             continue
         dob = _day(pat.get("birthdate", "")) or date(1970, 1, 1)
         age = dos.year - dob.year
@@ -124,6 +138,19 @@ def build_bundles(data: SyntheaData, as_of: date) -> tuple[list[Bundle], dict[st
             dos=dos, dx=dx, cpts=cpts,
         )))  # fmt: skip
 
+    # Synthea records several encounters for one patient on one day; a practice bills that as one claim
+    merged: dict[tuple, tuple[date, str, Bundle]] = {}
+    for dos, cid, b in sorted(pending, key=lambda x: (x[0], x[1])):
+        key = (b.patient.ref, dos, b.payer.payer_id)
+        if key not in merged:
+            merged[key] = (dos, cid, b)
+            continue
+        first = merged[key][2]
+        report["merged_same_day"] += 1
+        have = {x for x, _ in first.cpts}
+        first.cpts += [(x, u) for x, u in b.cpts if x not in have and len(first.cpts) < MAX_CLAIM_LINES]
+        first.dx += [d for d in b.dx if d not in first.dx and len(first.dx) < MAX_CLAIM_DX]
+    pending = list(merged.values())
     pending.sort(key=lambda x: (x[0], x[1]))
     bundles = []
     for n, (_, _, b) in enumerate(pending, start=1):

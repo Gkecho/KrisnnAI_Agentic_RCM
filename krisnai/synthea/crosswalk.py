@@ -55,6 +55,17 @@ CONDITION_ICD10: dict[str, str] = {
     "433144002": "N183",
     "87433001": "J439",
     "162864005": "E669",
+    "314529007": "Z79899",  # medication review due
+    "66383009": "K051",  # gingivitis
+    "73595000": "Z733",  # stress
+    "431857002": "N184",
+    "423315002": "Z604",  # limited social contact
+    "422650009": "Z604",  # social isolation
+    "55822004": "E785",  # hyperlipidemia
+    "6525002": "F1920",  # drug dependence
+    "109570002": "K029",  # dental caries
+    "43878008": "J020",  # strep sore throat
+    "18718003": "K059",  # gingival disease
 }
 FALLBACK_ICD10 = "Z0000"  # encounter for general adult medical examination
 
