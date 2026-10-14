@@ -7,14 +7,21 @@ from pathlib import Path
 
 from krisnai.synthea.bundles import LOOKBACK_DAYS, build_bundles
 from krisnai.synthea.reader import read_dir
-from krisnai.synthea.simulate import simulate, write_dir
+from krisnai.synthea.simulate import parse_rate_cut, simulate, write_dir
 
 
-def build(synthea_dir: Path, out_dir: Path, as_of: date, seed: int = 7, lookback_days: int = LOOKBACK_DAYS) -> dict:
+def build(
+    synthea_dir: Path,
+    out_dir: Path,
+    as_of: date,
+    seed: int = 7,
+    lookback_days: int = LOOKBACK_DAYS,
+    rate_cuts: list[str] | None = None,
+) -> dict:
     """Return a report: what Synthea gave us, what was billable, what the simulator planted, what was written."""
     data = read_dir(synthea_dir)
     bundles, report = build_bundles(data, as_of, lookback_days)
-    claims, visits = simulate(bundles, as_of, seed)
+    claims, visits = simulate(bundles, as_of, seed, [parse_rate_cut(t) for t in rate_cuts or []])
     written = write_dir(claims, visits, out_dir, as_of)
     planted: dict[str, int] = {}
     for c in claims:

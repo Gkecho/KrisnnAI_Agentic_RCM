@@ -55,6 +55,7 @@ class SimLine:
     pr: Decimal = Decimal("0")
     paid: Decimal = Decimal("0")
     cas: list[tuple[str, str, Decimal]] = field(default_factory=list)  # (group, reason, amount)
+    cut: Decimal = Decimal("0")  # dollars the payer takes off this line because of a payer-wide rate cut
 
     @property
     def expected_pay(self) -> Decimal:

@@ -19,7 +19,7 @@ import krisnai.model as m
 from krisnai.engine import NO_ACTION
 from krisnai.model import tenant_session
 
-AGENTS = ("a5_prevention", "a6_submission", "a7_ar", "a8_denial")
+AGENTS = ("a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay")
 AGE_BUCKETS = ((7, "0-7"), (14, "8-14"), (30, "15-30"))  # days since the card was raised
 DUE_SOON_DAYS = 7  # an item due within this many days counts as deadline-critical; TBD at spec review
 

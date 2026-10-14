@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import random
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -43,6 +44,21 @@ GROUND_TRUTH_COLUMNS = [
 ]  # fmt: skip
 
 
+@dataclass(frozen=True)
+class RateCut:
+    """From `start`, `payer_id` pays `percent` % less than the contract on `cpt` (a planted payer-wide change)."""
+
+    payer_id: str
+    cpt: str
+    start: date
+    percent: Decimal
+
+
+def parse_rate_cut(text: str) -> RateCut:
+    payer, cpt, start, percent = text.split(":")
+    return RateCut(payer, cpt, date.fromisoformat(start), Decimal(percent))
+
+
 def fee(payer: PayerInfo, cpt: str) -> Decimal:
     return money(CPT_BASE_FEE[cpt] * payer.fee_multiplier)
 
@@ -63,13 +79,15 @@ def _settle(c: SimClaim) -> None:
             ln.paid, ln.pr = Decimal("0"), Decimal("0")
             ln.cas = [("CO", c.carc, ln.billed)]
             continue
-        short = c.shortfall if c.shortfall_line == i else Decimal("0")
+        short = (c.shortfall if c.shortfall_line == i else Decimal("0")) + ln.cut
         ln.pr = money(ln.allowed * PATIENT_SHARE)
         ln.paid = ln.allowed - ln.pr - short
         ln.cas = [("CO", "45", ln.billed - ln.allowed + short), ("PR", "2", ln.pr)]
 
 
-def simulate(bundles: list[Bundle], as_of: date, seed: int) -> tuple[list[SimClaim], list[SimVisit]]:
+def simulate(
+    bundles: list[Bundle], as_of: date, seed: int, rate_cuts: list[RateCut] | None = None
+) -> tuple[list[SimClaim], list[SimVisit]]:
     rng = random.Random(seed)
     order = list(range(len(bundles)))
     rng.shuffle(order)
@@ -127,6 +145,11 @@ def simulate(bundles: list[Bundle], as_of: date, seed: int) -> tuple[list[SimCla
                 c.scenario, c.remit_date = "open", None  # the payer never pays it
         if c.remit_date is not None and c.remit_date > as_of:
             c.scenario, c.remit_date = "open", None  # not paid yet at as_of
+        if c.remit_date is not None and c.scenario in ("clean", "underpayment"):
+            for ln in c.lines:
+                for cut in rate_cuts or []:
+                    if cut.payer_id == c.payer.payer_id and cut.cpt == ln.cpt and c.remit_date >= cut.start:
+                        ln.cut = money(ln.allowed * cut.percent / 100)
         if c.scenario not in ("open", "rejection") or c.remit_date is not None:
             _settle(c)
     return claims, visits
@@ -152,10 +175,15 @@ def ground_truth(claims: list[SimClaim], visits: list[SimVisit], as_of: date) ->
             else:
                 add("denial", c.claim_id, "", "", c.payer, "", c.carc, amount, age <= APPEAL_WINDOW_DAYS,
                     f"denied {age}d before as_of, appeal window {APPEAL_WINDOW_DAYS}d")  # fmt: skip
-        elif c.scenario == "underpayment":
+        elif c.scenario in ("underpayment", "clean") and c.remit_date is not None:
             age = (as_of - c.remit_date).days
-            add("underpayment", c.claim_id, "", c.shortfall_line + 1, c.payer, c.lines[c.shortfall_line].cpt, "45",
-                c.shortfall, age <= APPEAL_WINDOW_DAYS, f"paid {age}d before as_of")  # fmt: skip
+            for i, ln in enumerate(c.lines):
+                planted = c.shortfall if c.scenario == "underpayment" and c.shortfall_line == i else Decimal("0")
+                if planted + ln.cut <= 0:
+                    continue
+                why = f"paid {age}d before as_of" + (", payer-wide rate cut" if ln.cut else "")
+                add("underpayment", c.claim_id, "", i + 1, c.payer, ln.cpt, "45", planted + ln.cut,
+                    age <= APPEAL_WINDOW_DAYS, why)  # fmt: skip
         elif c.scenario == "rejection":
             amount = sum((ln.expected_pay for ln in c.lines), Decimal("0"))
             age = (as_of - c.dos).days

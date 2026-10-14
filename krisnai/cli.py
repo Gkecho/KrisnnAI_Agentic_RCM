@@ -8,6 +8,7 @@
     krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth CSV]   leakage diagnostic (read-only)
     krisnai a8 seed|replay --tenant ID                                    denial agent (shadow only)
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
+    krisnai a10 replay|patterns --tenant ID                               underpayment agent (shadow only)
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
@@ -86,6 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     replay_help = "replay A8 over the tenant's history in shadow mode and print the summary"
     for name, text in (("seed", seed_help), ("replay", replay_help)):
         a8_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a10 = sub.add_parser("a10", help="A10 contract and underpayment agent, shadow mode only")
+    a10_sub = a10.add_subparsers(dest="a10_cmd", required=True)
+    a10_replay = "replay A10 over the tenant's payments in shadow mode and print the summary"
+    a10_patterns = "list payer-wide short-payment patterns (one dispute each) from the replay"
+    for name, text in (("replay", a10_replay), ("patterns", a10_patterns)):
+        a10_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
     a5 = sub.add_parser("a5", help="A5 claim prevention agent, shadow mode only")
     a5_sub = a5.add_subparsers(dest="a5_cmd", required=True)
     a5_seed = "load the placeholder NCCI and MUE rows for a tenant"
@@ -137,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     sy_build.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
     sy_build.add_argument("--seed", type=int, default=7)
     sy_build.add_argument("--lookback-days", type=int, default=548, help="drop visits older than this")
+    sy_build.add_argument("--rate-cut", action="append", default=[], metavar="PAYER:CPT:YYYY-MM-DD:PCT",
+                          help="a payer pays PCT%% less on a CPT from a date (repeatable); planted underpayment")
     args = parser.parse_args(argv)
 
     if args.cmd == "synthea":
@@ -151,7 +160,8 @@ def main(argv: list[str] | None = None) -> int:
                 print("nothing run (add --yes to download the jar, pull the image and run)")
                 return 0
             return runner.run(p)
-        print(json.dumps(synthea_build(args.src, args.out, args.as_of, args.seed, args.lookback_days), indent=2))
+        report = synthea_build(args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut)
+        print(json.dumps(report, indent=2))
         return 0
 
     engine = make_engine(args.db_url)
@@ -238,6 +248,22 @@ def main(argv: list[str] | None = None) -> int:
             items = replay(engine, args.tenant, A8DenialAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a10":
+        from krisnai.agents.a10_underpay import (
+            A10UnderpaymentAgent,
+            format_patterns,
+            format_summary,
+            patterns,
+            summarize,
+        )
+        from krisnai.engine import replay
+
+        if args.a10_cmd == "replay":
+            items = replay(engine, args.tenant, A10UnderpaymentAgent())
+            print(f"replayed {len(items)} payments (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+        else:
+            print(format_patterns(patterns(engine, args.tenant), args.tenant))
     elif args.cmd == "a5":
         from krisnai.agents.a5_prevention import A5PreventionAgent, format_summary, seed_defaults, summarize
         from krisnai.engine import replay

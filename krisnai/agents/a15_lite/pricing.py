@@ -24,6 +24,13 @@ class ClaimPricer:
     def __init__(self) -> None:
         self._pricers: dict[tuple[int, date], Pricer] = {}
 
+    def pricer(self, session: Session, as_of: date) -> Pricer:
+        """The cached A15 pricer for this tenant and day (one snapshot, reused across events)."""
+        key = (session.info["tenant_id"], as_of)
+        if key not in self._pricers:
+            self._pricers[key] = Pricer(load_snapshot(session.get_bind(), key[0], key[1]), A15Config())
+        return self._pricers[key]
+
     def price(
         self,
         session: Session,
@@ -37,10 +44,7 @@ class ClaimPricer:
 
         `empty_default` is what to return when there are no lines at all (for example the claim's total charge).
         """
-        key = (session.info["tenant_id"], as_of)
-        if key not in self._pricers:
-            self._pricers[key] = Pricer(load_snapshot(session.get_bind(), key[0], key[1]), A15Config())
-        pricer = self._pricers[key]
+        pricer = self.pricer(session, as_of)
         total, bases = Decimal(0), []
         for ln in lines:
             value, basis = pricer.payer_expected(

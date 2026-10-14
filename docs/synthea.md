@@ -32,6 +32,11 @@ Planted: denial, timely_filing, underpayment, rejection, unbilled_visit, plus cl
 `ground_truth.csv` lists each planted problem; `open_ar.csv` lists unpaid claims. Nothing is chosen because it is
 unpaid: payment timing decides what is open at `--as-of`.
 
+## Payer rate cuts
+
+`krisnai synthea build ... --rate-cut PAYER:CPT:YYYY-MM-DD:PCT` (repeatable) makes a payer pay PCT% under the contract on one CPT from a date. Each affected
+line is an underpayment in `ground_truth.csv`. It is how A10's payer-wide pattern detection is tested; without the flag the output is unchanged.
+
 ## Limits (read before trusting a number)
 
 - Synthea codes in SNOMED. The CPT / ICD-10 crosswalk is a small stand-in; unmapped codes fall back to an E/M code by
