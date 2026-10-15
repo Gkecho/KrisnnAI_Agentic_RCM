@@ -21,7 +21,8 @@ from krisnai.model import tenant_session
 
 AGENTS = (
     "a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay", "a3_documentation", "a1_clearance",
-    "a9_learning", "a2_authorization", "a11_cash",
+    "a9_learning", "a2_authorization", "a11_cash", "a13_credentialing", "a12_patient", "a4_coding",
+    "a15_investigator",
 )  # fmt: skip
 AGE_BUCKETS = ((7, "0-7"), (14, "8-14"), (30, "15-30"))  # days since the card was raised
 DUE_SOON_DAYS = 7  # an item due within this many days counts as deadline-critical; TBD at spec review
@@ -41,11 +42,15 @@ def _claims_of(agent_id: str, p: dict) -> list[str]:
         return [p["visit"]] if p.get("visit") else []
     if agent_id in ("a1_clearance", "a2_authorization"):  # an appointment, not a claim
         return [p["appt"]] if p.get("appt") else []
+    if agent_id == "a13_credentialing":  # a provider (and payer), not a claim
+        return [p["key"]] if p.get("key") else []
     if agent_id == "a11_cash":  # a payment (or a bank deposit), not a claim
         key = p.get("trace") or p.get("deposit_ref")
         return [key] if key else []
     if agent_id == "a9_learning":  # a proposed rule, not a claim
         return [p["rule_key"]] if p.get("rule_key") else []
+    if agent_id == "a15_investigator":  # a payer (and CPT) slice, not a claim
+        return [p["slice"]] if p.get("slice") else []
     return [p["claim"]] if p.get("claim") else []
 
 
@@ -119,6 +124,8 @@ def _is_open(
         return p["rule_key"] not in decided
     if agent_id in ("a1_clearance", "a2_authorization"):  # matters until the visit; then A15, A8 and A10 take over
         return date.fromisoformat(p["appt_date"]) >= as_of
+    if agent_id == "a15_investigator":  # open until a later sweep finds the slice back within baseline (no_action)
+        return True
     claims = _claims_of(agent_id, p)
     if not claims:  # a recoupment has no claim: it stays until a person closes it
         return True

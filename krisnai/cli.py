@@ -14,6 +14,10 @@
     krisnai a9 sweep|replay|approve|reject|forward|attribution            denial learning agent (shadow only)
     krisnai a2 seed|sweep|replay --tenant ID                              authorization agent (shadow only)
     krisnai a11 sweep|replay --tenant ID                                  cash reconciliation agent (shadow only)
+    krisnai a13 sweep|replay --tenant ID                                  credentialing agent (shadow only)
+    krisnai investigate sweep|replay|ledger --tenant ID                   revenue assurance investigator (shadow only)
+    krisnai a12 sweep|replay --tenant ID                                  patient balance worklist (staff-facing)
+    krisnai a4 replay|variance --tenant ID                                coding audit, suggestions only
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
@@ -98,6 +102,45 @@ def main(argv: list[str] | None = None) -> int:
     a10_patterns = "list payer-wide short-payment patterns (one dispute each) from the replay"
     for name, text in (("replay", a10_replay), ("patterns", a10_patterns)):
         a10_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a4 = sub.add_parser("a4", help="A4 coding integrity copilot (suggestions only), shadow mode only")
+    a4_sub = a4.add_subparsers(dest="a4_cmd", required=True)
+    a4_sub.add_parser("replay", help="replay A4 over the claims in shadow mode").add_argument(
+        "--tenant", type=int, required=True
+    )
+    a4_sub.add_parser("variance", help="audit variance: billed vs documented E/M level").add_argument(
+        "--tenant", type=int, required=True
+    )
+    a12 = sub.add_parser("a12", help="A12 patient engagement agent (staff-facing worklist), shadow mode only")
+    a12_sub = a12.add_subparsers(dest="a12_cmd", required=True)
+    a12_sweep = a12_sub.add_parser("sweep", help="raise a balance check event for each open patient balance item")
+    a12_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a12_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a12_sweep.add_argument("--every-days", type=int, default=7)
+    a12_replay = a12_sub.add_parser("replay", help="replay A12 over the events in shadow mode")
+    a12_replay.add_argument("--as-of", type=date.fromisoformat, help="date for the collections KPI")
+    for sp in (a12_sweep, a12_replay):
+        sp.add_argument("--tenant", type=int, required=True)
+    a13 = sub.add_parser("a13", help="A13 credentialing and enrollment agent, shadow mode only")
+    a13_sub = a13.add_subparsers(dest="a13_cmd", required=True)
+    a13_sweep = a13_sub.add_parser("sweep", help="raise enrollment and screening events for open gaps")
+    a13_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a13_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a13_sweep.add_argument("--every-days", type=int, default=7)
+    a13_replay = a13_sub.add_parser("replay", help="replay A13 over the events in shadow mode")
+    for sp in (a13_sweep, a13_replay):
+        sp.add_argument("--tenant", type=int, required=True)
+    inv = sub.add_parser("investigate", help="A15 revenue assurance investigator, shadow mode only")
+    inv_sub = inv.add_subparsers(dest="inv_cmd", required=True)
+    inv_sweep = inv_sub.add_parser("sweep", help="raise variance events for slices whose realisation fell")
+    inv_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    inv_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    inv_sweep.add_argument("--every-days", type=int, default=28)
+    inv_replay = inv_sub.add_parser("replay", help="replay A15 over the events in shadow mode")
+    inv_ledger = inv_sub.add_parser("ledger", help="leakage detected on one date vs paid by a later date")
+    inv_ledger.add_argument("--detected-on", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    inv_ledger.add_argument("--through", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    for sp in (inv_sweep, inv_replay, inv_ledger):
+        sp.add_argument("--tenant", type=int, required=True)
     a11 = sub.add_parser("a11", help="A11 cash reconciliation agent, shadow mode only")
     a11_sub = a11.add_subparsers(dest="a11_cmd", required=True)
     a11_sweep = a11_sub.add_parser("sweep", help="raise reconciliation events for payments and deposits")
@@ -208,6 +251,13 @@ def main(argv: list[str] | None = None) -> int:
                           help="also write notes.csv, charges.csv, all visits and doc_truth.csv (planted defects)")
     sy_build.add_argument("--denial-pattern", action="append", default=[], metavar="PAYER:CPT:CARC:RATE:YYYY-MM-DD",
                           help="from a date a payer denies claims with a CPT at RATE (0-1): a planted recurring defect")
+    sy_build.add_argument("--coding", action="store_true",
+                          help="level elements on E/M notes and coding_truth.csv (needs --documentation)")
+    sy_build.add_argument("--patient", action="store_true",
+                          help="also write patient_payments.csv, statements.csv and patient_truth.csv")
+    sy_build.add_argument("--enrollment", action="store_true",
+                          help="also write enrollments.csv, screenings.csv and credentialing_truth.csv "
+                               "(needs --documentation)")
     sy_build.add_argument("--cash", action="store_true",
                           help="also write bank_deposits.csv, postings.csv and cash_truth.csv (planted defects)")
     sy_build.add_argument("--authorization", action="store_true",
@@ -233,7 +283,8 @@ def main(argv: list[str] | None = None) -> int:
         report = synthea_build(
             args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut, args.documentation,
             args.eligibility, args.denial_pattern,
-            args.authorization, args.cash,
+            args.authorization, args.cash, args.enrollment, args.patient,
+            args.coding,
         )
         print(json.dumps(report, indent=2))
         return 0
@@ -320,6 +371,59 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{added} routing rows added")
         else:
             items = replay(engine, args.tenant, A8DenialAgent())
+            print(f"replayed {len(items)} events (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a4":
+        from krisnai.agents.a4_coding import A4CodingAgent, format_variance, variance
+        from krisnai.engine import replay
+
+        if args.a4_cmd == "replay":
+            items = replay(engine, args.tenant, A4CodingAgent())
+            print(f"replayed {len(items)} claims (shadow: nothing executed; suggestions only, a coder decides)")
+        print(format_variance(variance(engine, args.tenant)))
+    elif args.cmd == "a12":
+        from krisnai.agents.a12_patient import A12PatientAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a12_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} patient balance events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A12PatientAgent())
+            print(f"replayed {len(items)} events (shadow: nothing executed; nothing sent to patients)")
+            print(format_summary(summarize(engine, args.tenant, args.as_of)))
+    elif args.cmd == "investigate":
+        from krisnai.agents.a15_investigator import (
+            A15InvestigatorAgent,
+            format_ledger,
+            format_summary,
+            ledger,
+            summarize,
+            sweep,
+        )
+        from krisnai.engine import replay
+
+        if args.inv_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} variance events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        elif args.inv_cmd == "replay":
+            items = replay(engine, args.tenant, A15InvestigatorAgent())
+            print(f"replayed {len(items)} events (shadow: nothing executed, nothing recovered)")
+            print(format_summary(summarize(engine, args.tenant)))
+        else:
+            print(format_ledger(ledger(engine, args.tenant, args.detected_on, args.through)))
+    elif args.cmd == "a13":
+        from krisnai.agents.a13_credentialing import A13CredentialingAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a13_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} credentialing events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A13CredentialingAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
     elif args.cmd == "a11":
