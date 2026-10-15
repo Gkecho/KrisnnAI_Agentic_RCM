@@ -1,0 +1,26 @@
+# Local FHIR server for Stage 1: Microsoft's open-source FHIR server on SQL Server. Security is OFF (localhost only).
+# The SQL Server password is never stored in the repo: `krisnai fhir up` generates one per run into out/fhir/.
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${KRISNAI_FHIR_SA_PASSWORD:?run krisnai fhir up}"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      retries: 20
+  fhir:
+    image: mcr.microsoft.com/healthcareapis/r4-fhir-server
+    depends_on:
+      sql:
+        condition: service_healthy
+    environment:
+      FHIR__Security__Enabled: "false"
+      SqlServer__ConnectionString: "Server=tcp:sql,1433;Initial Catalog=FHIR;Persist Security Info=False;User ID=sa;Password=${KRISNAI_FHIR_SA_PASSWORD};MultipleActiveResultSets=False;Connection Timeout=30;TrustServerCertificate=true;"
+      SqlServer__AllowDatabaseCreation: "true"
+      SqlServer__Initialize: "true"
+      SqlServer__SchemaOptions__AutomaticUpdatesEnabled: "true"
+      DataStore: "SqlServer"
+    ports:
+      - "127.0.0.1:8080:8080"
