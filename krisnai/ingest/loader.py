@@ -45,6 +45,7 @@ from krisnai.model import (
     Enrollment,
     Event,
     FeeSchedule,
+    PatientCrosswalk,
     PatientPayment,
     PatientRef,
     PatientStatement,
@@ -66,7 +67,7 @@ from krisnai.model import (
 FILE_TYPES = {"837": "837P", "835": "835", "999": "999", "277": "277CA", "271": "271"}
 CSV_NAME_HINTS = (
     "fee", "visit", "note", "charge", "appoint", "authoriz", "deposit", "posting", "enroll", "screening",
-    "patient_payment", "statement",
+    "patient_payment", "statement", "crosswalk",
 )
 X12_SUFFIXES = {".x12", ".edi", ".837", ".835", ".837p", ".999", ".277", ".277ca", ".txt"}
 
@@ -88,6 +89,9 @@ class Lookups:
         self._payers: dict[str, int] = {}
         self._providers: dict[str, int] = {}
         self._patients: dict[bytes, int] = {}
+        # member id -> master patient id (hashes). Applied when a patient reference is created, so one person
+        # with several member ids is one patient_ref. Rows loaded before the crosswalk keep their member hash.
+        self._master = dict(session.execute(select(PatientCrosswalk.member_hash, PatientCrosswalk.master_hash)).all())
 
     def payer(self, code: str, name: str) -> int:
         if code not in self._payers:
@@ -112,6 +116,7 @@ class Lookups:
     def patient(self, ref_hash: bytes | None) -> int | None:
         if ref_hash is None:
             return None
+        ref_hash = self._master.get(ref_hash, ref_hash)
         if ref_hash not in self._patients:
             row = self.s.scalars(select(PatientRef).where(PatientRef.ref_hash == ref_hash)).first()
             if row is None:
@@ -587,6 +592,36 @@ def _write_screenings(s: Session, sf: int, rows: list[dict]) -> int:
     return len(rows)
 
 
+def parse_crosswalk(text: str, salt: str) -> list[dict]:
+    """CSV: member_id, master_id. Both are hashed here; the raw ids never leave the parser."""
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"member_id", "master_id"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"crosswalk CSV needs columns {sorted(need)}")
+    rows: dict[bytes, bytes] = {}
+    for n, r in enumerate(reader, start=2):
+        member, master = (r["member_id"] or "").strip(), (r["master_id"] or "").strip()
+        if not member or not master:
+            raise X12Error(f"crosswalk line {n}: member_id and master_id are both required")
+        h = hashing.patient_hash(salt, member)
+        m_hash = hashing.patient_hash(salt, master)
+        if rows.get(h, m_hash) != m_hash:
+            raise X12Error(f"crosswalk line {n}: a member id maps to two different master ids")
+        rows[h] = m_hash
+    if not rows:
+        raise X12Error("crosswalk CSV has no rows")
+    return [{"member": k, "master": v} for k, v in rows.items()]
+
+
+def _write_crosswalk(s: Session, sf: int, rows: list[dict]) -> int:
+    have = set(s.scalars(select(PatientCrosswalk.member_hash)))
+    new = [r for r in rows if r["member"] not in have]
+    for r in new:
+        s.add(PatientCrosswalk(source_file_id=sf, member_hash=r["member"], master_hash=r["master"]))
+    s.flush()
+    return len(new)
+
+
 def parse_patient_payments(text: str) -> list[dict]:
     """CSV: payment_id, claim_id, paid_on, amount; optional method."""
     rows = []
@@ -722,7 +757,8 @@ def csv_kind(name: str) -> str:
     low = name.lower()
     names = {"charge": "charges", "note": "notes", "appoint": "appointments", "authoriz": "authorizations",
              "deposit": "deposits", "posting": "postings", "enroll": "enrollments", "screening": "screenings",
-             "patient_payment": "patient_payments", "statement": "statements", "visit": "visits"}  # fmt: skip
+             "patient_payment": "patient_payments", "statement": "statements", "visit": "visits",
+             "crosswalk": "crosswalk"}  # fmt: skip
     for kind, file_type in names.items():
         if kind in low:
             return file_type
@@ -797,6 +833,8 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                 parsed, payload = "postings", parse_postings(text)
             elif kind == "charges":
                 parsed, payload = "charges", parse_charges(text)
+            elif kind == "crosswalk":
+                parsed, payload = "crosswalk", parse_crosswalk(text, salt)
             elif is_csv:
                 parsed, payload = "fee_schedule", parse_fee_schedule(text)
             else:
@@ -835,6 +873,8 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                 n = _write_postings(s, sf.id, payload)
             elif kind == "charges":
                 n = _write_charges(s, sf.id, payload)
+            elif kind == "crosswalk":
+                n = _write_crosswalk(s, sf.id, payload)
             else:
                 n = _write_fee_schedule(s, sf.id, payload) if is_csv else _write_x12(s, sf.id, payload)
             if n == 0:  # every transaction in this file was already loaded from another file

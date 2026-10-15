@@ -26,6 +26,7 @@ TABLES = Base.metadata.tables
 ENGINE_TABLES = (
     "policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window",
     "ncci_pair", "mue_limit", "payer_filing_window", "rejection_route", "learned_rule", "auth_requirement",
+    "ops_run",
 )  # fmt: skip
 EXPECTED_TABLES = {
     "tenant", "source_file", "event", "payer", "provider", "patient_ref", "claim", "claim_line",
@@ -33,7 +34,7 @@ EXPECTED_TABLES = {
     "plb_adjustment", "payment", "fee_schedule", "ar_snapshot", "visit",
     "policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window",
     "ncci_pair", "mue_limit", "payer_filing_window", "rejection_route", "visit_note", "charge",
-    "appointment", "eligibility_response", "learned_rule", "prior_authorization", "auth_requirement", "bank_deposit", "posting", "enrollment", "provider_screening", "patient_payment", "patient_statement",
+    "appointment", "eligibility_response", "learned_rule", "prior_authorization", "auth_requirement", "bank_deposit", "posting", "enrollment", "provider_screening", "patient_payment", "patient_statement", "ops_run", "patient_crosswalk",
 }  # fmt: skip
 
 

@@ -122,6 +122,26 @@ Unique keys (idempotency): `(tenant_id, cpt_a, cpt_b)`
 | `modifier_indicator` | VARCHAR(1) | no | prevention config: 1 = a modifier may bypass the edit, 0 = never billable together |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `ops_run`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `mode` | VARCHAR(10) | no | ops run: daily or backfill |
+| `as_of` | DATE | no | ops run: the date every agent was advanced to |
+| `go_live` | DATE | yes | ops run: backfill go-live date; cards raised on or after it are 'new' |
+| `started_at` | DATETIME2(0) | no | ops run: when it started (UTC) |
+| `finished_at` | DATETIME2(0) | yes | ops run: when it finished (UTC); null while running |
+| `files_loaded` | INTEGER | no | ops run: inbox files loaded |
+| `files_skipped` | INTEGER | no | ops run: inbox files already loaded or carrying nothing new |
+| `files_failed` | INTEGER | no | ops run: inbox files that did not parse (moved to rejected) |
+| `events_added` | INTEGER | no | ops run: events added by the load and the sweeps |
+| `gate` | VARCHAR(10) | no | ops run: load gate result: passed, failed or skipped |
+| `status` | VARCHAR(10) | no | ops run: ok, gated (stopped at the gate) or failed |
+| `detail` | NVARCHAR(MAX) | no | ops run: JSON of per-step results and the summary |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `policy`
 
 Unique keys (idempotency): `(tenant_id, action_type)`
@@ -203,6 +223,19 @@ Unique keys (idempotency): `(tenant_id, source_file_id, isa13, gs06, st02, seq_i
 | `seq_in_file` | INTEGER | no | position of this event within its transaction set |
 | `known_at` | DATETIME2(0) | no | when the data became known (point-in-time key) |
 | `payload` | NVARCHAR(MAX) | no | the parsed record as JSON; patient identifiers are already hashed, so no PHI |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `patient_crosswalk`
+
+Unique keys (idempotency): `(tenant_id, member_hash)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `member_hash` | IMAGE | no | crosswalk CSV member_id, salted SHA-256 |
+| `master_hash` | IMAGE | no | crosswalk CSV master_id, salted SHA-256 |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `patient_payment`

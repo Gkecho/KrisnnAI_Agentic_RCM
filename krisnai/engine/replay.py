@@ -32,11 +32,17 @@ def replay(
     agent: Agent,
     until: datetime | None = None,
     provider: ModelProvider | None = None,
+    only_new: bool = False,
 ) -> list[ReplayItem]:
+    """Replay `agent` over its trigger events. `only_new` skips events that already have a decision record from this
+    agent (one query instead of one run per event); the records and fingerprints of the rest are unchanged."""
     with tenant_session(engine, tenant_id) as s:
         stmt = select(Event.id, Event.known_at).where(Event.event_type.in_(agent.trigger_types))
         if until is not None:
             stmt = stmt.where(Event.known_at <= until)
+        if only_new:
+            done = select(DecisionRecord.event_id).where(DecisionRecord.agent_id == agent.agent_id)
+            stmt = stmt.where(Event.id.not_in(done))
         events = [(eid, known) for eid, known in s.execute(stmt.order_by(Event.known_at, Event.id)).all()]
     items: list[ReplayItem] = []
     for event_id, known_at in events:

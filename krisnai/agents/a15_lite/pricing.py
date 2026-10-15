@@ -2,7 +2,8 @@
 
 Used by A6, A7 and A8.
 
-One A15 snapshot is loaded per tenant and as-of date and reused, so replaying many events on one day stays cheap.
+The data is loaded once per tenant (until a table grows) and each day's pricer is built from the rows known by that day,
+so replaying events spread over a long history reads the database once, not once per day.
 Lines can be claim lines or remit lines: anything with cpt, modifier_1, units, charge and service_date.
 """
 
@@ -10,8 +11,12 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+import krisnai.model as m
 
 from krisnai.agents.a15_lite.config import A15Config
 from krisnai.agents.a15_lite.expected import FEE, UNPRICED, Pricer, money, worst_basis
@@ -23,12 +28,34 @@ BILLED_FALLBACK = "billed_fallback"
 class ClaimPricer:
     def __init__(self) -> None:
         self._pricers: dict[tuple[int, date], Pricer] = {}
+        self._source: dict[int, tuple[tuple, list, list]] = {}  # tenant -> (version, remits, fees), everything known
+
+    @staticmethod
+    def _version(session: Session) -> tuple:
+        return (
+            session.scalar(select(func.count()).select_from(m.Remit)),
+            session.scalar(select(func.max(m.Remit.id))),
+            session.scalar(select(func.count()).select_from(m.FeeSchedule)),
+            session.scalar(select(func.max(m.FeeSchedule.id))),
+        )
 
     def pricer(self, session: Session, as_of: date) -> Pricer:
-        """The cached A15 pricer for this tenant and day (one snapshot, reused across events)."""
-        key = (session.info["tenant_id"], as_of)
+        """The cached A15 pricer for this tenant and day, built from the rows known by that day."""
+        tenant = session.info["tenant_id"]
+        version = self._version(session)
+        have = self._source.get(tenant)
+        if have is None or have[0] != version:  # first use, or rows were added since: reload and drop the day cache
+            snap = load_snapshot(session.get_bind(), tenant, date.max)
+            self._source[tenant] = (version, snap.remits, snap.fees)
+            self._pricers = {k: v for k, v in self._pricers.items() if k[0] != tenant}
+            have = self._source[tenant]
+        key = (tenant, as_of)
         if key not in self._pricers:
-            self._pricers[key] = Pricer(load_snapshot(session.get_bind(), key[0], key[1]), A15Config())
+            view = SimpleNamespace(
+                remits=[r for r in have[1] if r.known is not None and r.known <= as_of],
+                fees=[f for f in have[2] if f.effective <= as_of],
+            )
+            self._pricers[key] = Pricer(view, A15Config())
         return self._pricers[key]
 
     def price(

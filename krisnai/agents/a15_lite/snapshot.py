@@ -67,6 +67,7 @@ class Remit:
     total_paid: Decimal
     lines: list[RemitLine] = field(default_factory=list)
     claim_adjustments: list[tuple[str, str, Decimal]] = field(default_factory=list)
+    known: date | None = None  # the day both its payment and its remit were known (events' known_at)
 
 
 @dataclass
@@ -148,7 +149,10 @@ def load_snapshot(engine: Engine, tenant_id: int, as_of: date) -> Snapshot:
             p = pay.get(r.payment_id)
             if p is None or r.event_id not in known:
                 continue
-            remits[r.id] = Remit(r.id, r.claim_id, payer[p.payer_id], p.payment_date, r.claim_status_code, r.total_paid)
+            remits[r.id] = Remit(
+                r.id, r.claim_id, payer[p.payer_id], p.payment_date, r.claim_status_code, r.total_paid,
+                known=max(events[p.event_id].known_at, events[r.event_id].known_at).date(),
+            )
         lines: dict[int, RemitLine] = {}
         for rl in s.scalars(select(m.RemitLine).order_by(m.RemitLine.remit_id, m.RemitLine.line_number)):
             if rl.remit_id in remits:

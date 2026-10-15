@@ -26,15 +26,27 @@ class Account:
 
 
 def load_accounts(session: Session, claim: str | None = None) -> dict[str, Account]:
-    """One account per claim with a confirmed patient share: the latest non-reversed, non-denied remit wins."""
+    """One account per claim with a confirmed patient share: the latest non-reversed, non-denied remit wins.
+
+    With `claim` set only that claim's rows are read (one agent event = one claim); without it, every account.
+    """
     payer_code = {p.id: p.payer_id_code for p in session.scalars(select(m.Payer))}
-    pay_payer = {p.id: p.payer_id for p in session.scalars(select(m.Payment))}
-    known = {e.id: e.known_at.date() for e in session.scalars(select(m.Event).where(m.Event.event_type == "835.remit"))}
     stmt = select(m.Remit).where(m.Remit.claim_status_code.not_in(("22", "4")))
     if claim is not None:
         stmt = stmt.where(m.Remit.claim_submitter_id == claim)
+    remits = list(session.scalars(stmt))
+    event_ids = {r.event_id for r in remits}
+    pay_ids = {r.payment_id for r in remits}
+    if claim is not None:
+        known = {e.id: e.known_at.date() for e in session.scalars(select(m.Event).where(m.Event.id.in_(event_ids)))
+                 if e.event_type == "835.remit"}  # fmt: skip
+        pay_payer = {p.id: p.payer_id for p in session.scalars(select(m.Payment).where(m.Payment.id.in_(pay_ids)))}
+    else:
+        pay_payer = {p.id: p.payer_id for p in session.scalars(select(m.Payment))}
+        known = {e.id: e.known_at.date()
+                 for e in session.scalars(select(m.Event).where(m.Event.event_type == "835.remit"))}  # fmt: skip
     best: dict[str, m.Remit] = {}
-    for r in session.scalars(stmt):
+    for r in remits:
         if r.event_id not in known:
             continue
         cur = best.get(r.claim_submitter_id)
@@ -42,7 +54,10 @@ def load_accounts(session: Session, claim: str | None = None) -> dict[str, Accou
             best[r.claim_submitter_id] = r
     ids = {r.id for r in best.values()}
     codes: dict[int, dict[str, Decimal]] = defaultdict(dict)
-    for a in session.scalars(select(m.Adjustment).where(m.Adjustment.group_code == "PR")):
+    a_stmt = select(m.Adjustment).where(m.Adjustment.group_code == "PR")
+    if claim is not None:
+        a_stmt = a_stmt.where(m.Adjustment.remit_id.in_(ids))
+    for a in session.scalars(a_stmt):
         if a.remit_id in ids:
             codes[a.remit_id][a.reason_code] = codes[a.remit_id].get(a.reason_code, Decimal(0)) + a.amount
     out: dict[str, Account] = {}

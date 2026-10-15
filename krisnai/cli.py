@@ -15,6 +15,8 @@
     krisnai a2 seed|sweep|replay --tenant ID                              authorization agent (shadow only)
     krisnai a11 sweep|replay --tenant ID                                  cash reconciliation agent (shadow only)
     krisnai a13 sweep|replay --tenant ID                                  credentialing agent (shadow only)
+    krisnai demo [--out DIR] [--synthea DIR]                              mock practice + report.html (shadow only)
+    krisnai ops daily|backfill|status|bench --tenant ID                   inbox runner (shadow only)
     krisnai investigate sweep|replay|ledger --tenant ID                   revenue assurance investigator (shadow only)
     krisnai a12 sweep|replay --tenant ID                                  patient balance worklist (staff-facing)
     krisnai a4 replay|variance --tenant ID                                coding audit, suggestions only
@@ -129,6 +131,30 @@ def main(argv: list[str] | None = None) -> int:
     a13_replay = a13_sub.add_parser("replay", help="replay A13 over the events in shadow mode")
     for sp in (a13_sweep, a13_replay):
         sp.add_argument("--tenant", type=int, required=True)
+    demo = sub.add_parser("demo", help="build a mock practice, run every agent in shadow mode, write report.html")
+    demo.add_argument("--out", type=Path, default=Path("out/demo"), help="folder to (re)build; wiped first")
+    demo.add_argument("--synthea", type=Path, default=Path("out/synthea"), help="Synthea output folder")
+    demo.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 14), help="YYYY-MM-DD")
+    demo.add_argument("--seed", type=int, default=7)
+    ops = sub.add_parser("ops", help="daily and backfill runs over an inbox folder (shadow mode throughout)")
+    ops_sub = ops.add_subparsers(dest="ops_cmd", required=True)
+    ops_daily = ops_sub.add_parser("daily", help="load the inbox, check it, advance every agent to --as-of")
+    ops_back = ops_sub.add_parser("backfill", help="load history, then advance every agent over a date range")
+    ops_status = ops_sub.add_parser("status", help="recent runs and the watermark")
+    ops_bench = ops_sub.add_parser("bench", help="time a synthetic load and every agent step")
+    for sp in (ops_daily, ops_back):
+        sp.add_argument("--inbox", type=Path, required=True)
+        sp.add_argument("--archive", type=Path, help="default: <inbox>/../archive")
+        sp.add_argument("--allow-failed", action="store_true", help="continue past files that failed to load")
+    ops_daily.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    ops_back.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    ops_back.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    ops_back.add_argument("--step-days", type=int, default=28)
+    ops_back.add_argument("--go-live", type=date.fromisoformat, help="cards raised on/after this are reported as new")
+    for sp in (ops_daily, ops_back, ops_status):
+        sp.add_argument("--tenant", type=int, required=True)
+    ops_bench.add_argument("--claims", type=int, default=2000)
+    ops_bench.add_argument("--workdir", type=Path, help="scratch folder (default: a temp folder)")
     inv = sub.add_parser("investigate", help="A15 revenue assurance investigator, shadow mode only")
     inv_sub = inv.add_subparsers(dest="inv_cmd", required=True)
     inv_sweep = inv_sub.add_parser("sweep", help="raise variance events for slices whose realisation fell")
@@ -289,6 +315,24 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2))
         return 0
 
+    if args.cmd == "ops" and args.ops_cmd == "bench":
+        from krisnai.ops.bench import format_bench, run_bench
+
+        print(format_bench(run_bench(args.claims, args.workdir)))
+        return 0
+    if args.cmd == "demo":
+        from krisnai.demo import make_demo
+
+        res = make_demo(args.out, args.synthea, args.as_of, seed=args.seed)
+        print(f"report: {(res.root / 'report.html').resolve()}")
+        db = (res.root / "demo.sqlite").resolve()
+        print(f"database: {db} (tenant {res.tenant_id}, salt env DEMO_SALT=demo-salt)")
+        print(f"planted: {res.planted['rate_cut']['payer']} {res.planted['rate_cut']['cpt']} rate cut; "
+              f"{res.planted['denial_pattern']['payer']} {res.planted['denial_pattern']['cpt']} denial pattern")
+        print(f"ui data: {(res.root / 'ui_data.js').resolve()}")
+        res.engine.dispose()  # release demo.sqlite so a re-run can replace the folder (Windows keeps open files)
+        return 0
+
     engine = make_engine(args.db_url)
     if args.cmd == "init-db":
         Base.metadata.create_all(engine)
@@ -393,6 +437,29 @@ def main(argv: list[str] | None = None) -> int:
             items = replay(engine, args.tenant, A12PatientAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed; nothing sent to patients)")
             print(format_summary(summarize(engine, args.tenant, args.as_of)))
+    elif args.cmd == "ops":
+        from krisnai import ops as opsm
+        from krisnai.ops.daily import format_report
+
+        if args.ops_cmd == "status":
+            wm = opsm.watermark(engine, args.tenant)
+            print(f"watermark: {wm or 'none (no run has finished ok)'}")
+            last = opsm.last_run(engine, args.tenant)
+            if last is not None:
+                print(f"last run: {last.mode} to {last.as_of}, {last.status}, gate {last.gate}, "
+                      f"{last.files_loaded} files loaded, {last.events_added} events")
+        else:
+            salt = _salt_for(engine, args.tenant)
+            archive = args.archive or args.inbox.parent / "archive"
+            if args.ops_cmd == "daily":
+                rep = opsm.run_period(engine, args.tenant, salt, args.as_of, inbox=args.inbox, archive=archive,
+                                      mode="daily", allow_failed=args.allow_failed)  # fmt: skip
+            else:
+                rep = opsm.run_period(engine, args.tenant, salt, args.end, inbox=args.inbox, archive=archive,
+                                      mode="backfill", start=args.start, step_days=args.step_days,
+                                      go_live=args.go_live, allow_failed=args.allow_failed)  # fmt: skip
+            print(format_report(rep))
+            return 0 if rep.status == "ok" else 1
     elif args.cmd == "investigate":
         from krisnai.agents.a15_investigator import (
             A15InvestigatorAgent,
