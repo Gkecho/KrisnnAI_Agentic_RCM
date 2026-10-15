@@ -10,6 +10,10 @@
     krisnai a5 seed|replay --tenant ID                                    claim prevention agent (shadow only)
     krisnai a10 replay|patterns --tenant ID                               underpayment agent (shadow only)
     krisnai a3 sweep|replay --tenant ID                                   documentation agent (shadow only)
+    krisnai a1 sweep|replay --tenant ID                                   pre-visit clearance agent (shadow only)
+    krisnai a9 sweep|replay|approve|reject|forward|attribution            denial learning agent (shadow only)
+    krisnai a2 seed|sweep|replay --tenant ID                              authorization agent (shadow only)
+    krisnai a11 sweep|replay --tenant ID                                  cash reconciliation agent (shadow only)
     krisnai a7 sweep|replay|inbox --tenant ID                             AR follow-up agent (shadow only)
     krisnai a6 seed|replay --tenant ID                                    rejection handling agent (shadow only)
     krisnai tower --tenant ID --as-of DATE [--json]                       control tower snapshot (read-only)
@@ -94,6 +98,51 @@ def main(argv: list[str] | None = None) -> int:
     a10_patterns = "list payer-wide short-payment patterns (one dispute each) from the replay"
     for name, text in (("replay", a10_replay), ("patterns", a10_patterns)):
         a10_sub.add_parser(name, help=text).add_argument("--tenant", type=int, required=True)
+    a11 = sub.add_parser("a11", help="A11 cash reconciliation agent, shadow mode only")
+    a11_sub = a11.add_subparsers(dest="a11_cmd", required=True)
+    a11_sweep = a11_sub.add_parser("sweep", help="raise reconciliation events for payments and deposits")
+    a11_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a11_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a11_sweep.add_argument("--every-days", type=int, default=7)
+    a11_replay = a11_sub.add_parser("replay", help="replay A11 over the events in shadow mode")
+    a11_replay.add_argument("--as-of", type=date.fromisoformat, help="date for the days-to-deposit / post KPIs")
+    for sp in (a11_sweep, a11_replay):
+        sp.add_argument("--tenant", type=int, required=True)
+    a2 = sub.add_parser("a2", help="A2 authorization agent, shadow mode only")
+    a2_sub = a2.add_subparsers(dest="a2_cmd", required=True)
+    a2_seed = a2_sub.add_parser("seed", help="load the placeholder payer + CPT authorization requirements")
+    a2_sweep = a2_sub.add_parser("sweep", help="raise the 7 d and 2 d authorization checkpoints in a window")
+    a2_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a2_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a2_replay = a2_sub.add_parser("replay", help="replay A2 over the checkpoints in shadow mode")
+    for sp in (a2_seed, a2_sweep, a2_replay):
+        sp.add_argument("--tenant", type=int, required=True)
+    a9 = sub.add_parser("a9", help="A9 denial prevention learning agent, shadow mode only")
+    a9_sub = a9.add_subparsers(dest="a9_cmd", required=True)
+    a9_sweep = a9_sub.add_parser("sweep", help="raise an event for each new recurring denial pattern")
+    a9_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a9_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a9_sweep.add_argument("--every-days", type=int, default=30)
+    a9_replay = a9_sub.add_parser("replay", help="replay A9 over the pattern events in shadow mode")
+    a9_approve = a9_sub.add_parser("approve", help="a named person approves a proposed rule (A5 then uses it)")
+    a9_reject = a9_sub.add_parser("reject", help="a named person rejects a proposed rule")
+    a9_forward = a9_sub.add_parser("forward", help="forward test of each rule on claims filed after it was proposed")
+    a9_attr = a9_sub.add_parser("attribution", help="which upstream agent had flagged each denial")
+    for sp in (a9_approve, a9_reject):
+        sp.add_argument("--rule", required=True, help="rule key, payer|cpt|carc")
+        sp.add_argument("--by", required=True, help="the approver's name (stored with the decision)")
+    for sp in (a9_forward, a9_attr):
+        sp.add_argument("--as-of", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    for sp in (a9_sweep, a9_replay, a9_approve, a9_reject, a9_forward, a9_attr):
+        sp.add_argument("--tenant", type=int, required=True)
+    a1 = sub.add_parser("a1", help="A1 pre-visit clearance agent, shadow mode only")
+    a1_sub = a1.add_subparsers(dest="a1_cmd", required=True)
+    a1_sweep = a1_sub.add_parser("sweep", help="raise the 72 h and 24 h clearance checkpoints in a date window")
+    a1_sweep.add_argument("--from", dest="start", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a1_sweep.add_argument("--to", dest="end", type=date.fromisoformat, required=True, help="YYYY-MM-DD")
+    a1_replay = a1_sub.add_parser("replay", help="replay A1 over the checkpoints in shadow mode")
+    for sp in (a1_sweep, a1_replay):
+        sp.add_argument("--tenant", type=int, required=True)
     a3 = sub.add_parser("a3", help="A3 documentation completeness agent, shadow mode only")
     a3_sub = a3.add_subparsers(dest="a3_cmd", required=True)
     a3_sweep = a3_sub.add_parser("sweep", help="raise a documentation check event for each visit with a gap")
@@ -157,6 +206,14 @@ def main(argv: list[str] | None = None) -> int:
     sy_build.add_argument("--lookback-days", type=int, default=548, help="drop visits older than this")
     sy_build.add_argument("--documentation", action="store_true",
                           help="also write notes.csv, charges.csv, all visits and doc_truth.csv (planted defects)")
+    sy_build.add_argument("--denial-pattern", action="append", default=[], metavar="PAYER:CPT:CARC:RATE:YYYY-MM-DD",
+                          help="from a date a payer denies claims with a CPT at RATE (0-1): a planted recurring defect")
+    sy_build.add_argument("--cash", action="store_true",
+                          help="also write bank_deposits.csv, postings.csv and cash_truth.csv (planted defects)")
+    sy_build.add_argument("--authorization", action="store_true",
+                          help="also write authorizations.csv and auth_truth.csv (needs --eligibility)")
+    sy_build.add_argument("--eligibility", action="store_true",
+                          help="also write appointments.csv, 271 files and elig_truth.csv (planted coverage problems)")
     sy_build.add_argument("--rate-cut", action="append", default=[], metavar="PAYER:CPT:YYYY-MM-DD:PCT",
                           help="a payer pays PCT%% less on a CPT from a date (repeatable); planted underpayment")
     args = parser.parse_args(argv)
@@ -174,7 +231,9 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             return runner.run(p)
         report = synthea_build(
-            args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut, args.documentation
+            args.src, args.out, args.as_of, args.seed, args.lookback_days, args.rate_cut, args.documentation,
+            args.eligibility, args.denial_pattern,
+            args.authorization, args.cash,
         )
         print(json.dumps(report, indent=2))
         return 0
@@ -262,6 +321,76 @@ def main(argv: list[str] | None = None) -> int:
         else:
             items = replay(engine, args.tenant, A8DenialAgent())
             print(f"replayed {len(items)} events (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a11":
+        from krisnai.agents.a11_cash import A11CashAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a11_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} reconciliation events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A11CashAgent())
+            print(f"replayed {len(items)} events (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant, args.as_of)))
+    elif args.cmd == "a2":
+        from krisnai.agents.a2_authorization import (
+            A2AuthorizationAgent,
+            format_summary,
+            seed_defaults,
+            summarize,
+            sweep,
+        )
+        from krisnai.engine import replay
+        from krisnai.model import tenant_session
+
+        if args.a2_cmd == "seed":
+            with tenant_session(engine, args.tenant) as s:
+                added = seed_defaults(s)
+                s.commit()
+            print(f"{added} authorization requirement rows added")
+        elif args.a2_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end)
+            added = f"{res.events} authorization checkpoints added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A2AuthorizationAgent())
+            print(f"replayed {len(items)} checkpoints (shadow: nothing executed)")
+            print(format_summary(summarize(engine, args.tenant)))
+    elif args.cmd == "a9":
+        from krisnai.agents import a9_learning as a9m
+        from krisnai.engine import replay
+
+        if args.a9_cmd == "sweep":
+            res = a9m.sweep(engine, args.tenant, args.start, args.end, args.every_days)
+            added = f"{res.events} pattern events added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        elif args.a9_cmd == "replay":
+            items = replay(engine, args.tenant, a9m.A9LearningAgent())
+            print(f"replayed {len(items)} patterns (shadow: nothing executed)")
+            print(a9m.format_summary(a9m.proposals(engine, args.tenant), args.tenant))
+        elif args.a9_cmd in ("approve", "reject"):
+            status = a9m.APPROVED if args.a9_cmd == "approve" else a9m.REJECTED
+            try:
+                print(json.dumps(a9m.decide(engine, args.tenant, args.rule, status, args.by)))
+            except a9m.DecisionError as e:
+                raise SystemExit(str(e)) from None
+        elif args.a9_cmd == "forward":
+            print(a9m.format_forward(a9m.forward(engine, args.tenant, args.as_of)))
+        else:
+            print(a9m.format_attribution(a9m.attribution(engine, args.tenant, args.as_of)))
+    elif args.cmd == "a1":
+        from krisnai.agents.a1_clearance import A1ClearanceAgent, format_summary, summarize, sweep
+        from krisnai.engine import replay
+
+        if args.a1_cmd == "sweep":
+            res = sweep(engine, args.tenant, args.start, args.end)
+            added = f"{res.events} clearance checkpoints added"
+            print("this sweep was already recorded: nothing added" if res.skipped else added)
+        else:
+            items = replay(engine, args.tenant, A1ClearanceAgent())
+            print(f"replayed {len(items)} checkpoints (shadow: nothing executed)")
             print(format_summary(summarize(engine, args.tenant)))
     elif args.cmd == "a3":
         from krisnai.agents.a3_documentation import A3DocumentationAgent, format_summary, summarize, sweep

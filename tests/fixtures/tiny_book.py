@@ -81,6 +81,46 @@ class Book:
         self._add(m.Visit(visit_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider.id,
                           patient_ref_id=(patient or self.patient).id, service_date=dos, cpt=cpt, units=D(1)))  # fmt: skip
 
+    def appointment(self, ref: str, payer: str, appt: date, booked: date, cpt: str = "99213",
+                    patient: m.PatientRef | None = None) -> None:  # fmt: skip
+        self._add(m.Appointment(appt_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider.id,
+                                patient_ref_id=(patient or self.patient).id, appt_date=appt, booked_on=booked,
+                                cpt=cpt, status="booked"))  # fmt: skip
+
+    def eligibility(self, ref: str, payer: str, checked: date, service: date | None, active: bool = True,
+                    plan_begin: date | None = None, plan_end: date | None = None, other: str | None = None,
+                    copay: str | None = None, coinsurance: str | None = None, deductible: str | None = None,
+                    patient: m.PatientRef | None = None) -> None:  # fmt: skip
+        self._add(m.EligibilityResponse(
+            event_id=self.event(checked, "271.response", st02=ref, gs06=ref), payer_id=self.payer(payer).id,
+            patient_ref_id=(patient or self.patient).id, response_ref=ref, checked_on=checked, service_date=service,
+            active=active, plan_begin=plan_begin, plan_end=plan_end, other_payer=other,
+            copay=D(copay) if copay else None, coinsurance=D(coinsurance) if coinsurance else None,
+            deductible_remaining=D(deductible) if deductible else None,
+        ))  # fmt: skip
+
+    def authorization(self, ref: str, payer: str, cpt: str, requested: date, status: str = "approved",
+                      decided: date | None = None, start: date | None = None, end: date | None = None,
+                      approved: int | None = None, used: int | None = None, units_as_of: date | None = None,
+                      patient: m.PatientRef | None = None, appointment: str | None = None) -> None:  # fmt: skip
+        self._add(m.Authorization(
+            appointment_ref=appointment,
+            auth_ref=ref, payer_id=self.payer(payer).id, patient_ref_id=(patient or self.patient).id, cpt=cpt,
+            units_approved=approved, units_used=used, units_as_of=units_as_of, start_date=start, end_date=end,
+            status=status, requested_on=requested, decided_on=decided,
+        ))  # fmt: skip
+
+    def require_auth(self, payer: str, cpt: str, validity_days: int = 90) -> None:
+        self._add(m.AuthRequirement(payer_id=self.payer(payer).id, cpt=cpt, validity_days=validity_days))
+
+    def deposit(self, ref: str, on: date, amount: str, payer: str | None = None, trace: str | None = None) -> None:
+        self._add(m.BankDeposit(deposit_ref=ref, deposit_date=on, amount=D(amount),
+                                payer_id=self.payer(payer).id if payer else None, trace_ref=trace, method="ACH"))  # fmt: skip
+
+    def posting(self, ref: str, trace: str, claim: str, on: date, amount: str) -> None:
+        self._add(m.Posting(posting_ref=ref, payment_trace=trace, claim_submitter_id=claim, posted_on=on,
+                            posted_amount=D(amount), posted_by_role="payment_poster"))  # fmt: skip
+
     def note(self, ref: str, note_date: date, signed: date | None = None, elements: str = "assessment,plan",
              minutes: int | None = None) -> None:  # fmt: skip
         self._add(m.VisitNote(visit_ref=ref, note_date=note_date, signed_date=signed, minutes=minutes,

@@ -19,7 +19,10 @@ import krisnai.model as m
 from krisnai.engine import NO_ACTION
 from krisnai.model import tenant_session
 
-AGENTS = ("a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay", "a3_documentation")
+AGENTS = (
+    "a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay", "a3_documentation", "a1_clearance",
+    "a9_learning", "a2_authorization", "a11_cash",
+)  # fmt: skip
 AGE_BUCKETS = ((7, "0-7"), (14, "8-14"), (30, "15-30"))  # days since the card was raised
 DUE_SOON_DAYS = 7  # an item due within this many days counts as deadline-critical; TBD at spec review
 
@@ -36,6 +39,13 @@ def _claims_of(agent_id: str, p: dict) -> list[str]:
         return list(p["claims"])
     if agent_id == "a3_documentation":  # a visit, not a claim
         return [p["visit"]] if p.get("visit") else []
+    if agent_id in ("a1_clearance", "a2_authorization"):  # an appointment, not a claim
+        return [p["appt"]] if p.get("appt") else []
+    if agent_id == "a11_cash":  # a payment (or a bank deposit), not a claim
+        key = p.get("trace") or p.get("deposit_ref")
+        return [key] if key else []
+    if agent_id == "a9_learning":  # a proposed rule, not a claim
+        return [p["rule_key"]] if p.get("rule_key") else []
     return [p["claim"]] if p.get("claim") else []
 
 
@@ -48,6 +58,7 @@ def open_cards(engine: Engine, tenant_id: int, as_of: date) -> list[dict]:
             .where(m.DecisionRecord.agent_id.in_(AGENTS), m.Event.known_at <= end)
             .order_by(m.Event.known_at, m.DecisionRecord.id)
         ).all()
+        decided = set(s.scalars(select(m.LearnedRule.rule_key).where(m.LearnedRule.status != "proposed")))
         remits: dict[str, list[tuple[datetime, Decimal, str]]] = {}
         for sid, known, paid, status in s.execute(
             select(m.Remit.claim_submitter_id, m.Event.known_at, m.Remit.total_paid, m.Remit.claim_status_code)
@@ -75,7 +86,7 @@ def open_cards(engine: Engine, tenant_id: int, as_of: date) -> list[dict]:
 
     cards = []
     for (agent_id, _), (rec, known, p) in latest.items():
-        if not _is_open(agent_id, known, p, remits, filed):
+        if not _is_open(agent_id, known, p, remits, filed, as_of, decided):
             continue
         card = p["card"]
         deadline = date.fromisoformat(card["deadline"])
@@ -101,7 +112,13 @@ def _key(rec: m.DecisionRecord, p: dict) -> str:
     return claims[0] if claims else f"record{rec.id}"
 
 
-def _is_open(agent_id: str, raised: datetime, p: dict, remits: dict, filed: dict) -> bool:
+def _is_open(
+    agent_id: str, raised: datetime, p: dict, remits: dict, filed: dict, as_of: date, decided: set[str]
+) -> bool:
+    if agent_id == "a9_learning":  # open until a named person approves or rejects the rule
+        return p["rule_key"] not in decided
+    if agent_id in ("a1_clearance", "a2_authorization"):  # matters until the visit; then A15, A8 and A10 take over
+        return date.fromisoformat(p["appt_date"]) >= as_of
     claims = _claims_of(agent_id, p)
     if not claims:  # a recoupment has no claim: it stays until a person closes it
         return True

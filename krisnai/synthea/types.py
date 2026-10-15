@@ -77,6 +77,8 @@ class SimClaim:
     remit_date: date | None = None
     shortfall_line: int | None = None
     shortfall: Decimal = Decimal("0")
+    pattern: str = ""  # "payer:cpt:carc" when a planted denial pattern made this claim a denial
+    auth_defect: str = ""  # planted prior-authorization defect, "" when none (or authorization is not simulated)
 
     @property
     def billed(self) -> Decimal:

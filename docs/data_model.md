@@ -35,19 +35,30 @@ erDiagram
     event ||--o{ ack_999 : has
     event ||--o{ claim : has
     event ||--o{ decision_record : has
+    event ||--o{ eligibility_response : has
     event ||--o{ payment : has
     event ||--o{ remit : has
+    patient_ref ||--o{ appointment : has
     patient_ref ||--o{ claim : has
+    patient_ref ||--o{ eligibility_response : has
+    patient_ref ||--o{ prior_authorization : has
     patient_ref ||--o{ remit : has
     patient_ref ||--o{ visit : has
+    payer ||--o{ appointment : has
+    payer ||--o{ auth_requirement : has
+    payer ||--o{ bank_deposit : has
     payer ||--o{ claim : has
+    payer ||--o{ eligibility_response : has
     payer ||--o{ fee_schedule : has
+    payer ||--o{ learned_rule : has
     payer ||--o{ payer_appeal_window : has
     payer ||--o{ payer_filing_window : has
     payer ||--o{ payment : has
+    payer ||--o{ prior_authorization : has
     payer ||--o{ visit : has
     payment ||--o{ plb_adjustment : has
     payment ||--o{ remit : has
+    provider ||--o{ appointment : has
     provider ||--o{ claim : has
     provider ||--o{ visit : has
     remit ||--o{ adjustment : has
@@ -216,6 +227,23 @@ Unique keys (idempotency): `(tenant_id, payer_id_code)`
 | `name` | VARCHAR(200) | no | NM103 payer name |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `posting`
+
+Unique keys (idempotency): `(tenant_id, posting_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `posting_ref` | VARCHAR(40) | no | postings CSV posting_id (the PM system's own number) |
+| `payment_trace` | VARCHAR(50) | no | postings CSV payment_trace: the 835 TRN02 the posting came from |
+| `claim_submitter_id` | VARCHAR(38) | no | postings CSV claim_id (CLM01) |
+| `posted_on` | DATE | no | postings CSV posted_on |
+| `posted_amount` | NUMERIC(18, 2) | no | postings CSV posted_amount |
+| `posted_by_role` | VARCHAR(20) | no | postings CSV posted_by_role (a role, never a person's name) |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `provider`
 
 Unique keys (idempotency): `(tenant_id, npi)`
@@ -262,6 +290,55 @@ Unique keys (idempotency): `(tenant_id, event_id)`
 | `transaction_status` | VARCHAR(1) | no | IK5-01 (A accepted, E accepted with errors, R rejected) |
 | `group_status` | VARCHAR(1) | yes | AK9-01 |
 | `error_codes` | VARCHAR(100) | yes | IK5-02..06 / IK4-03 joined with commas |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `appointment`
+
+Unique keys (idempotency): `(tenant_id, appt_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `appt_ref` | VARCHAR(40) | no | appointments CSV appointment_id (the PM system's own number) |
+| `payer_id` | BIGINT | no | appointments CSV payer_id: the coverage on file at booking |
+| `provider_id` | BIGINT | no | appointments CSV provider_npi, resolved to provider.id |
+| `patient_ref_id` | BIGINT | no | appointments CSV patient_ref (member id), hashed to patient_ref.id |
+| `appt_date` | DATE | no | appointments CSV appt_date: the day of the visit |
+| `booked_on` | DATE | no | appointments CSV booked_on: when it was scheduled |
+| `cpt` | VARCHAR(5) | no | appointments CSV cpt: the expected service |
+| `status` | VARCHAR(12) | no | appointments CSV status (booked, cancelled) |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `auth_requirement`
+
+Unique keys (idempotency): `(tenant_id, payer_id, cpt)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `payer_id` | BIGINT | no | payer that requires the authorization |
+| `cpt` | VARCHAR(5) | no | auth config: the CPT that needs prior authorization |
+| `validity_days` | INTEGER | no | auth config: how long an approval normally stays valid |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `bank_deposit`
+
+Unique keys (idempotency): `(tenant_id, deposit_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `deposit_ref` | VARCHAR(40) | no | bank deposits CSV deposit_id (the bank's own line reference) |
+| `deposit_date` | DATE | no | bank deposits CSV deposit_date: when the money reached the account |
+| `amount` | NUMERIC(18, 2) | no | bank deposits CSV amount |
+| `payer_id` | BIGINT | yes | bank deposits CSV payer_id when the bank line names the payer, else empty |
+| `trace_ref` | VARCHAR(50) | yes | bank deposits CSV trace: the 835 TRN02 reassociation trace, if sent |
+| `method` | VARCHAR(10) | no | bank deposits CSV method (ACH, CHK, LOCKBOX) |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `claim`
@@ -317,6 +394,30 @@ Unique keys (idempotency): `(tenant_id, event_id, agent_id, action_type)`
 | `verification_result` | VARCHAR(500) | yes | whether that condition held |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `eligibility_response`
+
+Unique keys (idempotency): `(tenant_id, event_id)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `event_id` | BIGINT | no | 271.response event this row was built from |
+| `payer_id` | BIGINT | no | 271 NM1*PR payer id, resolved to payer.id |
+| `patient_ref_id` | BIGINT | yes | 271 NM1*IL member id, hashed to patient_ref.id |
+| `response_ref` | VARCHAR(50) | no | 271 TRN02 trace number |
+| `checked_on` | DATE | no | 271 BHT04 date the answer was produced (interchange date) |
+| `service_date` | DATE | yes | 271 DTP*291 date the answer applies to |
+| `active` | BIT | no | 271 EB01: true = 1 active coverage, false = 6 inactive |
+| `plan_begin` | DATE | yes | 271 DTP*346 plan begin |
+| `plan_end` | DATE | yes | 271 DTP*347 plan end, null = open ended |
+| `other_payer` | VARCHAR(60) | yes | 271 EB*R followed by NM1*PR: another payer is primary |
+| `copay` | NUMERIC(18, 2) | yes | 271 EB*B amount: flat copayment |
+| `coinsurance` | NUMERIC(5, 4) | yes | 271 EB*A percent as a fraction (0.2 = 20%) |
+| `deductible_remaining` | NUMERIC(18, 2) | yes | 271 EB*C amount still to be met |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `fee_schedule`
 
 Unique keys (idempotency): `(tenant_id, payer_id, cpt, modifier, effective_date)`
@@ -332,6 +433,27 @@ Unique keys (idempotency): `(tenant_id, payer_id, cpt, modifier, effective_date)
 | `allowed_amount` | NUMERIC(18, 2) | no | fee schedule CSV allowed_amount |
 | `effective_date` | DATE | no | fee schedule CSV effective_date |
 | `end_date` | DATE | yes | fee schedule CSV end_date, null = open ended |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `learned_rule`
+
+Unique keys (idempotency): `(tenant_id, rule_key)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `rule_key` | VARCHAR(60) | no | learned rule: payer code | CPT | CARC |
+| `payer_id` | BIGINT | no | payer the pattern was found for |
+| `cpt` | VARCHAR(5) | no | learned rule: CPT the payer keeps denying |
+| `carc` | VARCHAR(5) | no | learned rule: CARC the payer denies it with |
+| `proposed_on` | DATE | no | learned rule: day A9 proposed it |
+| `status` | VARCHAR(10) | no | learned rule: proposed, approved or rejected |
+| `n_denials` | INTEGER | no | learned rule: denied claims behind it when proposed |
+| `n_adjudicated` | INTEGER | no | learned rule: adjudicated claims for the payer and CPT when proposed |
+| `denial_rate` | NUMERIC(5, 4) | no | learned rule: denied / adjudicated when proposed |
+| `approved_by` | VARCHAR(60) | yes | learned rule: the named person who approved or rejected it |
+| `decided_on` | DATE | yes | learned rule: day of that decision |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `payer_appeal_window`
@@ -374,6 +496,30 @@ Unique keys (idempotency): `(tenant_id, event_id)`
 | `credit_debit` | VARCHAR(1) | no | BPR03 (C credit, D debit) |
 | `payment_method` | VARCHAR(3) | no | BPR04 (ACH, CHK, NON) |
 | `payment_date` | DATE | no | BPR16 check issue / EFT effective date |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `prior_authorization`
+
+Unique keys (idempotency): `(tenant_id, auth_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `auth_ref` | VARCHAR(40) | no | authorizations CSV authorization_id (the payer or PM reference) |
+| `payer_id` | BIGINT | no | authorizations CSV payer_id, resolved to payer.id |
+| `patient_ref_id` | BIGINT | no | authorizations CSV patient_ref (member id), hashed to patient_ref.id |
+| `cpt` | VARCHAR(5) | no | authorizations CSV cpt: the service the authorization covers |
+| `appointment_ref` | VARCHAR(40) | yes | authorizations CSV appointment_id: the booked service it was requested for, empty if unlinked |
+| `units_approved` | INTEGER | yes | authorizations CSV units_approved, empty until decided |
+| `units_used` | INTEGER | yes | authorizations CSV units_used as of units_as_of |
+| `units_as_of` | DATE | yes | authorizations CSV units_as_of: the day units_used was true |
+| `start_date` | DATE | yes | authorizations CSV start_date of the approved window |
+| `end_date` | DATE | yes | authorizations CSV end_date of the approved window, empty = open |
+| `status` | VARCHAR(10) | no | authorizations CSV status: requested, approved, denied or expired |
+| `requested_on` | DATE | no | authorizations CSV requested_on |
+| `decided_on` | DATE | yes | authorizations CSV decided_on, empty while pending |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `visit`

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from krisnai.model import MueLimit, NcciPair, PayerFilingWindow
+from krisnai.model import LearnedRule, MueLimit, NcciPair, PayerFilingWindow
 
 DEFAULT_FILING_DAYS = 365  # TBD at spec review; used only when the payer has no payer_filing_window row
 FILING_WARN_DAYS = 30  # flag a claim this close to its filing deadline; TBD at spec review
@@ -22,6 +22,7 @@ class RuleData:
     ncci: dict[frozenset[str], str]  # {cpt_a, cpt_b} -> modifier_indicator
     mue: dict[str, int]
     filing_days: dict[int, int]  # payer.id -> days
+    learned: dict[int, dict[str, tuple[str, str]]]  # payer.id -> {cpt: (rule_key, carc)}; approved A9 rules only
 
 
 def seed_defaults(session: Session) -> int:
@@ -41,9 +42,18 @@ def seed_defaults(session: Session) -> int:
     return added
 
 
+def _learned(session: Session) -> dict[int, dict[str, tuple[str, str]]]:
+    """Rules a named person approved in A9 (status approved). Proposed and rejected rules have no effect."""
+    out: dict[int, dict[str, tuple[str, str]]] = {}
+    for r in session.scalars(select(LearnedRule).where(LearnedRule.status == "approved")):
+        out.setdefault(r.payer_id, {})[r.cpt] = (r.rule_key, r.carc)
+    return out
+
+
 def load(session: Session) -> RuleData:
     return RuleData(
         ncci={frozenset((r.cpt_a, r.cpt_b)): r.modifier_indicator for r in session.scalars(select(NcciPair))},
         mue={r.cpt: r.max_units for r in session.scalars(select(MueLimit))},
         filing_days={r.payer_id: r.filing_days for r in session.scalars(select(PayerFilingWindow))},
+        learned=_learned(session),
     )

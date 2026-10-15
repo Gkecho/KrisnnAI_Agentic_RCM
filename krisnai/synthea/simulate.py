@@ -15,8 +15,16 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from krisnai.synthea.cash import CashPlan
+from krisnai.synthea.cash import DEPOSIT_COLUMNS as CASH_DEPOSIT_COLUMNS
+from krisnai.synthea.cash import POSTING_COLUMNS as CASH_POSTING_COLUMNS
+from krisnai.synthea.cash import TRUTH_COLUMNS as CASH_TRUTH_COLUMNS
 from krisnai.synthea.crosswalk import CPT_BASE_FEE
+from krisnai.synthea.authorization import AUTH_COLUMNS, AuthPlan
+from krisnai.synthea.authorization import TRUTH_COLUMNS as AUTH_TRUTH_COLUMNS
 from krisnai.synthea.documentation import CHARGE_COLUMNS, NOTE_COLUMNS, TRUTH_COLUMNS, DocPlan
+from krisnai.synthea.eligibility import APPOINTMENT_COLUMNS, EligPlan
+from krisnai.synthea.eligibility import TRUTH_COLUMNS as ELIG_TRUTH_COLUMNS
 from krisnai.synthea.types import (
     BILLED_MARKUP,
     PATIENT_SHARE,
@@ -39,6 +47,12 @@ SHARES = {  # share of billed claims
 UNBILLED_SHARE = Decimal("0.03")
 STUCK_SHARE = 0.10
 TIMELY_CARC = "29"
+AUTH_CARC = "197"  # precertification / authorization absent
+# cumulative bands of one draw: share of authorization-requiring claims given each planted defect
+AUTH_DEFECT_BANDS = (
+    ("no_authorization", 0.10), ("expired_authorization", 0.16), ("pending_late", 0.21),
+    ("units_exhausted", 0.26),
+)
 GROUND_TRUTH_COLUMNS = [
     "issue_id", "issue_type", "claim_id", "visit_id", "line_no", "payer_id", "cpt", "carc",
     "expected_amount", "status", "reason",
@@ -53,6 +67,24 @@ class RateCut:
     cpt: str
     start: date
     percent: Decimal
+
+
+@dataclass(frozen=True)
+class DenialPattern:
+    """From `start`, `payer_id` denies claims carrying `cpt` with `carc` at `rate` (a planted recurring defect)."""
+
+    payer_id: str
+    cpt: str
+    carc: str
+    rate: float
+    start: date
+
+
+def parse_denial_pattern(text: str) -> DenialPattern:
+    payer, cpt, carc, rate, start = text.split(":")
+    if carc not in DENIAL_RARC:
+        raise ValueError(f"denial pattern CARC {carc} must be one of {sorted(DENIAL_RARC)}")
+    return DenialPattern(payer, cpt, carc, float(rate), date.fromisoformat(start))
 
 
 def parse_rate_cut(text: str) -> RateCut:
@@ -87,9 +119,16 @@ def _settle(c: SimClaim) -> None:
 
 
 def simulate(
-    bundles: list[Bundle], as_of: date, seed: int, rate_cuts: list[RateCut] | None = None
+    bundles: list[Bundle],
+    as_of: date,
+    seed: int,
+    rate_cuts: list[RateCut] | None = None,
+    patterns: list[DenialPattern] | None = None,
+    auth_cpts: frozenset[str] | None = None,
 ) -> tuple[list[SimClaim], list[SimVisit]]:
     rng = random.Random(seed)
+    pattern_rng = random.Random(seed + 41)  # own stream: planting a pattern moves no other draw
+    auth_rng = random.Random(seed + 53)  # own stream: planting authorization defects moves no other draw
     order = list(range(len(bundles)))
     rng.shuffle(order)
     n_unbilled = int(len(bundles) * UNBILLED_SHARE)
@@ -146,6 +185,23 @@ def simulate(
                 c.scenario, c.remit_date = "open", None  # the payer never pays it
         if c.remit_date is not None and c.remit_date > as_of:
             c.scenario, c.remit_date = "open", None  # not paid yet at as_of
+        if c.remit_date is not None and c.scenario == "clean":
+            for pat in patterns or []:
+                if pat.payer_id == c.payer.payer_id and c.submitted >= pat.start and any(
+                    ln.cpt == pat.cpt for ln in c.lines
+                ) and pattern_rng.random() < pat.rate:
+                    c.scenario, c.carc, c.pattern = "denial", pat.carc, f"{pat.payer_id}:{pat.cpt}:{pat.carc}"
+                    break
+        if auth_cpts and c.remit_date is not None and c.scenario == "clean" and any(
+            ln.cpt in auth_cpts for ln in c.lines
+        ):
+            draw = auth_rng.random()
+            for defect, upper in AUTH_DEFECT_BANDS:
+                if draw < upper:
+                    c.auth_defect = defect
+                    break
+            if c.auth_defect in ("no_authorization", "expired_authorization"):
+                c.scenario, c.carc = "denial", AUTH_CARC  # the payer denies a service that had no valid authorization
         if c.remit_date is not None and c.scenario in ("clean", "underpayment"):
             for ln in c.lines:
                 for cut in rate_cuts or []:
@@ -205,7 +261,14 @@ def _write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
 
 
 def write_dir(
-    claims: list[SimClaim], visits: list[SimVisit], out_dir: Path, as_of: date, doc: DocPlan | None = None
+    claims: list[SimClaim],
+    visits: list[SimVisit],
+    out_dir: Path,
+    as_of: date,
+    doc: DocPlan | None = None,
+    elig: EligPlan | None = None,
+    auth: AuthPlan | None = None,
+    cash: CashPlan | None = None,
 ) -> dict[str, int]:
     """Write 837 / 999 / 277CA / 835 files plus fee_schedule.csv, visits.csv, ground_truth.csv and open_ar.csv.
 
@@ -265,6 +328,21 @@ def write_dir(
     ):  # fmt: skip
         _write_csv(out_dir / name, cols, rows)
         counts["csv"] += 1
+    if cash is not None:
+        _write_csv(out_dir / "bank_deposits.csv", CASH_DEPOSIT_COLUMNS, cash.deposits)
+        _write_csv(out_dir / "postings.csv", CASH_POSTING_COLUMNS, cash.postings)
+        _write_csv(out_dir / "cash_truth.csv", CASH_TRUTH_COLUMNS, cash.truth)
+        counts["csv"] += 3
+    if auth is not None:
+        _write_csv(out_dir / "authorizations.csv", AUTH_COLUMNS, auth.rows)
+        _write_csv(out_dir / "auth_truth.csv", AUTH_TRUTH_COLUMNS, auth.truth)
+        counts["csv"] += 2
+    hits = [c for c in claims if c.pattern]
+    if hits:  # only when a denial pattern was planted, so the default output is unchanged
+        rows = [{"claim_id": c.claim_id, "payer_id": c.pattern.split(":")[0], "cpt": c.pattern.split(":")[1],
+                 "carc": c.pattern.split(":")[2]} for c in hits]  # fmt: skip
+        _write_csv(out_dir / "pattern_truth.csv", ["claim_id", "payer_id", "cpt", "carc"], rows)
+        counts["csv"] += 1
     if doc is not None:
         for name, cols, rows in (
             ("notes.csv", NOTE_COLUMNS, doc.note_rows),
@@ -273,4 +351,10 @@ def write_dir(
         ):  # fmt: skip
             _write_csv(out_dir / name, cols, rows)
             counts["csv"] += 1
+    if elig is not None:
+        for name, text in elig.files.items():
+            put(name, text, "271")
+        _write_csv(out_dir / "appointments.csv", APPOINTMENT_COLUMNS, elig.appointments)
+        _write_csv(out_dir / "elig_truth.csv", ELIG_TRUTH_COLUMNS, elig.truth)
+        counts["csv"] += 2
     return dict(counts)

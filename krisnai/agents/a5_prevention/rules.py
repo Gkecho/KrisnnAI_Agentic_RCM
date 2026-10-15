@@ -74,5 +74,15 @@ def mue_units(c: dict) -> RuleResult:
     return RuleResult("mue_units", not over, "; ".join(over) or "within limits")
 
 
+def learned_pattern(c: dict) -> RuleResult:
+    """Claims matching a pattern the practice manager approved in A9 (this payer denies this CPT with this CARC)."""
+    hits = c.get("learned", [])
+    detail = "; ".join(f"{h['cpt']} denied with CARC {h['carc']} by this payer ({h['rule_key']})" for h in hits)
+    return RuleResult("learned_pattern", not hits, detail or "no approved learned rule applies")
+
+
 def run_all(c: dict) -> list[RuleResult]:
-    return [required_fields(c), duplicate_claim(c), timely_filing(c), ncci_without_modifier(c), mue_units(c)]
+    out = [required_fields(c), duplicate_claim(c), timely_filing(c), ncci_without_modifier(c), mue_units(c)]
+    if "learned" in c:  # only tenants with at least one approved learned rule
+        out.append(learned_pattern(c))
+    return out

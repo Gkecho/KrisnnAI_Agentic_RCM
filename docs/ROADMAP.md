@@ -25,10 +25,10 @@ Update the **Status** column as work lands. Milestones M0-M11 are done; M12 onwa
 | Synthea foundation | Synthea import, payer simulator, ground truth (`docs/synthea.md`) | Data, Wave 2 prerequisite | M12a | **Done (tested on a mini folder; real Synthea run pending Docker)** | Appointments, 271, notes, charges, authorizations still to add with A1, A3, A2. |
 | A10 | Contract & Underpayment | MVP, Wave 2 | M12 | **Done, shadow** | Per-payment contract check, cause category, payer-wide patterns, dispute package draft. Needs real contracts, contract extraction (approved model), dispute submission, payer multi-procedure rules. |
 | A3 | Documentation Completeness | MVP, Wave 2 | M13 | **Done, shadow** | Note and charge feeds (new tables), five gap types, sweeper, four task/review actions, charge-lag KPI. Needs a real EHR note-status and PM charge-log feed, provider-lead sign-off on elements and days, orders. |
-| A1 | Pre-Visit Financial Clearance | MVP, Wave 2 | M14 | Planned | appointments, 270/271 eligibility (new parsers and synthetic data) |
-| A9 | Denial Prevention Learning | MVP+, Wave 3 | M15 | Planned | resolved-denial outcomes from A8/A7, outcome attribution |
-| A2 | Authorization Intelligence | MVP+, Wave 3 | M16 | Planned | authorization/referral data, payer auth rules |
-| A11 | Payment Posting & Reconciliation | MVP+, Wave 3 | M17 | Planned | bank/lockbox feed, ERA posting write-back (gated by accuracy) |
+| A1 | Pre-Visit Financial Clearance | MVP, Wave 2 | M14 | **Done, shadow** | Appointments + 271 parser, four gap types, 72 h / 24 h checkpoints, patient estimate. Needs the clearinghouse 270 adapter, real 271 variants, referral/auth data (A2), front-desk sign-off. |
+| A9 | Denial Prevention Learning | MVP+, Wave 3 | M15 | **Done, shadow** | Clusters (payer + CPT + CARC, 120-day window), proposals, named approval, A5 `learned_pattern`, forward test, attribution. One rule family; thresholds are placeholders. |
+| A2 | Authorization Intelligence | MVP+, Wave 3 | M16 | **Done, shadow** | Authorization feed + payer requirement table, five gap types, 7 d / 2 d checkpoints, request task and exception review. No portal, no clinical check, no approval-risk model. |
+| A11 | Payment Posting & Reconciliation | MVP+, Wave 3 | M17 | **Done, shadow** | Bank deposit and posting feeds, six reconciliation gaps, days-to-deposit and days-to-post KPIs, unapplied cash and variance. No posting write-back (gated), no patient payments, bank file variants (BAI2, lockbox) not covered. |
 | A4 | Coding & Charge Integrity Copilot | Phase 2 | M18 | Later | signed notes, NCCI/MUE tables |
 | A12 | Patient Financial Engagement | Phase 2 | M19 | Later | statements, channels, compliance review (TCPA, Reg F, state law) |
 | A13 | Credentialing & Enrollment | Phase 2 | M20 | Later | provider/payer enrollment data |

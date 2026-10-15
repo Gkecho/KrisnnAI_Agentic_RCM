@@ -123,6 +123,25 @@ class Ack277Rec:
     payer_claim_number: str | None
 
 
+@dataclass
+class Elig271Rec:
+    """One subscriber answer in a 271 eligibility response."""
+
+    response_ref: str
+    payer_code: str
+    payer_name: str
+    patient_hash: bytes | None
+    checked_on: date
+    service_date: date | None
+    active: bool
+    plan_begin: date | None
+    plan_end: date | None
+    other_payer: str | None
+    copay: Decimal | None
+    coinsurance: Decimal | None
+    deductible_remaining: Decimal | None
+
+
 def _default(value):
     if isinstance(value, bytes):
         return value.hex()

@@ -36,6 +36,7 @@ OWNER = {
     "timely_filing": "billing",
     "ncci_pair": "coding",
     "mue_units": "coding",
+    "learned_pattern": "billing",
 }
 
 
@@ -111,6 +112,13 @@ class A5PreventionAgent(Agent):
             "mue": {c: data.mue[c] for c in sorted(cpts) if c in data.mue},
             "not_evaluated": list(rules.NOT_EVALUATED),
         }
+        hits = [
+            {"rule_key": key, "cpt": cpt, "carc": carc}
+            for cpt, (key, carc) in sorted(data.learned.get(claim.payer_id, {}).items())
+            if cpt in cpts
+        ]
+        if data.learned:  # present only once a manager approved a learned rule; before that A5 is unchanged
+            snapshot["learned"] = hits
         return Context(data=snapshot, lineage={"event_ids": [event.id], "source_file_ids": [claim.source_file_id]})
 
     # --------------------------------------------------------------------------- 3 deterministic checks

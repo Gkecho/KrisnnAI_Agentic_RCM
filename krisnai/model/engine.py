@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import CHAR, Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import CHAR, Boolean, Date, DateTime, Integer, Numeric, String, Text
 
-from krisnai.model.base import Base, Decimal, Mapped, Money, Scoped, col, datetime, fk, scoped
+from krisnai.model.base import Base, Decimal, Mapped, Money, Scoped, col, date, datetime, fk, scoped
 
 
 class Policy(Scoped, Base):
@@ -172,3 +172,27 @@ class RejectionRoute(Scoped, Base):
     kind: Mapped[str] = col(String(10), "routing config: technical (fixable without judgement) or business")
     owner: Mapped[str] = col(String(20), "routing config: front_desk, coding or billing")
     description: Mapped[str] = col(String(200), "routing config: what the status means, for the person reading the task")
+
+
+class LearnedRule(Scoped, Base):
+    """A rule A9 proposed from recurring denials. Only `approved` rows change A5, and only a named person approves."""
+
+    __tablename__ = "learned_rule"
+    __table_args__ = scoped(
+        [("payer_id", "payer")],
+        unique=[("rule_key",)],
+        checks=[("status", "status IN ('proposed', 'approved', 'rejected')")],
+        from_file=False,
+    )
+
+    rule_key: Mapped[str] = col(String(60), "learned rule: payer code | CPT | CARC")
+    payer_id: Mapped[int] = fk("payer the pattern was found for")
+    cpt: Mapped[str] = col(String(5), "learned rule: CPT the payer keeps denying")
+    carc: Mapped[str] = col(String(5), "learned rule: CARC the payer denies it with")
+    proposed_on: Mapped[date] = col(Date, "learned rule: day A9 proposed it")
+    status: Mapped[str] = col(String(10), "learned rule: proposed, approved or rejected")
+    n_denials: Mapped[int] = col(Integer, "learned rule: denied claims behind it when proposed")
+    n_adjudicated: Mapped[int] = col(Integer, "learned rule: adjudicated claims for the payer and CPT when proposed")
+    denial_rate: Mapped[Decimal] = col(Numeric(5, 4), "learned rule: denied / adjudicated when proposed")
+    approved_by: Mapped[str | None] = col(String(60), "learned rule: the named person who approved or rejected it")
+    decided_on: Mapped[date | None] = col(Date, "learned rule: day of that decision")

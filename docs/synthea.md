@@ -32,6 +32,29 @@ Planted: denial, timely_filing, underpayment, rejection, unbilled_visit, plus cl
 `ground_truth.csv` lists each planted problem; `open_ar.csv` lists unpaid claims. Nothing is chosen because it is
 unpaid: payment timing decides what is open at `--as-of`.
 
+## Cash feed (`--cash`)
+
+Writes `bank_deposits.csv`, `postings.csv` and `cash_truth.csv` from the 835 payments the book already has (one payment per payer per remit date). Planted: missing deposit
+(3% of payments), short deposit (3%), duplicate (2%), late deposit (5%), unidentified deposit (about 2%), never posted (4% of paid claims), partly posted (3%), late posting
+(6%). 20% of normal deposits carry no trace. Defects only on payments at least 14 days old. Own random stream; default output unchanged.
+
+## Denial patterns (`--denial-pattern PAYER:CPT:CARC:RATE:YYYY-MM-DD`)
+
+Repeatable. From the date, that payer denies claims carrying that CPT with that CARC at RATE (0 to 1), on top of the random denials. Writes `pattern_truth.csv`. It is how
+A9's pattern proposal is tested; without the flag the output is unchanged.
+
+## Authorization feed (`--authorization`, needs `--eligibility`)
+
+Writes `authorizations.csv` (each row linked to its appointment) and `auth_truth.csv`. Claims carrying 71046, 45378 or 77067 (placeholder requirement set) get an approved
+authorization covering the visit, or one planted defect: no authorization (10%), expired (6%), pending 10 to 16 days (5%), units exhausted (5%). The first two make the claim
+a CARC 197 denial. The appointment is booked for the authorization-requiring service when the claim has one. Own random stream; default output unchanged.
+
+## Eligibility feed (`--eligibility`)
+
+Adds `appointments.csv` (one per billed claim, booked 3 to 13 days ahead), one 271 answer per appointment (X12 005010X279A1, grouped by payer and day) and
+`elig_truth.csv`. Planted: coverage inactive (every claim denied with CARC 27 or 31), other primary payer (4%), no check (8%), stale check (5%, booked 20 to 40 days
+ahead). Normal answers are active with 10% coinsurance, matching the simulator's patient share. Own random stream: claims and payer behaviour are unchanged.
+
 ## Documentation feed (`--documentation`)
 
 Adds `visits.csv` with every billed service (one visit per claim line), `notes.csv`, `charges.csv` and `doc_truth.csv`. Planted: missing note (5%), unsigned note
