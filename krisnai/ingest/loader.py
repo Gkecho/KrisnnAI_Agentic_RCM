@@ -42,14 +42,18 @@ from krisnai.model import (
     ClaimDx,
     ClaimLine,
     EligibilityResponse,
+    Enrollment,
     Event,
     FeeSchedule,
+    PatientPayment,
     PatientRef,
+    PatientStatement,
     Payer,
     Payment,
     PlbAdjustment,
     Posting,
     Provider,
+    ProviderScreening,
     Remit,
     RemitLine,
     RemitRemark,
@@ -60,7 +64,10 @@ from krisnai.model import (
 )  # fmt: skip
 
 FILE_TYPES = {"837": "837P", "835": "835", "999": "999", "277": "277CA", "271": "271"}
-CSV_NAME_HINTS = ("fee", "visit", "note", "charge", "appoint", "authoriz", "deposit", "posting")
+CSV_NAME_HINTS = (
+    "fee", "visit", "note", "charge", "appoint", "authoriz", "deposit", "posting", "enroll", "screening",
+    "patient_payment", "statement",
+)
 X12_SUFFIXES = {".x12", ".edi", ".837", ".835", ".837p", ".999", ".277", ".277ca", ".txt"}
 
 
@@ -502,6 +509,149 @@ def _write_postings(s: Session, sf: int, rows: list[dict]) -> int:
     return len(rows)
 
 
+def parse_enrollments(text: str) -> list[dict]:
+    """CSV: enrollment_id, provider_npi, payer_id, status, status_on; optional submitted_on, effective_on,
+    expires_on."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"enrollment_id", "provider_npi", "payer_id", "status", "status_on"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"enrollments CSV needs columns {sorted(need)}")
+
+    def day(r, key):
+        v = (r.get(key) or "").strip()
+        return date.fromisoformat(v) if v else None
+
+    for n, r in enumerate(reader, start=2):
+        try:
+            status = r["status"].strip().lower()
+            if status not in ("pending", "active", "expired", "denied", "terminated"):
+                raise ValueError(f"status {status!r}")
+            rows.append({
+                "ref": r["enrollment_id"].strip(), "npi": r["provider_npi"].strip(), "payer": r["payer_id"].strip(),
+                "status": status, "status_on": date.fromisoformat(r["status_on"]),
+                "submitted": day(r, "submitted_on"), "effective": day(r, "effective_on"),
+                "expires": day(r, "expires_on"),
+            })  # fmt: skip
+        except (ValueError, KeyError) as e:
+            raise X12Error(f"enrollments line {n}: {e}") from None
+    if not rows:
+        raise X12Error("enrollments CSV has no rows")
+    return rows
+
+
+def _write_enrollments(s: Session, sf: int, rows: list[dict]) -> int:
+    lk = Lookups(s, sf)
+    for r in rows:
+        s.add(Enrollment(
+            source_file_id=sf, enrollment_ref=r["ref"], provider_id=lk.provider(r["npi"], "", None),
+            payer_id=lk.payer(r["payer"], r["payer"]), status=r["status"], submitted_on=r["submitted"],
+            effective_on=r["effective"], expires_on=r["expires"], status_on=r["status_on"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
+def parse_screenings(text: str) -> list[dict]:
+    """CSV: screening_id, provider_npi, screened_on, result (clear or excluded); optional source."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"screening_id", "provider_npi", "screened_on", "result"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"screenings CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            result = r["result"].strip().lower()
+            if result not in ("clear", "excluded"):
+                raise ValueError(f"result {result!r}")
+            rows.append({
+                "ref": r["screening_id"].strip(), "npi": r["provider_npi"].strip(),
+                "on": date.fromisoformat(r["screened_on"]), "result": result,
+                "source": (r.get("source") or "OIG").strip(),
+            })  # fmt: skip
+        except (ValueError, KeyError) as e:
+            raise X12Error(f"screenings line {n}: {e}") from None
+    if not rows:
+        raise X12Error("screenings CSV has no rows")
+    return rows
+
+
+def _write_screenings(s: Session, sf: int, rows: list[dict]) -> int:
+    lk = Lookups(s, sf)
+    for r in rows:
+        s.add(ProviderScreening(
+            source_file_id=sf, screening_ref=r["ref"], provider_id=lk.provider(r["npi"], "", None),
+            screened_on=r["on"], result=r["result"], source=r["source"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
+def parse_patient_payments(text: str) -> list[dict]:
+    """CSV: payment_id, claim_id, paid_on, amount; optional method."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"payment_id", "claim_id", "paid_on", "amount"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"patient payments CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            rows.append({
+                "ref": r["payment_id"].strip(), "claim": r["claim_id"].strip(),
+                "on": date.fromisoformat(r["paid_on"]), "amount": Decimal(r["amount"]),
+                "method": (r.get("method") or "CARD").strip(),
+            })  # fmt: skip
+        except (InvalidOperation, ValueError, KeyError) as e:
+            raise X12Error(f"patient payments line {n}: {e}") from None
+    if not rows:
+        raise X12Error("patient payments CSV has no rows")
+    return rows
+
+
+def _write_patient_payments(s: Session, sf: int, rows: list[dict]) -> int:
+    for r in rows:
+        s.add(PatientPayment(
+            source_file_id=sf, payment_ref=r["ref"], claim_submitter_id=r["claim"], paid_on=r["on"],
+            amount=r["amount"], method=r["method"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
+def parse_statements(text: str) -> list[dict]:
+    """CSV: statement_id, claim_id, sent_on; optional channel, status (sent, disputed, plan, hardship, returned)."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(text))
+    need = {"statement_id", "claim_id", "sent_on"}
+    if not reader.fieldnames or not need <= set(reader.fieldnames):
+        raise X12Error(f"statements CSV needs columns {sorted(need)}")
+    for n, r in enumerate(reader, start=2):
+        try:
+            status = (r.get("status") or "sent").strip().lower()
+            if status not in ("sent", "disputed", "plan", "hardship", "returned"):
+                raise ValueError(f"status {status!r}")
+            rows.append({
+                "ref": r["statement_id"].strip(), "claim": r["claim_id"].strip(),
+                "on": date.fromisoformat(r["sent_on"]), "channel": (r.get("channel") or "mail").strip(),
+                "status": status,
+            })  # fmt: skip
+        except (ValueError, KeyError) as e:
+            raise X12Error(f"statements line {n}: {e}") from None
+    if not rows:
+        raise X12Error("statements CSV has no rows")
+    return rows
+
+
+def _write_statements(s: Session, sf: int, rows: list[dict]) -> int:
+    for r in rows:
+        s.add(PatientStatement(
+            source_file_id=sf, statement_ref=r["ref"], claim_submitter_id=r["claim"], sent_on=r["on"],
+            channel=r["channel"], status=r["status"],
+        ))  # fmt: skip
+    s.flush()
+    return len(rows)
+
+
 def parse_notes(text: str) -> list[dict]:
     """CSV columns: visit_id, note_date, signed_date (empty = unsigned), minutes (optional), elements (comma list)."""
     rows = []
@@ -571,7 +721,8 @@ def csv_kind(name: str) -> str:
     """Which CSV this is, from its file name: charges, notes, visits, else a fee schedule."""
     low = name.lower()
     names = {"charge": "charges", "note": "notes", "appoint": "appointments", "authoriz": "authorizations",
-             "deposit": "deposits", "posting": "postings", "visit": "visits"}  # fmt: skip
+             "deposit": "deposits", "posting": "postings", "enroll": "enrollments", "screening": "screenings",
+             "patient_payment": "patient_payments", "statement": "statements", "visit": "visits"}  # fmt: skip
     for kind, file_type in names.items():
         if kind in low:
             return file_type
@@ -632,6 +783,14 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                 parsed, payload = "appointments", parse_appointments(text, salt)
             elif kind == "authorizations":
                 parsed, payload = "authorizations", parse_authorizations(text, salt)
+            elif kind == "patient_payments":
+                parsed, payload = "patient_payments", parse_patient_payments(text)
+            elif kind == "statements":
+                parsed, payload = "statements", parse_statements(text)
+            elif kind == "enrollments":
+                parsed, payload = "enrollments", parse_enrollments(text)
+            elif kind == "screenings":
+                parsed, payload = "screenings", parse_screenings(text)
             elif kind == "deposits":
                 parsed, payload = "deposits", parse_deposits(text)
             elif kind == "postings":
@@ -662,6 +821,14 @@ def ingest_file(engine: Engine, tenant_id: int, path: Path, salt: str) -> Ingest
                 n = _write_appointments(s, sf.id, payload)
             elif kind == "authorizations":
                 n = _write_authorizations(s, sf.id, payload)
+            elif kind == "patient_payments":
+                n = _write_patient_payments(s, sf.id, payload)
+            elif kind == "statements":
+                n = _write_statements(s, sf.id, payload)
+            elif kind == "enrollments":
+                n = _write_enrollments(s, sf.id, payload)
+            elif kind == "screenings":
+                n = _write_screenings(s, sf.id, payload)
             elif kind == "deposits":
                 n = _write_deposits(s, sf.id, payload)
             elif kind == "postings":

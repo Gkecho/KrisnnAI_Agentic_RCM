@@ -29,10 +29,10 @@ Update the **Status** column as work lands. Milestones M0-M11 are done; M12 onwa
 | A9 | Denial Prevention Learning | MVP+, Wave 3 | M15 | **Done, shadow** | Clusters (payer + CPT + CARC, 120-day window), proposals, named approval, A5 `learned_pattern`, forward test, attribution. One rule family; thresholds are placeholders. |
 | A2 | Authorization Intelligence | MVP+, Wave 3 | M16 | **Done, shadow** | Authorization feed + payer requirement table, five gap types, 7 d / 2 d checkpoints, request task and exception review. No portal, no clinical check, no approval-risk model. |
 | A11 | Payment Posting & Reconciliation | MVP+, Wave 3 | M17 | **Done, shadow** | Bank deposit and posting feeds, six reconciliation gaps, days-to-deposit and days-to-post KPIs, unapplied cash and variance. No posting write-back (gated), no patient payments, bank file variants (BAI2, lockbox) not covered. |
-| A4 | Coding & Charge Integrity Copilot | Phase 2 | M18 | Later | signed notes, NCCI/MUE tables |
-| A12 | Patient Financial Engagement | Phase 2 | M19 | Later | statements, channels, compliance review (TCPA, Reg F, state law) |
-| A13 | Credentialing & Enrollment | Phase 2 | M20 | Later | provider/payer enrollment data |
-| A15 full | Revenue Assurance Investigator | Phase 2 | M21 | Later | stable Waves 1-3; root-cause graph |
+| A4 | Coding & Charge Integrity Copilot | Phase 2 | M20 | **Done, shadow (suggestions only)** | E/M level-of-service audit on documented elements: over- and under-coding signals, audit variance by provider and code. Placeholder level table, no note text, no ICD-10 / modifier / procedure coding, no model. Liability boundary: a certified coder decides. |
+| A12 | Patient Financial Engagement | Phase 2 | M19 | **Done, shadow (staff-facing worklist only)** | Patient payment and statement feeds, five item types, plain-language explanation for staff, aging stages. No outreach, no payment processing, no write-off; legal review of TCPA / Reg F / state law and a BAA vendor are prerequisites. Secondary balances not tracked (no COB owner). |
+| A13 | Credentialing & Enrollment | Phase 2 | M18 | **Done, shadow** | Enrollment and screening feeds, six gap types, claim-risk dollars from the visit extract. Rendering provider not parsed from the 837 (follow-up); no portal, packet or live OIG lookup. |
+| A15 full | Revenue Assurance Investigator | Phase 2 | M21 | **Done, shadow** | Realisation vs contract by payer and payer+CPT, recent vs baseline window; each flagged slice explained from A15-lite leaks and tagged with the upstream agents that flagged the claim before billing; sweeper, one review per slice, detected-vs-later-paid ledger. Placeholder thresholds; no volume / mix decomposition; attribution by key match, not causal proof. |
 
 ## Order of work
 1. **M8a (done): specs.** `docs/specs/A1.md` ... `A15.md` drafted on the real Appendix A (24 fields each), thresholds TBD; `A8.md` redone on it. The A15-lite agent map now follows the strategy's numbering (authorization to A2, coding to A4, coverage to A1, claim defects to A5). Strategy document copied to `docs/strategy_v5.docx`.
@@ -42,7 +42,7 @@ Update the **Status** column as work lands. Milestones M0-M11 are done; M12 onwa
    Temporal is the named candidate), value ledger / outcome attribution with a holdout design, first real EHR/PM adapter, real clearinghouse adapter, payer-rule library v1.
 4. **Wave 2 (M12-M14):** A10, A3, A1. A3 and A1 need new synthetic data first (notes/charges; appointments and eligibility).
 5. **Wave 3 (M15-M17):** A9, A2, A11, after Waves 1-2 have produced outcome history.
-6. **Phase 2 (M18-M21):** A4, A12, A13, full A15.
+6. **Phase 2 (M18-M21, done):** A4, A12, A13, full A15. All fifteen agents are built in shadow mode.
 
 ## Known blockers and open decisions (from the strategy's Appendix B and this build)
 - **FastAPI cannot load** on the development PC (Windows Smart App Control blocks `pydantic-core`; no pure-Python build). The approval service functions exist and are tested; the HTTP layer waits on a different machine or a changed policy.

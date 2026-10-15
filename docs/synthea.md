@@ -32,6 +32,25 @@ Planted: denial, timely_filing, underpayment, rejection, unbilled_visit, plus cl
 `ground_truth.csv` lists each planted problem; `open_ar.csv` lists unpaid claims. Nothing is chosen because it is
 unpaid: payment timing decides what is open at `--as-of`.
 
+## Coding audit option (`--coding`, needs `--documentation`)
+
+E/M notes carry level elements matching the billed level (level 4 documents `history_detailed` and `exam_expanded`). On visits with no other documentation defect, 6% of
+level-4 lines are planted as `upcoded` (only level-3 elements documented) and 6% of level-3 lines as `undercoded` (level-4 elements documented), signed the day after the
+visit. Writes `coding_truth.csv` (the dollar difference at contract). Own random stream; default output unchanged.
+
+## Patient balance feed (`--patient`)
+
+Writes `patient_payments.csv`, `statements.csv` and `patient_truth.csv` from the patient share (CLP05) of each paid claim. Claims known 45 or more days get one
+outcome: paid in full (60%), partly paid (10%), unpaid (15%), no statement (5%), disputed (4%), credit (6%); younger claims are paid in full inside 25 days. The answer
+key lists the item a person would raise, in the agent's reading order. Own random stream; default output unchanged.
+
+## Credentialing feed (`--enrollment`, needs `--documentation`)
+
+Writes `enrollments.csv`, `screenings.csv` and `credentialing_truth.csv`. Per rendering NPI + payer pair: an active enrollment, or one planted defect: lapsed (8%),
+no record (5%), denied application (3%), pending 100 to 200 days (5%), expiring in 20 to 80 days (10%). The first three make later claims for that pair CARC 185
+denials (a second RARC map keeps the random denial draw unchanged). Screenings: current, one stale, one excluded. Visits are the service evidence. Own random stream;
+default output unchanged.
+
 ## Cash feed (`--cash`)
 
 Writes `bank_deposits.csv`, `postings.csv` and `cash_truth.csv` from the 835 payments the book already has (one payment per payer per remit date). Planted: missing deposit

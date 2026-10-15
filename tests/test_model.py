@@ -33,7 +33,7 @@ EXPECTED_TABLES = {
     "plb_adjustment", "payment", "fee_schedule", "ar_snapshot", "visit",
     "policy", "decision_record", "approval_request", "carc_route", "payer_appeal_window",
     "ncci_pair", "mue_limit", "payer_filing_window", "rejection_route", "visit_note", "charge",
-    "appointment", "eligibility_response", "learned_rule", "prior_authorization", "auth_requirement", "bank_deposit", "posting",
+    "appointment", "eligibility_response", "learned_rule", "prior_authorization", "auth_requirement", "bank_deposit", "posting", "enrollment", "provider_screening", "patient_payment", "patient_statement",
 }  # fmt: skip
 
 

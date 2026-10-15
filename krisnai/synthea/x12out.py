@@ -20,6 +20,8 @@ DENIAL_RARC = {  # CARC -> a plausible RARC, purely synthetic pairing
     "16": "MA130", "18": "N522", "50": "N115", "97": "N19", "27": "N30", "31": "N382", "197": "N54", "4": "N519",
 }  # fmt: skip
 
+EXTRA_RARC = {"185": "N290"}  # CARCs the simulator can plant that are not in the random draw above
+
 
 def _seg(*elements: object) -> str:
     parts = [str(e) for e in elements]
@@ -145,5 +147,5 @@ def write_835(payer: PayerInfo, remit_date: date, claims: list[SimClaim], ctrl: 
                     body.append(_seg("CAS", group, *flat))
             body.append(_seg("AMT", "B6", _amt(Decimal("0") if denied else ln.allowed)))
             if c.scenario == "denial":
-                body.append(_seg("LQ", "HE", DENIAL_RARC[c.carc]))
+                body.append(_seg("LQ", "HE", DENIAL_RARC.get(c.carc) or EXTRA_RARC[c.carc]))
     return _envelope("HP", "005010X221A1", "835", "005010X221A1", body, ctrl, payer.payer_id, SENDER, remit_date)

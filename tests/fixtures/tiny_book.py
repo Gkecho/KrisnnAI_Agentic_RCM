@@ -121,6 +121,36 @@ class Book:
         self._add(m.Posting(posting_ref=ref, payment_trace=trace, claim_submitter_id=claim, posted_on=on,
                             posted_amount=D(amount), posted_by_role="payment_poster"))  # fmt: skip
 
+    def enrollment(self, ref: str, npi: str, payer: str, status: str, status_on: date, submitted: date | None = None,
+                   effective: date | None = None, expires: date | None = None) -> None:  # fmt: skip
+        self._add(m.Enrollment(
+            enrollment_ref=ref, provider_id=self.provider_for(npi).id, payer_id=self.payer(payer).id, status=status,
+            submitted_on=submitted, effective_on=effective, expires_on=expires, status_on=status_on,
+        ))  # fmt: skip
+
+    def screening(self, ref: str, npi: str, on: date, result: str = "clear") -> None:
+        self._add(m.ProviderScreening(screening_ref=ref, provider_id=self.provider_for(npi).id, screened_on=on,
+                                      result=result, source="OIG"))  # fmt: skip
+
+    def provider_for(self, npi: str) -> m.Provider:
+        if not hasattr(self, "_providers_by_npi"):
+            self._providers_by_npi = {self.provider.npi: self.provider}
+        if npi not in self._providers_by_npi:
+            self._providers_by_npi[npi] = self._add(m.Provider(npi=npi, name="Synthetic Provider " + npi))
+        return self._providers_by_npi[npi]
+
+    def service(self, ref: str, npi: str, payer: str, dos: date, cpt: str = "99213") -> None:
+        self._add(m.Visit(visit_ref=ref, payer_id=self.payer(payer).id, provider_id=self.provider_for(npi).id,
+                          patient_ref_id=self.patient.id, service_date=dos, cpt=cpt, units=D(1)))  # fmt: skip
+
+    def patient_payment(self, ref: str, claim: str, on: date, amount: str) -> None:
+        self._add(m.PatientPayment(payment_ref=ref, claim_submitter_id=claim, paid_on=on, amount=D(amount),
+                                   method="CARD"))  # fmt: skip
+
+    def statement(self, ref: str, claim: str, on: date, status: str = "sent", channel: str = "mail") -> None:
+        self._add(m.PatientStatement(statement_ref=ref, claim_submitter_id=claim, sent_on=on, channel=channel,
+                                     status=status))  # fmt: skip
+
     def note(self, ref: str, note_date: date, signed: date | None = None, elements: str = "assessment,plan",
              minutes: int | None = None) -> None:  # fmt: skip
         self._add(m.VisitNote(visit_ref=ref, note_date=note_date, signed_date=signed, minutes=minutes,

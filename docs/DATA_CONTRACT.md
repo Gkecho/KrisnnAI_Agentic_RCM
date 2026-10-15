@@ -81,7 +81,8 @@ These are the gaps a full database closes. Each is a field the agents currently 
    daily from go-live, and everything before that is reconstructed from dates that are in the rows. **DECIDED: yes, the database keeps audit / history.**
    The adapter takes `known_at` from the audit timestamp (or the audit table) of each row, not from the extract date, and records which column it used.
 2. **Submission truth.** Whether and when a claim was sent, and to whom (today: the 837 file date and the 999 / 277CA).
-3. **Patient payments and statements** (today: not tracked; patient AR is out of A14's scope until this exists; A12 depends on it).
+3. **Patient payments and statements** (`patient_payment` and `patient_statement` feeds exist and are simulated; A12 uses them for a staff-facing worklist; patient AR
+   is still out of A14's totals; outreach consent and channel data are not modelled).
 4. **Secondary / tertiary payer billing and coordination of benefits** (today: **no agent owns it**; the 271 other-payer flag is the only signal).
 5. **Authorizations and referrals** with units, dates and status, **linked to the appointment they were requested for** (A2; `prior_authorization` feed is
    simulated today; referrals are not modelled).
@@ -89,7 +90,8 @@ These are the gaps a full database closes. Each is a field the agents currently 
 7. **Work-queue and staff data** (tasks, who worked what, time spent) for A14 productivity, staffing and load balancing (none today).
 8. **Bank deposits / lockbox** for A11 reconciliation (`bank_deposit` and `posting` feeds exist and are simulated; a real BAI2 or lockbox file
    and the PM posting log must be mapped to them; many payers send no trace number).
-9. **Provider enrolment and credentialing** for A13 (none today).
+9. **Provider enrolment and credentialing** for A13 (`enrollment` and `provider_screening` feeds exist and are simulated; the rendering provider (NM1*82)
+   is **not parsed from the 837 yet**, so service evidence comes from the visit extract; parsing it is a recommended adapter change).
 10. **Identity.** One patient key across scheduling, billing, eligibility and notes. Today the member id is the key and is hashed with the tenant salt;
     cross-system identity resolution is **not built**. **DECIDED: yes, there is a master patient id.** The adapter hashes the master id (with the
     tenant salt) into `patient_ref`, so visits, appointments, notes, charges, eligibility and claims all join on one key. EDI files carry only the
@@ -127,10 +129,13 @@ evidence, not guessed). The baseline column says which data sets it.
 | A9 learning | preventable denial recurrence | a payer-wide denial pattern | cluster: payer + CPT + CARC; A5 already flagged? | denial rate over the last 120 days of answered claims | 5 denials, 30% rate, 120-day window, 80% already-flagged, 80% overlap | your denial mix by payer and CPT; manager sign-off |
 | A10 underpayment | underpaid $ detected / recovered | an 835 claim payment | paid + patient share below the fee schedule | gap vs contract; cause from the CARC on the line; pattern = same % short across lines | $1.00 floor; 20% on payer-history pricing; pattern needs 5 lines, within 1 point, half the short lines | your real contracts and underpayment history |
 | A14 tower | cash forecast accuracy; backlog; productivity | continuous (daily) | four signals: backlog growth, payer slowdown, rejection spike, deadline critical | forecast WAPE and coverage; backlog by owner and age | +25% and 5 items; +7 d median days-to-pay; +5 points rejection share; due within 7 d; 28-day horizon, 80% interval | your own weekly backlog and cash history |
+| A15 investigator | net collection rate; recovered leakage | every 28 days (sweep date) | realisation against contract fell by a slice (payer, payer+CPT) | realisation recent vs baseline; dollar impact; dollars by cause and by upstream flag; detected vs later-paid ledger | recent 56 d vs baseline 180 d by payment date; 8 lines, 500.00 expected, 5 points (placeholders) | your payer mix and seasonality (to set the thresholds); the revenue assurance lead's sign-off |
 | A15-lite | validated leakage baseline | on request | denials, underpayments, rejections, unbilled visits, timely filing | recoverable vs structural $ | appeal 180 d, filing 365 d, G0 tolerance 0.01, 99% match | the contract with the client (G0 reconciliation) |
 | A2 authorization | authorization turnaround; auth-related denials | checkpoints 7 d and 2 d before a visit needing authorization | none requested; denied; window expired; units used up; pending too long | turnaround days (request to decision); share of required appointments covered | 7 and 2 day checkpoints; pending after 7 days; requirement list is placeholder | your authorization log and denial history (CARC 197/198) |
 | A11 cash | days to post; unapplied cash; reconciliation variance | an 835 payment, then weekly while a gap is open; an unexplained deposit | deposit missing / short / duplicate; claim not posted or partly posted | days to deposit and to post; unapplied cash and variance dollars | deposit due 5 d; post due 3 d; late over 7 d; match window 30 d | your bank file timing and posting lag by payer |
-| A4, A12, A13 | not built | | | | | |
+| A13 credentialing | credentialing denials; enrollment cycle time | provider + payer checked on each sweep; screening per provider | no active enrollment while services continue; expired; expiring; pending too long; excluded; stale screening | cycle time (application to effective); claim payment at risk | expiry warning 90 d; pending 90 d; service window 90 d; screening stale 35 d | your enrollment and denial history (CARC 185 and related) |
+| A12 patient balance | patient collections; days in patient A/R | patient share confirmed, then weekly while open | dispute / hardship; credit; small balance; no statement; aging 30 / 60 / 90 | collections rate; average open age; open balance by stage | statement due 7 d; aging from 30 d; small balance 10.00 | your patient payment curve and write-off policy |
+| A4 coding audit | coding denials; audit variance; coder productivity | each claim at the claim event | billed E/M level above or below the level the signed note's named elements support | audit variance rate over judged lines, by provider and code; dollar difference at contract | level table (placeholder); baseline elements; review in 3 days | your coding audit results and coding-denial history; the lead coder's level rules |
 
 ### 5.1 Where the claim "actions follow the metrics" is and is not true
 - True for **ranking** (A7, A8, A9, A10, A14) and for **triggers that are rates or timing** (A7 expected payment date, A9 recurrence, A14 signals).

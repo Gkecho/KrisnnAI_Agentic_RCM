@@ -49,6 +49,7 @@ erDiagram
     payer ||--o{ bank_deposit : has
     payer ||--o{ claim : has
     payer ||--o{ eligibility_response : has
+    payer ||--o{ enrollment : has
     payer ||--o{ fee_schedule : has
     payer ||--o{ learned_rule : has
     payer ||--o{ payer_appeal_window : has
@@ -60,6 +61,8 @@ erDiagram
     payment ||--o{ remit : has
     provider ||--o{ appointment : has
     provider ||--o{ claim : has
+    provider ||--o{ enrollment : has
+    provider ||--o{ provider_screening : has
     provider ||--o{ visit : has
     remit ||--o{ adjustment : has
     remit ||--o{ remit_line : has
@@ -202,6 +205,22 @@ Unique keys (idempotency): `(tenant_id, source_file_id, isa13, gs06, st02, seq_i
 | `payload` | NVARCHAR(MAX) | no | the parsed record as JSON; patient identifiers are already hashed, so no PHI |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `patient_payment`
+
+Unique keys (idempotency): `(tenant_id, payment_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `payment_ref` | VARCHAR(40) | no | patient payments CSV payment_id (the PM system's own number) |
+| `claim_submitter_id` | VARCHAR(38) | no | patient payments CSV claim_id (CLM01) the payment applies to |
+| `paid_on` | DATE | no | patient payments CSV paid_on |
+| `amount` | NUMERIC(18, 2) | no | patient payments CSV amount |
+| `method` | VARCHAR(10) | no | patient payments CSV method (CARD, CHECK, CASH, ONLINE) |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `patient_ref`
 
 Unique keys (idempotency): `(tenant_id, ref_hash)`
@@ -212,6 +231,22 @@ Unique keys (idempotency): `(tenant_id, ref_hash)`
 | `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
 | `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
 | `ref_hash` | IMAGE | no | SHA-256(tenant salt + NM109 member id), computed before the row is written |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `patient_statement`
+
+Unique keys (idempotency): `(tenant_id, statement_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `statement_ref` | VARCHAR(40) | no | statements CSV statement_id |
+| `claim_submitter_id` | VARCHAR(38) | no | statements CSV claim_id (CLM01) |
+| `sent_on` | DATE | no | statements CSV sent_on: the day of the statement or the status change |
+| `channel` | VARCHAR(10) | no | statements CSV channel (mail, portal, sms, phone, none) |
+| `status` | VARCHAR(10) | no | statements CSV status: sent, disputed, plan, hardship or returned |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `payer`
@@ -418,6 +453,25 @@ Unique keys (idempotency): `(tenant_id, event_id)`
 | `deductible_remaining` | NUMERIC(18, 2) | yes | 271 EB*C amount still to be met |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
+### `enrollment`
+
+Unique keys (idempotency): `(tenant_id, enrollment_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `enrollment_ref` | VARCHAR(40) | no | enrollments CSV enrollment_id (the credentialing system's number) |
+| `provider_id` | BIGINT | no | enrollments CSV provider_npi, resolved to provider.id |
+| `payer_id` | BIGINT | no | enrollments CSV payer_id, resolved to payer.id |
+| `status` | VARCHAR(12) | no | enrollments CSV status: pending, active, expired, denied or terminated |
+| `submitted_on` | DATE | yes | enrollments CSV submitted_on: when the application went in |
+| `effective_on` | DATE | yes | enrollments CSV effective_on: when it became active |
+| `expires_on` | DATE | yes | enrollments CSV expires_on, empty = no expiry on file |
+| `status_on` | DATE | no | enrollments CSV status_on: the day this status was recorded |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
 ### `fee_schedule`
 
 Unique keys (idempotency): `(tenant_id, payer_id, cpt, modifier, effective_date)`
@@ -520,6 +574,22 @@ Unique keys (idempotency): `(tenant_id, auth_ref)`
 | `status` | VARCHAR(10) | no | authorizations CSV status: requested, approved, denied or expired |
 | `requested_on` | DATE | no | authorizations CSV requested_on |
 | `decided_on` | DATE | yes | authorizations CSV decided_on, empty while pending |
+| `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
+
+### `provider_screening`
+
+Unique keys (idempotency): `(tenant_id, screening_ref)`
+
+| Column | Type | Null | Source |
+|---|---|---|---|
+| `id` | BIGINT | no | surrogate key (IDENTITY) |
+| `tenant_id` | BIGINT | no | owning tenant; every query filters on it |
+| `source_file_id` | BIGINT | no | file this row was loaded from (lineage) |
+| `screening_ref` | VARCHAR(40) | no | screenings CSV screening_id |
+| `provider_id` | BIGINT | no | screenings CSV provider_npi, resolved to provider.id |
+| `screened_on` | DATE | no | screenings CSV screened_on |
+| `result` | VARCHAR(10) | no | screenings CSV result: clear or excluded |
+| `source` | VARCHAR(20) | no | screenings CSV source list (e.g. OIG, SAM, STATE) |
 | `loaded_at` | DATETIME2(0) | no | server UTC time the row was loaded |
 
 ### `visit`

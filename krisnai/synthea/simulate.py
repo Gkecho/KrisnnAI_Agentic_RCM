@@ -22,9 +22,17 @@ from krisnai.synthea.cash import TRUTH_COLUMNS as CASH_TRUTH_COLUMNS
 from krisnai.synthea.crosswalk import CPT_BASE_FEE
 from krisnai.synthea.authorization import AUTH_COLUMNS, AuthPlan
 from krisnai.synthea.authorization import TRUTH_COLUMNS as AUTH_TRUTH_COLUMNS
-from krisnai.synthea.documentation import CHARGE_COLUMNS, NOTE_COLUMNS, TRUTH_COLUMNS, DocPlan
+from krisnai.synthea.documentation import CHARGE_COLUMNS, CODING_COLUMNS, NOTE_COLUMNS, TRUTH_COLUMNS, DocPlan
+from krisnai.synthea.enrollment import ENROLLMENT_COLUMNS as ENROLL_COLUMNS
+from krisnai.synthea.enrollment import SCREENING_COLUMNS as SCREEN_COLUMNS
+from krisnai.synthea.enrollment import TRUTH_COLUMNS as ENROLL_TRUTH_COLUMNS
+from krisnai.synthea.enrollment import EnrollPlan
 from krisnai.synthea.eligibility import APPOINTMENT_COLUMNS, EligPlan
 from krisnai.synthea.eligibility import TRUTH_COLUMNS as ELIG_TRUTH_COLUMNS
+from krisnai.synthea.patient import PAYMENT_COLUMNS as PATIENT_PAYMENT_COLUMNS
+from krisnai.synthea.patient import STATEMENT_COLUMNS as PATIENT_STATEMENT_COLUMNS
+from krisnai.synthea.patient import TRUTH_COLUMNS as PATIENT_TRUTH_COLUMNS
+from krisnai.synthea.patient import PatientPlan
 from krisnai.synthea.types import (
     BILLED_MARKUP,
     PATIENT_SHARE,
@@ -48,6 +56,7 @@ UNBILLED_SHARE = Decimal("0.03")
 STUCK_SHARE = 0.10
 TIMELY_CARC = "29"
 AUTH_CARC = "197"  # precertification / authorization absent
+ENROLLMENT_CARC = "185"  # rendering provider not eligible
 # cumulative bands of one draw: share of authorization-requiring claims given each planted defect
 AUTH_DEFECT_BANDS = (
     ("no_authorization", 0.10), ("expired_authorization", 0.16), ("pending_late", 0.21),
@@ -125,6 +134,7 @@ def simulate(
     rate_cuts: list[RateCut] | None = None,
     patterns: list[DenialPattern] | None = None,
     auth_cpts: frozenset[str] | None = None,
+    enrollment_denials: dict[tuple[str, str], date] | None = None,
 ) -> tuple[list[SimClaim], list[SimVisit]]:
     rng = random.Random(seed)
     pattern_rng = random.Random(seed + 41)  # own stream: planting a pattern moves no other draw
@@ -192,6 +202,10 @@ def simulate(
                 ) and pattern_rng.random() < pat.rate:
                     c.scenario, c.carc, c.pattern = "denial", pat.carc, f"{pat.payer_id}:{pat.cpt}:{pat.carc}"
                     break
+        if enrollment_denials and c.remit_date is not None and c.scenario == "clean":
+            since = enrollment_denials.get((c.provider_npi, c.payer.payer_id))
+            if since is not None and c.submitted > since:
+                c.scenario, c.carc = "denial", ENROLLMENT_CARC  # the payer does not recognise the rendering provider
         if auth_cpts and c.remit_date is not None and c.scenario == "clean" and any(
             ln.cpt in auth_cpts for ln in c.lines
         ):
@@ -269,6 +283,8 @@ def write_dir(
     elig: EligPlan | None = None,
     auth: AuthPlan | None = None,
     cash: CashPlan | None = None,
+    enroll: EnrollPlan | None = None,
+    patient: PatientPlan | None = None,
 ) -> dict[str, int]:
     """Write 837 / 999 / 277CA / 835 files plus fee_schedule.csv, visits.csv, ground_truth.csv and open_ar.csv.
 
@@ -328,6 +344,16 @@ def write_dir(
     ):  # fmt: skip
         _write_csv(out_dir / name, cols, rows)
         counts["csv"] += 1
+    if patient is not None:
+        _write_csv(out_dir / "patient_payments.csv", PATIENT_PAYMENT_COLUMNS, patient.payments)
+        _write_csv(out_dir / "statements.csv", PATIENT_STATEMENT_COLUMNS, patient.statements)
+        _write_csv(out_dir / "patient_truth.csv", PATIENT_TRUTH_COLUMNS, patient.truth)
+        counts["csv"] += 3
+    if enroll is not None:
+        _write_csv(out_dir / "enrollments.csv", ENROLL_COLUMNS, enroll.enrollments)
+        _write_csv(out_dir / "screenings.csv", SCREEN_COLUMNS, enroll.screenings)
+        _write_csv(out_dir / "credentialing_truth.csv", ENROLL_TRUTH_COLUMNS, enroll.truth)
+        counts["csv"] += 3
     if cash is not None:
         _write_csv(out_dir / "bank_deposits.csv", CASH_DEPOSIT_COLUMNS, cash.deposits)
         _write_csv(out_dir / "postings.csv", CASH_POSTING_COLUMNS, cash.postings)
@@ -342,6 +368,9 @@ def write_dir(
         rows = [{"claim_id": c.claim_id, "payer_id": c.pattern.split(":")[0], "cpt": c.pattern.split(":")[1],
                  "carc": c.pattern.split(":")[2]} for c in hits]  # fmt: skip
         _write_csv(out_dir / "pattern_truth.csv", ["claim_id", "payer_id", "cpt", "carc"], rows)
+        counts["csv"] += 1
+    if doc is not None and doc.coding_truth is not None:
+        _write_csv(out_dir / "coding_truth.csv", CODING_COLUMNS, doc.coding_truth)
         counts["csv"] += 1
     if doc is not None:
         for name, cols, rows in (
