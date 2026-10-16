@@ -24,6 +24,9 @@ AGENTS = (
     "a9_learning", "a2_authorization", "a11_cash", "a13_credentialing", "a12_patient", "a4_coding",
     "a15_investigator",
 )  # fmt: skip
+QUEUE_TYPE = {"a8_denial": "Denial", "a6_submission": "Rejection", "a10_underpay": "Underpaid"}  # worklist pill by agent
+FILING_RISK_DAYS = 60  # an A7 item this close to the payer's filing limit is shown as "Filing risk" (matches A7's urgency window)
+CLAIM_AGENTS = {"a5_prevention", "a6_submission", "a7_ar", "a8_denial", "a10_underpay", "a4_coding"}  # cards about one claim
 AGE_BUCKETS = ((7, "0-7"), (14, "8-14"), (30, "15-30"))  # days since the card was raised
 DUE_SOON_DAYS = 7  # an item due within this many days counts as deadline-critical; TBD at spec review
 
@@ -33,6 +36,28 @@ def age_bucket(age_days: int) -> str:
         if age_days <= limit:
             return label
     return "30+"
+
+
+def queue_type(agent_id: str, filing_days_left: int | None) -> str | None:
+    """The biller worklist pill: Denial / Rejection / Underpaid by agent; A7 is Filing risk near the limit, else No response."""
+    if agent_id == "a7_ar":
+        return "Filing risk" if filing_days_left is not None and filing_days_left <= FILING_RISK_DAYS else "No response"
+    return QUEUE_TYPE.get(agent_id)
+
+
+def _claim_facts(engine: Engine, tenant_id: int, end: datetime) -> dict[str, tuple[str, str, Decimal]]:
+    """claim submitter id -> (payer name, payer id code, billed) of the latest claim version known by `end`."""
+    out: dict[str, tuple[str, str, Decimal]] = {}
+    with tenant_session(engine, tenant_id) as s:
+        for sid, name, code, billed in s.execute(
+            select(m.Claim.claim_submitter_id, m.Payer.name, m.Payer.payer_id_code, m.Claim.total_charge)
+            .join(m.Event, m.Event.id == m.Claim.event_id)
+            .join(m.Payer, m.Payer.id == m.Claim.payer_id)
+            .where(m.Event.known_at <= end)
+            .order_by(m.Event.known_at, m.Claim.id)
+        ):
+            out[sid] = (name, code, billed)
+    return out
 
 
 def _claims_of(agent_id: str, p: dict) -> list[str]:
@@ -89,6 +114,7 @@ def open_cards(engine: Engine, tenant_id: int, as_of: date) -> list[dict]:
             continue
         latest[(rec.agent_id, _key(rec, p))] = (rec, known, p)
 
+    facts = _claim_facts(engine, tenant_id, end)
     cards = []
     for (agent_id, _), (rec, known, p) in latest.items():
         if not _is_open(agent_id, known, p, remits, filed, as_of, decided):
@@ -96,6 +122,9 @@ def open_cards(engine: Engine, tenant_id: int, as_of: date) -> list[dict]:
         card = p["card"]
         deadline = date.fromisoformat(card["deadline"])
         age = (as_of - known.date()).days
+        claim_ids = _claims_of(agent_id, p)
+        fact = facts.get(claim_ids[0]) if len(claim_ids) == 1 and agent_id in CLAIM_AGENTS else None
+        filing_left = p.get("filing_days_left") if agent_id == "a7_ar" else None
         cards.append(
             {
                 "agent": agent_id, "action_type": rec.action_type, "claim": ",".join(_claims_of(agent_id, p)),
@@ -104,6 +133,9 @@ def open_cards(engine: Engine, tenant_id: int, as_of: date) -> list[dict]:
                 "deadline": deadline.isoformat(), "overdue": deadline < as_of,
                 "due_soon": deadline <= as_of + timedelta(days=DUE_SOON_DAYS),
                 "raised_on": known.date().isoformat(), "age_days": age, "age_bucket": age_bucket(age), "card": card,
+                "payer": fact[0] if fact else "", "payer_code": fact[1] if fact else "",
+                "billed": fact[2] if fact else None, "queue_type": queue_type(agent_id, filing_left),
+                "confidence": rec.confidence, "filing_days_left": filing_left,
             }
         )  # fmt: skip
     cards.sort(key=lambda c: (-c["priority"], c["agent"], c["claim"]))

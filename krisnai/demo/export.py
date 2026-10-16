@@ -4,7 +4,9 @@ Schema (`schema` = 1). Money is a string with two decimals; dates are ISO string
 
     meta      as_of, shadow (always true), run {status, gate, files_loaded, events_added}, planted {...}
     queue     open work items, highest priority first: agent, owner, title, value, deadline, overdue, raised_on, why[],
-              next_steps[], evidence[]
+              next_steps[], evidence[]; and for the worklist screens: action_type, claim (id, or appointment / visit /
+              payment / slice for other agents), payer, billed (claim-type cards only, else null), queue_type (Denial,
+              Rejection, No response, Underpaid, Filing risk, or null), confidence (0-1 or null), filing_days_left
     agents    one per A1..A15: id, name, blurb, decisions, proposed, no_action, actions[{action, count, dollars}],
               planted[{defect, count}], examples[{title, owner, value, deadline, why[], next_steps[]}]
     baseline  A15-lite: findings, recoverable, structural (detected, not recovered)
@@ -45,7 +47,10 @@ def build_payload(engine: Engine, tenant_id: int, out_dir: Path, as_of: date, pl
             "agent": c["agent"], "owner": c["owner"], "title": c["title"], "value": _m(c["expected_value"]),
             "priority": _m(c["priority"]), "deadline": c["deadline"], "overdue": c["overdue"],
             "raised_on": c["raised_on"], "why": c["card"]["why"], "next_steps": c["card"]["next_steps"],
-            "evidence": c["card"]["evidence"],
+            "evidence": c["card"]["evidence"], "action_type": c["action_type"], "claim": c["claim"],
+            "payer": c["payer"], "billed": _m(c["billed"]) if c["billed"] is not None else None,
+            "queue_type": c["queue_type"], "filing_days_left": c["filing_days_left"],
+            "confidence": f"{Decimal(c['confidence']):.2f}" if c["confidence"] is not None else None,
         }
         for c in cards[:QUEUE_LIMIT]
     ]

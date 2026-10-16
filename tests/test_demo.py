@@ -74,6 +74,14 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
     assert all({"decisions", "proposed", "actions", "planted", "examples"} <= set(a) for a in data["agents"])
     keys = {"agent", "owner", "title", "value", "deadline", "overdue", "why", "next_steps", "evidence"}
     assert data["queue"] and all(keys <= set(q) for q in data["queue"])
+    extra = {"action_type", "claim", "payer", "billed", "queue_type", "confidence", "filing_days_left"}
+    assert all(extra <= set(q) for q in data["queue"])
+    pills = {"Denial", "Rejection", "No response", "Underpaid", "Filing risk"}
+    typed = [q for q in data["queue"] if q["queue_type"]]
+    assert typed and {q["queue_type"] for q in typed} <= pills
+    assert all(q["payer"] and q["billed"] is not None for q in typed), "a worklist row needs its payer and billed amount"
+    assert all(q["queue_type"] is None for q in data["queue"] if q["agent"] not in
+               {"a6_submission", "a7_ar", "a8_denial", "a10_underpay"})  # fmt: skip
     prio = [float(q["priority"]) for q in data["queue"]]
     assert prio == sorted(prio, reverse=True)
     assert (out / "ui_data.js").read_text(encoding="utf-8").startswith("window.KRISNAI_LIVE = {")
