@@ -91,6 +91,39 @@ resource scopes (`user/Patient.read`, ...) plus REST scopes, which are lowercase
 
 Verified live: unauthenticated search returns 401, authenticated returns 200, through both curl and our client.
 
+### Seeding and reading (`seed.py`)
+```
+krisnai openemr seed --feeds out/demo/archive/2026-10-14 --limit 50    # REST writes; idempotent
+krisnai openemr pull --out out/openemr_pull                            # FHIR reads -> appointments.csv, visits.csv, notes.csv
+```
+Writes go through OpenEMR's REST API (`/apis/default/api`) because FHIR cannot create Appointments or Encounters; reads go through FHIR.
+Practitioners are the one resource of ours created over FHIR. (`krisnai openemr pull`, not `krisnai fhir pull --profile`: the OpenEMR read needs one REST call for appointment titles, so it lives with the OpenEMR code.)
+
+**What OpenEMR's FHIR cannot carry, and where it goes.** Our feeds hold fields OpenEMR's FHIR resources have no place for, so they ride in free-text fields as `krisnai:key=value;key=value`:
+| record | stored in | read back from |
+|---|---|---|
+| patient | `pubpid` = our member id (synthetic name `Synthetic <member>`, deterministic made-up birth date and sex) | FHIR Patient.identifier |
+| appointment id, CPT, payer, booked date, status | calendar `pc_title` | **REST** `GET /appointment` (FHIR Appointment shows time, patient, practitioner and a generic status, but no title or comment) |
+| visit id, CPT, units, payer | encounter `reason` | FHIR Encounter.reasonCode.text |
+| note (visit id, note date, signed date, minutes, elements) | an uploaded document `note_<visit>.txt` (category "Medical Record") | FHIR DocumentReference, then Binary |
+
+**Measured (2026-10-16, 50 patients).** Seeded 50 patients, 5 practitioners, 665 appointments, 843 encounters, 790 notes (about 4 minutes). Pulled back through
+FHIR: 665 / 843 / 790 rows, **identical to the source feeds on every column** (no missing rows, no extras). A second seed created nothing.
+
+**OpenEMR behaviours found the hard way (all handled in code and covered by tests with a fake OpenEMR that behaves the same):**
+- FHIR ignores paging: `_count=100` returns exactly 100 rows and no `next` link; with no `_count` it returns everything. The OpenEMR code never sends `_count`
+  (`FhirClient.search(page_size=None)`). Missing this would have made a second seed create hundreds of duplicates.
+- A list endpoint with no rows answers **404**, not an empty list (e.g. `GET /appointment` on a fresh install).
+- Appointment creation requires `pc_hometext`; encounters are addressed by the patient's **uuid** in the path, appointments and documents by numeric `pid`.
+- REST document upload needs the category path `Medical Record` (a path of `/` triggers an SQL error inside OpenEMR on MariaDB 11.4).
+- FHIR Binary (the note body) needs the `user/Binary.read` scope; FHIR Practitioner create needs a name with `use: official` plus family and given.
+- Registered OAuth clients are disabled until enabled in the database (done by `auth.py` in the local container).
+
+**What this does not show.** A real vendor EMR's FHIR (Epic, athenahealth, eClinicalWorks) will differ in profiles, scopes, SMART app launch and what is writable; the
+patients, names and birth dates here are made up; our own fields are stored in free text because OpenEMR has no place for them, which a real integration
+would replace with the EMR's native fields (payer from Coverage, CPT from charges). Nothing here writes back anything from our agents.
+
+
 ## 3. Portal bots (`krisnai/integrations/portal/`)
 | piece | what it does |
 |---|---|

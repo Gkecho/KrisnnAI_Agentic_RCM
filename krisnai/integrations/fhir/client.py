@@ -51,10 +51,11 @@ class FhirClient:
         cap = self.capability()
         return any(r.get("type") == resource_type for rest in cap.get("rest", []) for r in rest.get("resource", []))
 
-    def search(self, resource_type: str, params: dict | None = None, page_size: int = 100) -> Iterator[dict]:
+    def search(self, resource_type: str, params: dict | None = None, page_size: int | None = 100) -> Iterator[dict]:
         """Every resource of a type, following the bundle's `next` links. `_lastUpdated=gt<date>` gives an
-        incremental pull."""
-        q = {"_count": page_size, **(params or {})}
+        incremental pull. `page_size=None` sends no `_count`: OpenEMR ignores paging (a `_count` returns exactly that many
+        rows and no `next` link), and returns everything when none is sent."""
+        q = {**({"_count": page_size} if page_size else {}), **(params or {})}
         r = self._http.get(f"/{resource_type}", params=q).raise_for_status().json()
         while True:
             for entry in r.get("entry", []):

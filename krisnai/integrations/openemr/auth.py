@@ -24,7 +24,7 @@ SCOPES = [
     "openid", "offline_access", "api:oemr", "api:fhir",
     "user/Patient.read", "user/Patient.write", "user/Practitioner.read", "user/Practitioner.write",
     "user/Organization.read", "user/Organization.write", "user/Appointment.read", "user/Encounter.read",
-    "user/DocumentReference.read",
+    "user/DocumentReference.read", "user/Binary.read",
     "user/patient.read", "user/patient.write", "user/appointment.read", "user/appointment.write",
     "user/encounter.read", "user/encounter.write", "user/document.read", "user/document.write",
     "user/soap_note.read", "user/soap_note.write", "user/practitioner.read", "user/facility.read",
