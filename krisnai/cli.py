@@ -15,6 +15,8 @@
     krisnai a2 seed|sweep|replay --tenant ID                              authorization agent (shadow only)
     krisnai a11 sweep|replay --tenant ID                                  cash reconciliation agent (shadow only)
     krisnai a13 sweep|replay --tenant ID                                  credentialing agent (shadow only)
+    krisnai stage1 [--out DIR] [--with-fhir]                              bots against local mock services + report
+    krisnai fhir up|down|seed|pull                                        local FHIR server and feeds
     krisnai demo [--out DIR] [--synthea DIR]                              mock practice + report.html (shadow only)
     krisnai ops daily|backfill|status|bench --tenant ID                   inbox runner (shadow only)
     krisnai investigate sweep|replay|ledger --tenant ID                   revenue assurance investigator (shadow only)
@@ -136,6 +138,26 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--synthea", type=Path, default=Path("out/synthea"), help="Synthea output folder")
     demo.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 14), help="YYYY-MM-DD")
     demo.add_argument("--seed", type=int, default=7)
+    st1 = sub.add_parser("stage1", help="run the bots against the local mock clearinghouse and portal, write a report")
+    st1.add_argument("--out", type=Path, default=Path("out/stage1"))
+    st1.add_argument("--synthea", type=Path, default=Path("out/synthea"))
+    st1.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 6, 30), help="YYYY-MM-DD")
+    st1.add_argument("--seed", type=int, default=7)
+    st1.add_argument("--limit", type=int, default=25, help="items per bot")
+    st1.add_argument("--with-fhir", action="store_true", help="also run the FHIR round trip (Docker, ~2 GB images)")
+    fh = sub.add_parser("fhir", help="local FHIR server: up, down, seed from feeds, pull feeds back out")
+    fh_sub = fh.add_subparsers(dest="fhir_cmd", required=True)
+    fh_up = fh_sub.add_parser("up", help="start the Microsoft FHIR server and SQL Server containers")
+    fh_down = fh_sub.add_parser("down", help="stop and remove them (and their data)")
+    fh_seed = fh_sub.add_parser("seed", help="load appointments.csv, visits.csv and notes.csv into the server")
+    fh_pull = fh_sub.add_parser("pull", help="write those three feeds from the server into a folder")
+    for sp in (fh_up, fh_down):
+        sp.add_argument("--work", type=Path, default=Path("out/fhir"))
+    for sp in (fh_seed, fh_pull):
+        sp.add_argument("--url", default="http://localhost:8080")
+    fh_seed.add_argument("--feeds", type=Path, required=True)
+    fh_pull.add_argument("--out", type=Path, required=True)
+    fh_pull.add_argument("--since", help="YYYY-MM-DD: only resources updated after this day")
     ops = sub.add_parser("ops", help="daily and backfill runs over an inbox folder (shadow mode throughout)")
     ops_sub = ops.add_subparsers(dest="ops_cmd", required=True)
     ops_daily = ops_sub.add_parser("daily", help="load the inbox, check it, advance every agent to --as-of")
@@ -319,6 +341,29 @@ def main(argv: list[str] | None = None) -> int:
         from krisnai.ops.bench import format_bench, run_bench
 
         print(format_bench(run_bench(args.claims, args.workdir)))
+        return 0
+    if args.cmd == "stage1":
+        from krisnai.integrations.stage1 import run_stage1
+
+        res = run_stage1(args.out, args.synthea, args.as_of, args.seed, args.with_fhir, args.limit)
+        print(f"report: {res.report.resolve()}")
+        print(json.dumps({k: v for k, v in res.summary.items() if k != "fhir"}, sort_keys=True))
+        return 0
+    if args.cmd == "fhir":
+        from krisnai.integrations.fhir import docker as fdocker
+        from krisnai.integrations.fhir.client import FhirClient
+        from krisnai.integrations.fhir.sync import pull as fhir_pull
+        from krisnai.integrations.fhir.sync import seed as fhir_seed
+
+        if args.fhir_cmd == "up":
+            print(f"FHIR server ready at {fdocker.up(args.work)}")
+        elif args.fhir_cmd == "down":
+            fdocker.down(args.work)
+            print("stopped")
+        elif args.fhir_cmd == "seed":
+            print(json.dumps(fhir_seed(FhirClient(args.url), args.feeds), sort_keys=True))
+        else:
+            print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
         return 0
     if args.cmd == "demo":
         from krisnai.demo import make_demo

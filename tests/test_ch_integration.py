@@ -192,8 +192,8 @@ def test_eligibility_bot_closes_the_gaps_a1_flagged_and_the_agents_see_it(book, 
         return {g["kind"] for g in p.get("gaps", [])}
 
     checked = sorted(flagged & answered)
-    still_missing_control = [a for a in checked if gap_kinds(engines["control"], a) & {"no_check", "stale_check"}]
-    still_missing_bot = [a for a in checked if gap_kinds(engines["bot"], a) & {"no_check", "stale_check"}]
+    still_missing_control = [a for a in checked if gap_kinds(engines["control"], a) & {"no_eligibility_check", "stale_check"}]
+    still_missing_bot = [a for a in checked if gap_kinds(engines["bot"], a) & {"no_eligibility_check", "stale_check"}]
     assert still_missing_control, "the control run should keep the check gaps open"
     assert len(still_missing_bot) < len(still_missing_control)
     assert not still_missing_bot

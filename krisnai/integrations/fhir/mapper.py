@@ -12,6 +12,7 @@ Names are not carried (synthetic practice: nothing but the member id identifies 
 
 from __future__ import annotations
 
+import base64
 import csv
 import io
 from collections.abc import Iterable
@@ -103,6 +104,8 @@ def document_reference(row: dict) -> dict:
         "resourceType": "DocumentReference", "id": "dr-" + _slug(row["visit_id"]), "status": "current",
         "type": {"text": "Progress note"}, "date": f"{row['note_date']}T12:00:00Z",
         "context": {"encounter": [{"reference": f"Encounter/en-{_slug(row['visit_id'])}"}]},
+        "content": [{"attachment": {"contentType": "text/plain",
+                                    "data": base64.b64encode(row.get("elements", "").encode()).decode() or "AA=="}}],
         "description": row.get("elements", ""), "extension": ext,
     }  # fmt: skip
 

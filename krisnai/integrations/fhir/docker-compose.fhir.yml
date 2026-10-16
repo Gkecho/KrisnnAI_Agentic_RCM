@@ -16,7 +16,10 @@ services:
       sql:
         condition: service_healthy
     environment:
-      FHIR__Security__Enabled: "false"
+      FhirServer__Security__Enabled: "false"
+      # the capability statement builder reads these even with security off; they are placeholders
+      FhirServer__Security__Authentication__Authority: "http://localhost:8080"
+      FhirServer__Security__Authentication__Audience: "krisnai-local"
       SqlServer__ConnectionString: "Server=tcp:sql,1433;Initial Catalog=FHIR;Persist Security Info=False;User ID=sa;Password=${KRISNAI_FHIR_SA_PASSWORD};MultipleActiveResultSets=False;Connection Timeout=30;TrustServerCertificate=true;"
       SqlServer__AllowDatabaseCreation: "true"
       SqlServer__Initialize: "true"

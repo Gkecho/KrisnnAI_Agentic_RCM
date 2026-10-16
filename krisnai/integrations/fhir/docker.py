@@ -49,12 +49,12 @@ def up(work: Path, wait_seconds: int = 300) -> str:
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         try:
-            if httpx.get(f"{URL}/metadata", timeout=5).status_code == 200:
-                return URL
+            if httpx.get(f"{URL}/Patient", params={"_count": 1}, timeout=5).status_code == 200:
+                return URL  # a search answering 200 means the schema is initialised and security is off
         except httpx.HTTPError:
             pass
         time.sleep(5)
-    raise SystemExit(f"the FHIR server did not answer at {URL}/metadata within {wait_seconds} s")
+    raise SystemExit(f"the FHIR server did not answer at {URL}/Patient within {wait_seconds} s")
 
 
 def down(work: Path) -> None:
