@@ -176,12 +176,10 @@ def resubmission_bot(engine: Engine, tenant_id: int, extract: PmExtract, client:
             text = write_corrected_837(claim, ans.payer_claim_no, ctrl, when)
             sent = _write(out_dir, f"837P_{claim_id}_corrected.x12", text)
             res = client.submit_claim(text)
-            names = [sent,
-                     _write(out_dir, f"999_{claim_id}.x12", res["999"]),
-                     _write(out_dir, f"277CA_{claim_id}.x12", res["277CA"])]  # fmt: skip
+            names = [_write(out_dir, f"{kind}_{claim_id}.x12", res[kind]) for kind in ("999", "277CA") if res.get(kind)]
             ok = bool(res["results"]) and all(r["ok"] for r in res["results"])
             ev = BotEvent("resubmission", claim_id, "accepted" if ok else "rejected_again",
-                          "; ".join(r["reason"] for r in res["results"]), sent, names[1:])
+                          "; ".join(r["reason"] for r in res["results"]), sent, names)
         rep.events.append(ev)
         _log(log_path, ev)
     return rep

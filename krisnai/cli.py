@@ -145,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
     st1.add_argument("--seed", type=int, default=7)
     st1.add_argument("--limit", type=int, default=25, help="items per bot")
     st1.add_argument("--with-fhir", action="store_true", help="also run the FHIR round trip (Docker, ~2 GB images)")
+    sd = sub.add_parser("stedi", help="Stedi sandbox: one eligibility check with a TEST key (needs STEDI_API_KEY)")
+    sd.add_argument("--payer", default="60054", help="Stedi's documented Aetna mock payer id")
+    sd.add_argument("--member", default="AETNA9wcSu", help="the documented mock subscriber member id")
     fh = sub.add_parser("fhir", help="local FHIR server: up, down, seed from feeds, pull feeds back out")
     fh_sub = fh.add_subparsers(dest="fhir_cmd", required=True)
     fh_up = fh_sub.add_parser("up", help="start the Microsoft FHIR server and SQL Server containers")
@@ -348,6 +351,16 @@ def main(argv: list[str] | None = None) -> int:
         res = run_stage1(args.out, args.synthea, args.as_of, args.seed, args.with_fhir, args.limit)
         print(f"report: {res.report.resolve()}")
         print(json.dumps({k: v for k, v in res.summary.items() if k != "fhir"}, sort_keys=True))
+        return 0
+    if args.cmd == "stedi":
+        from krisnai.integrations.clearinghouse.stedi import StediClient
+        from krisnai.integrations.clearinghouse.x12_out import write_270
+
+        today = date.today()
+        sc = StediClient()
+        x12 = write_270(args.payer, "PAYER", args.member, "Doe", "John", "19800101", today, "KRISNAISMOKE", 1, today)
+        text = sc.check_eligibility(x12)
+        print(f"mode: {sc.last_mode or 'not reported'}; response starts: {text[:60]!r}; {len(text)} characters of X12")
         return 0
     if args.cmd == "fhir":
         from krisnai.integrations.fhir import docker as fdocker

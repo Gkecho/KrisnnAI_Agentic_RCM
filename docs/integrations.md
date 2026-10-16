@@ -21,8 +21,24 @@ start out\stage1\stage1_report.html
 gone (the control run without the bot still has it). **What it does not prove:** that a real clearinghouse or payer answers this way. The mock accepts any
 replacement of a claim it returned, so it shows the transport and the loop, not whether a correction is right.
 
-To point at a real sandbox: set `KRISNAI_ALLOW_REAL_ENDPOINTS=1`, give the client the sandbox URL and token from environment variables, and map the request
-and response format (a vendor's JSON API will differ from this X12 over HTTP shape; that mapping is the real work and is not done).
+### Stedi (built, not yet run against the live sandbox)
+`stedi.py` implements the same three calls over Stedi's **raw X12** healthcare endpoints (`eligibility/v3/raw-x12`, `claimstatus/v2/raw-x12`,
+`professionalclaims/v3/raw-x12-submission`, base `https://healthcare.us.stedi.com/2024-04-01`), so the repo's own 270/276/837 builders and 271/277/277CA
+parsers are used unchanged. Request and response shapes come from Stedi's published reference (checked 2026-10-16) and are tested with recorded-shape
+responses; **no call has been made to Stedi from this repo**. Safety: the key comes from `STEDI_API_KEY` only; non-local URLs need
+`KRISNAI_ALLOW_REAL_ENDPOINTS=1`; claim submission needs `KRISNAI_ALLOW_STEDI_SUBMIT=1` and an explicit test-key confirmation (a production key would send a
+real claim); a response in production mode stops the client unless `KRISNAI_ALLOW_STEDI_PRODUCTION=1`.
+
+To run the live check yourself (set the key in your own shell, never in chat):
+```
+set STEDI_API_KEY=<your TEST-mode key>
+set KRISNAI_ALLOW_REAL_ENDPOINTS=1
+.venv\Scripts\python.exe -m krisnai.cli stedi
+.venv\Scripts\python.exe -m pytest tests/test_stedi.py -k live
+```
+Known gaps: Stedi's test mode only answers its documented mock subscribers exactly (the Aetna mock is a dependent case; our 270 sends the subscriber
+loop only, so the first live call may return an AAA error to adjust), the auth header style (bare key vs `Key <key>`) should be confirmed on the first call
+(`KRISNAI_STEDI_AUTH_STYLE=key` switches it), and a new-style JSON eligibility API exists that this does not use.
 
 ## 2. FHIR (`krisnai/integrations/fhir/`)
 | piece | what it does |
