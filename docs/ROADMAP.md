@@ -58,6 +58,6 @@ following, none of which is built yet. They belong in the platform work before a
 - **Maker-checker**: the approver of an L3 action must differ from the initiator, approvals time-bound and logged.
 - **Versioned, effective-dated policy**: rules, prompts, models, thresholds and payer policies versioned and released by staged rollout with per-tenant feature flags.
 - **Before/after values and source evidence** on every write-back (today the adapters are stubs, so nothing writes back).
-- **Failure-injection tests** (duplicate events, retries, partial failures, outages, adversarial documents) before any action type reaches gate G3.
+- **Failure-injection tests** (duplicate events, retries, partial failures, outages, adversarial documents) before any action type reaches gate G3. **Partly done (2026-10-16):** clearinghouse and portal bots (timeouts, 5xx, 401, damaged and mismatched replies, outages, lost replies, MFA/CAPTCHA/locked/expired sessions; `docs/integrations.md`). Still open: engine-level duplicate events and partial failures, write-back, adversarial documents.
 - **Identity resolution** across systems, **value ledger / outcome attribution**, PHI masking in lower environments, log retention policy.
 - **Release-gate records** G0 to G5 with signed evidence packs (the strategy's gates are organisational, but the evidence packs come from the system).

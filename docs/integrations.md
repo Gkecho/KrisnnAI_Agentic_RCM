@@ -72,6 +72,33 @@ first mismatch **stops the whole run** with nothing else requested; a rate limit
 (Playwright) is not installed; the HTTP driver covers server-rendered portals. Real portals add MFA, CAPTCHA and JavaScript, where the bot must stop and hand
 to a person; none of that is exercised here.
 
+## Failure behaviour (what the bots do when things go wrong)
+Proven by `tests/test_ch_faults.py` (31 tests) and `tests/test_portal_hard.py` (12 tests), all against local mocks with deterministic fault injection
+(`clearinghouse/faults.py`, `FaultyClient`).
+
+**Clearinghouse bots** (eligibility, status, resubmission)
+| what goes wrong | what the bot does |
+|---|---|
+| timeout, connection error, 5xx on a read-only call | retried up to `retries` (default 2, optional backoff); batch continues |
+| 400-class refusal | no retry; that subject is `error`, the batch continues |
+| 401/403 | stops the batch at once; the rest are `not_attempted` |
+| garbage or truncated reply | `bad_response`; the reply is **not** written to the inbox |
+| reply for another patient / claim (checked by the echoed reference) | `bad_response`; not kept, so no agent reads another subject's answer |
+| 3 failures in a row (`breaker_limit`) | circuit opens; the rest are `not_attempted` |
+| resubmission: timeout / 5xx / lost reply | `unknown_sent`: never retried or resent; the status bot or a person resolves it |
+| resubmission: connection error | retried (the request never left) |
+| resubmission: any repeat run | skipped via `sent_ledger.jsonl` (written *before* the send); one replacement per (claim, payer claim number) |
+
+The log carries outcome and a short reason only: no full member id, token, or reply body.
+
+**Portal bot** stops and records `needs_human` (with `handoff` = mfa, captcha, js_required, account_locked, maintenance, session_expired) and requests
+nothing further. It never tries to solve a challenge, never retries a locked account, posts no password when it sees a CAPTCHA on the sign-in page, and
+re-logs in at most once per page and five times per run.
+
+**Not proven:** real clearinghouse error shapes (Stedi's 4xx/5xx bodies), real portal MFA/CAPTCHA flows, a JavaScript browser (Playwright is not
+installed here, so script-drawn pages are detected and handed off, not read), duplicate delivery from a real queue, and anything past the bots (the
+engine-level kill switch, maker-checker and write-back failure tests are still open, see `docs/ROADMAP.md`).
+
 ## What is still not done
 Real authentication flows and payer/portal behaviour, vendor-specific clearinghouse formats (Stedi, Optum), a browser driver, FHIR write-back to an EMR (the
 repo rules limit write-back to tasks and notes behind a disabled adapter), and any measurement of staff time saved (needs the Stage 3 baseline and control
