@@ -56,6 +56,9 @@ class StediClient:
         # Stedi's reference shows the bare key; the older "Key <key>" form is still accepted
         self._headers = {"Authorization": f"Key {key}" if style == "key" else key, "Content-Type": "application/json"}
         self.last_mode: str | None = None
+        # Stedi's own test keys carry the "test_" prefix. Error responses to them (e.g. AAA 43) still report
+        # applicationMode "production" (seen 2026-10-16), so for these keys the mode field is not a reliable signal.
+        self._test_key = key.startswith("test_")
 
     def close(self) -> None:
         self._http.close()
@@ -74,7 +77,7 @@ class StediClient:
             raise StediError(f"Stedi returned {r.status_code}: {msg}")
         mode = str((body.get("meta") or {}).get("applicationMode", "")).lower() or None
         self.last_mode = mode or self.last_mode
-        if mode and mode != "test" and os.environ.get(PRODUCTION_ENV) != "1":
+        if mode and mode != "test" and not self._test_key and os.environ.get(PRODUCTION_ENV) != "1":
             raise ProductionKeyRefused(
                 f"the key is in {mode} mode; use a test-mode key or set {PRODUCTION_ENV}=1 deliberately"
             )

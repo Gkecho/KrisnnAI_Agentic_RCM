@@ -101,6 +101,9 @@ def test_a_production_mode_response_stops_the_client(monkeypatch):
 
     c = client_with(handler, monkeypatch)
     monkeypatch.delenv(PRODUCTION_ENV, raising=False)
+    # a test_ key is trusted even though Stedi labels its responses "production"
+    assert c.check_eligibility("270") == "ISA"
+    c._test_key = False
     with pytest.raises(ProductionKeyRefused):
         c.check_eligibility("270")
 

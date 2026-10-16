@@ -16,16 +16,16 @@ from krisnai.synthea.x12out import BILLING_NPI, CLINIC, SENDER, TAX_ID, _amt, _e
 
 
 def write_270(payer_id: str, payer_name: str, member_id: str, last: str, first: str, dob: str, dos: date,
-              ref: str, ctrl: int, when: date) -> str:  # fmt: skip
+              ref: str, ctrl: int, when: date, npi: str = BILLING_NPI) -> str:  # fmt: skip
     """Eligibility inquiry for one subscriber and one date of service (general benefit inquiry, EQ*30)."""
     body = [
         _seg("BHT", "0022", "13", ref, when.strftime("%Y%m%d"), "1200"),
         _seg("HL", 1, "", "20", 1),
         _seg("NM1", "PR", "2", payer_name, "", "", "", "", "PI", payer_id),
         _seg("HL", 2, 1, "21", 1),
-        _seg("NM1", "1P", "2", CLINIC, "", "", "", "", "XX", BILLING_NPI),
+        _seg("NM1", "1P", "2", CLINIC, "", "", "", "", "XX", npi),
         _seg("HL", 3, 2, "22", 0),
-        _seg("TRN", "1", ref, SENDER),
+        _seg("TRN", "1", ref, SENDER.ljust(10, "0")[:10]),  # TRN-03 must be 10 characters
         _seg("NM1", "IL", "1", last, first, "", "", "", "MI", member_id),
         _seg("DMG", "D8", dob or "19700101"),
         _seg("DTP", "291", "D8", dos.strftime("%Y%m%d")),
