@@ -11,6 +11,10 @@ Schema (`schema` = 1). Money is a string with two decimals; dates are ISO string
               planted[{defect, count}], examples[{title, owner, value, deadline, why[], next_steps[]}]
     baseline  A15-lite: findings, recoverable, structural (detected, not recovered)
     slices    A15 investigator: payer or payer|CPT slices below baseline with dollars and top cause
+    replay    the history-replay view, from A15-lite: health {claims, clean_claim_rate, days_in_ar, ar_over_90_share},
+              reconciliation[{name, description, items, mismatches, max_difference, passed}], found_vs_planted[{type,
+              planted, found, precision, recall, correct_recall}] (only when the answer key exists), by_payer[{key,
+              findings, recoverable, structural}], opportunities[first 25 findings]
 """
 
 from __future__ import annotations
@@ -32,6 +36,35 @@ QUEUE_LIMIT = 300
 
 def _m(v) -> str:
     return f"{Decimal(str(v)):.2f}"
+
+
+def _replay(engine: Engine, tenant_id: int, out_dir: Path, as_of: date) -> dict:
+    """The A15-lite run behind the history-replay screen. Empty when A15-lite has not run for this folder."""
+    f = out_dir / "a15" / "a15_lite.json"
+    if not f.exists():
+        return {}
+    d = json.loads(f.read_text(encoding="utf-8"))
+    k = d.get("kpis", {})
+    first = lambda name, key: (k.get(name) or [{}])[0].get(key)  # noqa: E731
+    out = {
+        "health": {
+            "claims": first("clean_claim_rate", "submitted_claims"), "clean_claim_rate": first("clean_claim_rate", "clean_claim_rate"),
+            "days_in_ar": first("days_in_ar", "days_in_ar"), "ar_over_90_share": first("ar_over_90", "ar_over_90_share"),
+        },  # fmt: skip
+        "reconciliation": d.get("reconciliation", {}).get("checks", []),
+        "by_payer": d.get("by_payer", [])[:10],
+        "opportunities": d.get("opportunities", [])[:25],
+    }
+    gt = out_dir / "truth" / "ground_truth.csv"
+    if gt.exists():
+        from krisnai.agents.a15_lite import run_a15
+
+        res = run_a15(engine, tenant_id, as_of, out_dir / "a15", ground_truth=gt)
+        out["found_vs_planted"] = [
+            {"type": t, "planted": s.planted, "found": s.found, "precision": s.precision, "recall": s.recall,
+             "correct_recall": s.correct_recall} for t, s in (res.scores or {}).items()
+        ]  # fmt: skip
+    return out
 
 
 def build_payload(engine: Engine, tenant_id: int, out_dir: Path, as_of: date, planted: dict | None = None,
@@ -101,6 +134,7 @@ def build_payload(engine: Engine, tenant_id: int, out_dir: Path, as_of: date, pl
         "queue": queue,
         "agents": agents,
         "baseline": baseline or {},
+        "replay": _replay(engine, tenant_id, out_dir, as_of),
         "slices": [{"slice": x["slice"], "dollars": _m(x["impact"]), "top_cause": x["top_cause"]} for x in s["slices"]],
     }
 
