@@ -60,6 +60,37 @@ Notes (from this build): the server needs placeholder `FhirServer__Security__Aut
 DocumentReference needs `content`, and `/metadata` only answers once those are set. A real EMR's FHIR API will differ in profiles, scopes (SMART on FHIR
 authorization) and which resources it exposes; the mapper reads only the resources and fields above.
 
+## 2b. OpenEMR (`krisnai/integrations/openemr/`), the EMR behind the FHIR API
+OpenEMR 7.0.3 on MariaDB, local only (`127.0.0.1`: https 9300 with a self-signed certificate, http 8300). It is a real open-source EMR, unlike the Microsoft
+server above, which is a bare FHIR API with no clinical application. Synthetic data only.
+
+```
+krisnai openemr up        # first start pulls 1-2 GB and OpenEMR installs itself (about 5-10 minutes)
+krisnai openemr status
+krisnai openemr down      # removes the containers and their data
+```
+Passwords for the database and the admin user are generated per work folder (`out/openemr/`, git-ignored); nothing secret is in the repo.
+
+**FHIR base** `https://localhost:9300/apis/default/fhir`, FHIR R4 (4.0.1). **Verified capability list** (read from this instance on 2026-10-16):
+| resource | interactions |
+|---|---|
+| Patient | search, read, create, update |
+| Practitioner, Organization | search, read, create, update |
+| DocumentReference | search, read, create |
+| Appointment, Encounter | search, read **only** |
+| AllergyIntolerance, CarePlan, CareTeam, Condition, Coverage, Device, DiagnosticReport, Goal, Group, Immunization, Location, Medication, MedicationRequest, Observation, Person, PractitionerRole, Procedure, Provenance, ValueSet | search, read |
+
+So appointments and encounters cannot be written over FHIR; seeding them goes through OpenEMR's standard REST API (`/apis/default/api`), and FHIR is used to read.
+
+**Authentication (OAuth2 only).** `auth.py` registers a client at `/oauth2/default/registration`, then enables it with one SQL update inside the database
+container (OpenEMR keeps clients that ask for user scopes disabled until an administrator enables them, and has no API for that; this is acceptable
+only because the container is ours and local). It logs in with the password grant (`user_role=users`), caches the token and refreshes it before expiry.
+`FhirClient(..., token_provider=auth.token, verify=False)` uses it; the local-only guard still applies, so a non-local OpenEMR is refused. Scopes: FHIR
+resource scopes (`user/Patient.read`, ...) plus REST scopes, which are lowercase (`user/patient.write`, `user/appointment.write`, `user/encounter.write`,
+`user/document.write`, `user/soap_note.write`).
+
+Verified live: unauthenticated search returns 401, authenticated returns 200, through both curl and our client.
+
 ## 3. Portal bots (`krisnai/integrations/portal/`)
 | piece | what it does |
 |---|---|

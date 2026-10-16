@@ -6,7 +6,7 @@ as the clearinghouse client, so this never pushes synthetic data to someone else
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import httpx
 
@@ -15,13 +15,30 @@ from krisnai.integrations.clearinghouse.client import check_endpoint
 JSON = "application/fhir+json"
 
 
+class _Bearer(httpx.Auth):
+    """Asks the provider for a token on every request, so a refreshed token is picked up without rebuilding the client."""
+
+    def __init__(self, provider: Callable[[], str]):
+        self._provider = provider
+
+    def auth_flow(self, request):  # noqa: ANN001, ANN201
+        request.headers["Authorization"] = f"Bearer {self._provider()}"
+        yield request
+
+
 class FhirClient:
-    def __init__(self, base_url: str, http: httpx.Client | None = None, token: str | None = None, timeout: float = 60):
+    def __init__(self, base_url: str, http: httpx.Client | None = None, token: str | None = None, timeout: float = 60,
+                 token_provider: Callable[[], str] | None = None, verify: bool = True):  # fmt: skip
+        """`token_provider` (e.g. OpenEmrAuth.token) wins over a fixed `token`. `verify=False` is for a local container
+        with a self-signed certificate; the local-only guard below still applies."""
         check_endpoint(base_url)
         self.base_url = base_url.rstrip("/")
-        self._http = http or httpx.Client(base_url=self.base_url, timeout=timeout)
+        auth = _Bearer(token_provider) if token_provider else None
+        self._http = http or httpx.Client(base_url=self.base_url, timeout=timeout, verify=verify, auth=auth)
+        if http is not None and auth is not None:
+            self._http.auth = auth
         self._http.headers.update({"Accept": JSON})
-        if token:
+        if token and not token_provider:
             self._http.headers["Authorization"] = f"Bearer {token}"
 
     def close(self) -> None:

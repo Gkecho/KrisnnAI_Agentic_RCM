@@ -165,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     fh_seed.add_argument("--feeds", type=Path, required=True)
     fh_pull.add_argument("--out", type=Path, required=True)
     fh_pull.add_argument("--since", help="YYYY-MM-DD: only resources updated after this day")
+    oe = sub.add_parser("openemr", help="local OpenEMR (the EMR behind the FHIR integration): up, down, status")
+    oe.add_argument("oe_cmd", choices=["up", "down", "status"])
+    oe.add_argument("--work", type=Path, default=Path("out/openemr"))
     ops = sub.add_parser("ops", help="daily and backfill runs over an inbox folder (shadow mode throughout)")
     ops_sub = ops.add_subparsers(dest="ops_cmd", required=True)
     ops_daily = ops_sub.add_parser("daily", help="load the inbox, check it, advance every agent to --as-of")
@@ -382,6 +385,17 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_seed(FhirClient(args.url), args.feeds), sort_keys=True))
         else:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
+        return 0
+    if args.cmd == "openemr":
+        from krisnai.integrations.openemr import docker as oedocker
+
+        if args.oe_cmd == "up":
+            print(f"OpenEMR FHIR ready at {oedocker.up(args.work)} (admin password: {args.work / 'admin_password.txt'})")
+        elif args.oe_cmd == "down":
+            oedocker.down(args.work)
+            print("stopped")
+        else:
+            print(oedocker.status(args.work))
         return 0
     if args.cmd == "demo":
         from krisnai.demo import make_demo
