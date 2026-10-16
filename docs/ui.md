@@ -17,6 +17,8 @@ login middleware. The agents already produce everything such a UI needs; the mis
 
 Money is a two-decimal string; dates are ISO strings; there is no raw patient data (patients are salted hashes and claims are referenced by id).
 
+See `docs/ui_mapping.md` for the screen-by-screen mapping to the product preview and what is not yet buildable.
+
 ## Suggested screens (mapped to the site's modules)
 1. **Work queue** (`queue`): the control tower inbox; filter by agent and owner; open a row to see why and next steps.
 2. **Agent view** (`agents`): the site's workflow module for that agent, with live counts and example cards beside the static description.
