@@ -85,6 +85,35 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
     prio = [float(q["priority"]) for q in data["queue"]]
     assert prio == sorted(prio, reverse=True)
     assert (out / "ui_data.js").read_text(encoding="utf-8").startswith("window.KRISNAI_LIVE = {")
+    rp = data["replay"]
+    assert rp["reconciliation"] and all(c["passed"] for c in rp["reconciliation"]), "the run's gate passed"
+    assert {"claims", "clean_claim_rate", "days_in_ar", "ar_over_90_share"} <= set(rp["health"])
+    assert rp["found_vs_planted"] and all(
+        {"type", "planted", "found", "precision", "recall", "correct_recall"} <= set(x) for x in rp["found_vs_planted"]
+    )
+    assert len(rp["opportunities"]) <= 25 and len(rp["by_payer"]) <= 10
+
+
+def test_replay_section_is_empty_without_a15_and_has_no_scores_without_an_answer_key(tmp_path):
+    import json
+
+    from krisnai.demo.export import _replay
+
+    assert _replay(None, 1, tmp_path, AS_OF) == {}  # no a15 folder: nothing to show, nothing touched
+    (tmp_path / "a15").mkdir()
+    doc = {
+        "kpis": {"clean_claim_rate": [{"submitted_claims": 10, "clean_claim_rate": "0.9"}], "days_in_ar": [{"days_in_ar": "40"}],
+                 "ar_over_90": [{"ar_over_90_share": "0.2"}]},
+        "reconciliation": {"checks": [{"name": "claim_charge", "passed": True}]},
+        "by_payer": [{"key": f"P{i}"} for i in range(15)],
+        "opportunities": [{"claim": f"C{i}"} for i in range(40)],
+    }  # fmt: skip
+    (tmp_path / "a15" / "a15_lite.json").write_text(json.dumps(doc), encoding="utf-8")
+    out = _replay(None, 1, tmp_path, AS_OF)  # engine is not used without truth/ground_truth.csv
+    assert out["health"] == {"claims": 10, "clean_claim_rate": "0.9", "days_in_ar": "40", "ar_over_90_share": "0.2"}
+    assert out["reconciliation"] == [{"name": "claim_charge", "passed": True}]
+    assert len(out["by_payer"]) == 10 and len(out["opportunities"]) == 25
+    assert "found_vs_planted" not in out
 
 
 def test_a_missing_synthea_folder_says_how_to_make_one(tmp_path):

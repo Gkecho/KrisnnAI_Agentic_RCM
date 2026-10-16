@@ -48,9 +48,11 @@ def _replay(engine: Engine, tenant_id: int, out_dir: Path, as_of: date) -> dict:
     first = lambda name, key: (k.get(name) or [{}])[0].get(key)  # noqa: E731
     out = {
         "health": {
-            "claims": first("clean_claim_rate", "submitted_claims"), "clean_claim_rate": first("clean_claim_rate", "clean_claim_rate"),
-            "days_in_ar": first("days_in_ar", "days_in_ar"), "ar_over_90_share": first("ar_over_90", "ar_over_90_share"),
-        },  # fmt: skip
+            "claims": first("clean_claim_rate", "submitted_claims"),
+            "clean_claim_rate": first("clean_claim_rate", "clean_claim_rate"),
+            "days_in_ar": first("days_in_ar", "days_in_ar"),
+            "ar_over_90_share": first("ar_over_90", "ar_over_90_share"),
+        },
         "reconciliation": d.get("reconciliation", {}).get("checks", []),
         "by_payer": d.get("by_payer", [])[:10],
         "opportunities": d.get("opportunities", [])[:25],
