@@ -99,7 +99,10 @@ def eligibility_bot(engine: Engine, tenant_id: int, extract: PmExtract, client: 
     rep = BotReport("eligibility")
     todo = latest_decisions(engine, tenant_id, "a1_clearance", "appt")
     ctrl = 90000
-    for appt_id in sorted(todo)[:limit]:
+    # only visits that have not happened yet, soonest first: that is where a fresh answer can still change the outcome
+    upcoming = [a for a in todo if a in extract.appointments
+                and date.fromisoformat(extract.appointments[a]["appt_date"]) >= when]  # fmt: skip
+    for appt_id in sorted(upcoming, key=lambda a: (extract.appointments[a]["appt_date"], a))[:limit]:
         action, p = todo[appt_id]
         row = extract.appointments.get(appt_id)
         claim = next((c for c in extract.claims.values() if c.member_id == (row or {}).get("patient_ref")), None)
