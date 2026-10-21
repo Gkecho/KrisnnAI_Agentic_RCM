@@ -647,7 +647,6 @@ def read(text: str, signed: bool = True) -> Reading:
 
     # ---- conditions (assessment only)
     centries = _condition_entries()
-    cond_keys: dict[str, ConditionHit] = {}
     taken_all: list[tuple[int, int]] = []
     sentinel_names: set[str] = set()
     for s, e in ass_spans:
