@@ -27,7 +27,7 @@ from sqlalchemy import create_engine, select
 
 import krisnai.model as m
 from krisnai.ingest.x12 import read_transactions
-from krisnai.live.transcripts import generate
+from krisnai.live.transcripts import generate, generate_wide
 from krisnai.model import tenant_session
 
 PROBLEM_AGENT = {"denied": "a8_denial", "underpaid": "a10_underpay"}
@@ -113,8 +113,9 @@ def score(run: Path) -> dict:
             elig["active"] += 1
             elig["false_alarms"] += 1 if exc else 0
     # coding against the answer key
-    visits = {f"SYNVS{i:05d}L1": v for i, v in enumerate(generate(cfg["seed"], cfg["count"], date.fromisoformat(cfg["start"])), start=1)}
-    coding = {"auto_correct": 0, "auto_wrong": [], "problem_routed_right": 0, "problem_missed": [], "clean_to_coder": 0}
+    visits = {f"SYNVS{i:05d}L1": v for i, v in enumerate((generate_wide if cfg.get("wide") else generate)(cfg["seed"], cfg["count"], date.fromisoformat(cfg["start"])), start=1)}
+    alias = {"laterality_missing": "missing_laterality", "time_missing": "missing_time", "missing_assessment": "missing_plan"}  # the coder's names for the key's reasons
+    coding = {"auto_correct": 0, "auto_wrong": [], "problem_routed_right": 0, "problem_missed": [], "clean_to_coder": 0, "problem_routed_other_reason": 0}
     for e in st["enc"].values():
         rc, v = e.get("coding"), visits.get(e["visit_id"])
         if not rc or not v:
@@ -127,8 +128,10 @@ def score(run: Path) -> dict:
                     coding["auto_wrong"].append(e["visit_id"])
             else:
                 coding["clean_to_coder"] += 1
-        elif rc["route"] == "coder" and rc["reason"] == v.expected.reason:
+        elif rc["route"] == "coder" and alias.get(rc["reason"], rc["reason"]) == v.expected.reason:
             coding["problem_routed_right"] += 1
+        elif rc["route"] == "coder":  # stopped for a person, just for another (also real) reason: safe, counted apart
+            coding["problem_routed_other_reason"] += 1
         else:
             coding["problem_missed"].append(e["visit_id"])
     a4 = sum(len(v) for v in dec.get("a4_coding", {}).values())

@@ -48,7 +48,7 @@ from krisnai.live.payer import EXTRA_COLUMNS, PayerConfig, PayerSim
 from krisnai.live.reply_stage import RepliesMixin
 from krisnai.live.responder import break_837
 from krisnai.live.s1 import FEES, PAYER_ID, PAYER_NAME, SALT, TOKEN, _engine, _free_port, _Srv
-from krisnai.live.transcripts import TYPES, Visit, generate
+from krisnai.live.transcripts import TYPES, Visit, generate, generate_wide
 from krisnai.live.world import LiveWorld
 from krisnai.ops import run_period
 from krisnai.synthea import x12out
@@ -86,6 +86,7 @@ class StreamConfig:
     # switches for the three parallel pieces of work; each is off by default so existing behaviour and tests are unchanged
     payers: str = "single"  # S6: "single" (one payer, as before) or "network" (several payers, one picked per visit)
     reader: str = "rules"  # S7: how transcripts are read: "rules" or "rules+ai" (an AI proposal, checked by the rules)
+    wide: bool = False  # visits come from generate_wide (the whole catalog, many kinds of problem) instead of the seven-condition generator
     replies: bool = False  # S8: the bots answer the payer's replies (corrected claims, appeals, disputes, records)
     reject_rate: float = 0.0  # S8: the share of claims sent with a data-entry error the clearinghouse will reject
     lapsed_ids: tuple[int, ...] = ()  # visits (1-based) whose coverage has lapsed, when chosen one by one
@@ -110,7 +111,7 @@ class Stream(RepliesMixin):
         self.mutations = 0
         for d in ("inbox", "archive", "claims", "evidence"):
             (out / d).mkdir(parents=True, exist_ok=True)
-        self.visits: list[Visit] = visits if visits is not None else generate(cfg.seed, cfg.count, cfg.start)
+        self.visits: list[Visit] = visits if visits is not None else (generate_wide if cfg.wide else generate)(cfg.seed, cfg.count, cfg.start)
         self.state = self._load()
         self.seen_events = {json.loads(ln)["key"] for ln in (out / "events.jsonl").read_text("utf-8").splitlines() if ln} if (out / "events.jsonl").exists() else set()
         self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed, sample_rate=cfg.sample_rate), reader=cfg.reader)

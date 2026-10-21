@@ -107,7 +107,7 @@ def claim_traces(run: Path, st: dict, events: list[dict]) -> list[dict]:
                 for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
         claims.append({
             "id": eid, "claim": e.get("claim", "") if e.get("billed_on") else "", "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
-            "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""),
+            "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""), "payer_id": e.get("payer_id", ""),
             "payer": truth.get(e.get("claim", "")), "work": work,
             "agents": sorted((a for k in sorted(keys) for a in log.get(k, [])), key=lambda a: (a["first"], a["agent"])), "events": [x for x in events if x["subject"] in keys],
         })  # fmt: skip

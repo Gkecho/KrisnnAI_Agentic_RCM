@@ -109,7 +109,7 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
         try:
             h = int(hashlib.sha256("".join(v.text for v in visits).encode()).hexdigest(), 16)
             cfg = StreamConfig(count=len(visits), seed=h % 1000, start=date(2026, 10, 21), per_day=5, engine=engine, bots=engine, serve=serve_ports,
-                               early_stop=True, sample_rate=0.0, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, payers="network", **PAYER_MODES[payer])  # fmt: skip
+                               early_stop=True, sample_rate=0.0, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, payers="network", replies=True, reject_rate=0.05, **PAYER_MODES[payer])  # fmt: skip
             run_stream(r["out"], cfg, emr_factories[emr](), visits=visits, log=lambda *_: None)
             r["status"] = "done"
         except Exception as e:  # noqa: BLE001

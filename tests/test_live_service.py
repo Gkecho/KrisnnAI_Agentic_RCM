@@ -48,7 +48,7 @@ def test_a_complete_visit_goes_all_the_way_to_a_payer_decision_and_a_remit(tmp_p
     d = run(client(tmp_path), next(s for s in samples() if "problem" not in s["label"]), payer="pays")
     assert d["status"] == "done", d["error"]
     c = d["claims"][0]
-    assert c["coding"]["checks"] and c["payer"] and c["payer"]["outcome"] == "paid" and c["stage"] == "adjudicated"
+    assert c["coding"]["checks"] and c["payer"] and c["payer"]["outcome"] == "paid" and c["stage"] in ("adjudicated", "patient_balance", "settled")
     steps = {e["step"] for e in d["events"]}
     assert {"1 appointment", "2 eligibility", "3 visit", "4 claim", "5 clearinghouse", "6 payer", "7 remit"} <= steps
     assert d["ledger"]["cash_collected"] == "0.00" and d["ledger"]["remits_read"] == 1

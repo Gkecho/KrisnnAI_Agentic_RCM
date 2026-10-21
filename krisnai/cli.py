@@ -180,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("--port", type=int, default=8780, help="serve: the port for the local demo service")
     lv.add_argument("--emr", choices=["fake", "openemr"], default="fake", help="serve: the EMR a typed-in visit is written to")
     lv.add_argument("--js", type=Path, help="export: where to write tools_stream.js for the product preview")
+    lv.add_argument("--wide", action="store_true", help="run: visits across the whole catalog with many kinds of problem")
+    lv.add_argument("--network", action="store_true", help="run: six payers, one picked at random per visit")
+    lv.add_argument("--replies", action="store_true", help="run: the bots answer the payer's replies (demo only, ADR-0003)")
+    lv.add_argument("--reject-rate", type=float, default=0.0, help="run: the share of claims sent with a data-entry error")
     lv.add_argument("--fresh", action="store_true", help="run: wipe the output folder first (otherwise a saved run resumes)")
     lv.add_argument("--fake-emr", action="store_true", help="run: use an in-memory EMR instead of the local OpenEMR (no Docker)")
     lv.add_argument("--no-engine", action="store_true", help="run: skip the engine and the bots")
@@ -456,7 +460,8 @@ def main(argv: list[str] | None = None) -> int:
             emr = FakeEmr() if args.fake_emr else OpenEmrPort(oeseed._Server(OpenEmrAuth(args.work)))
             out = args.out if args.out != Path("out/live_s1") else Path("out/live_run")
             cfg = StreamConfig(count=args.count, seed=args.seed, policy_on=args.policy == "on", engine=not args.no_engine,
-                               bots=not args.no_engine)  # fmt: skip
+                               bots=not args.no_engine, wide=args.wide, payers="network" if args.network else "single",
+                               replies=args.replies, reject_rate=args.reject_rate)  # fmt: skip
             print(json.dumps(run_stream(out, cfg, emr, fresh=args.fresh, crash_after=args.crash_after), indent=1, sort_keys=True))
             return 0
         if args.live_cmd == "s2":

@@ -97,7 +97,39 @@ class CodingRecord:
 
 REASON_OF = {"signed": "unsigned", "baseline": "missing_plan", "status": "status_unclear", "one_diagnosis": "two_problems",
              "depth": "thin_chronic", "mue": "unit_limit", "ncci": "code_pair", "laterality": "laterality_missing",
-             "time_documented": "time_missing", "procedure_documented": "procedure_not_documented", "uncertainty": "reader_uncertain"}  # fmt: skip
+             "time_documented": "time_missing", "procedure_documented": "procedure_not_documented", "uncertainty": "reader_uncertain",
+             "visit_kind": "visit_kind", "indication": "missing_necessity"}  # fmt: skip
+
+
+HIGH_MARKERS = re.compile(r"reviewed (?:the )?(?:outside )?(?:records|results)|risk of (?:hospital )?admission|hospitali[sz]ation", re.I)
+INDICATION_RE = re.compile(r"indication\s*:|reason for (?:this|the)|because|due to|to (?:evaluate|assess|rule out|look for|check for|investigate|exclude)|concern(?:ed)? (?:for|about)|r/o|rule out|suspect", re.I)
+WEAK_INDICATION_RE = re.compile(r"routine screening|to be thorough|just in case|for completeness", re.I)
+
+
+def _em_level(rd: Reading, text: str, family: str) -> str:
+    """The office visit code by how deep the documentation is (a demo convention, not the AMA tables): straightforward, low, moderate, high."""
+    base = a4rules.supported_level(family, rd.elements)  # 99213/99214 or 99203/99204
+    low, mid = a4.FAMILIES[family]
+    hi = "99215" if family == "established" else "99205"
+    st = "99212" if family == "established" else "99202"
+    if base == mid:
+        return hi if HIGH_MARKERS.search(text) else mid
+    return st if len(rd.hpi) <= 1 and len(rd.systems) <= 1 else low
+
+
+def _missing_indication(rd: Reading, text: str) -> list[str]:
+    """Tests and images that need a stated reason (catalog `needs_indication`) where the note gives none, or only a weak one."""
+    out = []
+    low = text.lower()
+    for s in rd.services:
+        c = catalog.service_by_cpt(s.cpt)
+        if not (c and c.needs_indication):
+            continue
+        i = low.find(s.evidence.lower()[:40])
+        window = text[i: i + len(s.evidence) + 170] if i >= 0 else s.evidence
+        if not INDICATION_RE.search(window) or WEAK_INDICATION_RE.search(window):
+            out.append(s.name)
+    return out
 
 
 def _letters(n: int) -> list[str]:
@@ -122,13 +154,14 @@ def _lines(rd: Reading) -> list[dict]:
     return out
 
 
-def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool) -> list[Check]:
+def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool, text: str = "") -> list[Check]:
     dx = rd.diagnoses
     first = catalog.condition_by_icd(dx[0].icd10) if dx else None
     chronic = bool(dx) and (dx[0].chronic or (first.chronic if first else False))
-    docs_low = em_billed and cpt in ("99213", "99203")
+    docs_low = em_billed and cpt in ("99212", "99213", "99202", "99203")
     elements = rd.elements
     status_ok = rd.status != "unknown" or not em_billed
+    kinds = sorted({k for h in dx if (c := catalog.condition_by_icd(h.icd10)) and (k := c.visit_kind)} | {s.family for s in rd.services if s.family in ("preventive", "emergency")})
     checks = [
         Check("signed", rd.signed, "the note is signed" if rd.signed else "the note is not signed"),
         Check("baseline", set(a4.BASELINE) <= elements, "assessment and plan documented" if set(a4.BASELINE) <= elements
@@ -140,6 +173,8 @@ def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool) -> list[C
         Check("depth", not (chronic and docs_low), "documentation fits the problem" if not (chronic and docs_low)
               else "a chronic-condition follow-up is documented as a minor visit"),  # fmt: skip
     ]
+    if kinds:
+        checks.insert(1, Check("visit_kind", False, f"a {' and '.join(kinds)} visit is coded from the patient's age band or the emergency level, which a coder decides"))
     mue_map = dict(DEFAULT_MUE)
     over = [f"{ln['cpt']}: {ln['units']} units, limit {mue_map.get(ln['cpt'], 1)}" for ln in lines if ln["units"] > mue_map.get(ln["cpt"], 1)]
     if not lines:
@@ -149,7 +184,7 @@ def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool) -> list[C
         checks.append(Check("mue", not over, "; ".join(over) if over else "every line is within its unit limit"))
     codes = ([cpt] if em_billed and cpt else []) + [ln["cpt"] for ln in lines]
     pairs = [f"{a} with {b}" for a, b, _ in DEFAULT_NCCI if a in codes and b in codes]
-    em_proc = em_billed and any(ln["family"] in PROCEDURE_FAMILIES for ln in lines)
+    em_proc = em_billed and any(ln["family"] in PROCEDURE_FAMILIES + ("therapy",) for ln in lines)
     if len(codes) <= 1:
         checks.append(Check("ncci", True, "one procedure line, so no pair of codes to conflict"))
     elif pairs or em_proc:
@@ -175,6 +210,9 @@ def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool) -> list[C
             problems.append("no diagnosis to point to")
         problems += [f"{ln['name']} is only ordered, not documented as done" for ln in lines if ln["status"] == "ordered" and ln["family"] in PROCEDURE_FAMILIES + ("therapy",)]
         checks.append(Check("procedure_documented", not problems, "each service has evidence and a diagnosis" if not problems else "; ".join(problems)))
+    no_ind = _missing_indication(rd, text)
+    if no_ind:
+        checks.append(Check("indication", False, f"no clear reason (medical necessity) is stated for: {', '.join(no_ind)}"))
     if rd.uncertainties:
         shown = "; ".join(rd.uncertainties[:3]) + (f"; and {len(rd.uncertainties) - 3} more" if len(rd.uncertainties) > 3 else "")
         checks.append(Check("uncertainty", False, f"the reader could not interpret: {shown}"))
@@ -218,13 +256,13 @@ class Coder:
         rd = self.read(text, signed)
         dx = [(h.icd10, h.name) for h in rd.diagnoses]
         lines = _lines(rd)
-        therapy_only = bool(lines) and all(ln["family"] == "therapy" for ln in lines)
+        therapy_only = bool(lines) and all(ln["family"] == "therapy" for ln in lines) and len(rd.hpi) < 2 and not rd.systems  # a therapy session; with a full visit note it is a visit plus therapy
         em_billed = not therapy_only
         family = {"new": "new", "established": "established"}.get(rd.status, "established")
-        cpt = a4rules.supported_level(family, rd.elements) if rd.status != "unknown" and em_billed else ""
+        cpt = _em_level(rd, text, family) if rd.status != "unknown" and em_billed else ""
         if not em_billed:
             cpt = lines[0]["cpt"]
-        checks = _checks(rd, cpt or "99213", lines, em_billed)
+        checks = _checks(rd, cpt or "99213", lines, em_billed, text)
         failed = [c for c in checks if not c.ok]
         flags = [f"{h.icd10} is an unspecified code ({h.name}); a coder may be able to document more" for h in rd.diagnoses if h.unspecified]
         flags += [f"not coded: {n}" for n in rd.notes]

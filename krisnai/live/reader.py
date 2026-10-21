@@ -621,7 +621,8 @@ def read(text: str, signed: bool = True) -> Reading:
     if not exam_parts:
         exam_parts = [masked[a:b] for a, b in zip(doc.bounds, doc.bounds[1:], strict=False) if EXAM_CUE.search(masked[a:b])]
     exam_text = "\n".join(exam_parts)
-    rd.systems = [name for name, pat in SYSTEM_PATTERNS.items() if re.search(rf"\b(?:{pat})\b", exam_text, re.I)]
+    exam_text = re.sub(r"\b(?:back|arm|leg|trunk|chest|abdominal|facial|scalp|hand|foot|knee|shoulder)\s+(skin|lesion|rash)\b", r"\1", exam_text, flags=re.I)  # 'back skin' is one finding on skin
+    rd.systems =[name for name, pat in SYSTEM_PATTERNS.items() if re.search(rf"\b(?:{pat})\b", exam_text, re.I)]
 
     # ---- the assessment region
     ass_spans = list(spans.get("assessment", [])) + list(spans.get("ap", []))
