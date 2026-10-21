@@ -42,6 +42,8 @@ from krisnai.knowledge.demo import demo_book
 from krisnai.live.coder import Coder, Policy
 from krisnai.live.emr import PROVIDER_NPI, EmrPort
 from krisnai.live.payer import PayerConfig, PayerSim
+from krisnai.live.reply_stage import RepliesMixin
+from krisnai.live.responder import break_837
 from krisnai.live.s1 import FEES, PAYER_ID, PAYER_NAME, SALT, TOKEN, _engine, _free_port, _Srv
 from krisnai.live.transcripts import TYPES, Visit, generate
 from krisnai.live.world import LiveWorld
@@ -99,7 +101,7 @@ class Result:
     summary: dict = field(default_factory=dict)
 
 
-class Stream:
+class Stream(RepliesMixin):
     def __init__(self, cfg: StreamConfig, out: Path, emr: EmrPort, log=print, crash_after: int | None = None, visits: list[Visit] | None = None):  # noqa: ANN001
         self.cfg, self.out, self.emr, self.log, self.crash_after = cfg, out, emr, log, crash_after
         self.mutations = 0
@@ -116,6 +118,7 @@ class Stream:
         self.world = LiveWorld(self.payer, cfg.start)
         for member, active in self.state["members"].items():
             self.payers[self.state["enc"].get(member, {}).get("payer_id", PAYER_ID)].enrol(member, active)
+        self._init_replies()  # S8
         self._rebuild_payer()
 
     # ------------------------------------------------------------------------------------------ state
@@ -130,6 +133,8 @@ class Stream:
 
     def _save(self) -> None:
         self.state["coder_per_day"] = dict(self.coder.per_day)
+        if self.cfg.replies:
+            self.state["reply_per_day"] = dict(self.reply_policy.per_day)
         tmp = self.out / "state.json.tmp"
         text = json.dumps(self.state, indent=1, sort_keys=True)
         tmp.write_text(text, encoding="utf-8")
@@ -164,11 +169,11 @@ class Stream:
         """After a restart: replay the claims already submitted so the world and the payer hold what they held before."""
         for eid in sorted(self.state["enc"]):
             e = self.state["enc"][eid]
-            f = self.out / "claims" / f"{e.get('claim', '')}.837"
-            if e.get("billed_on") and f.exists() and e["stage"] in ("adjudicated", "rejected"):
-                billed = date.fromisoformat(e["billed_on"])
+            f = self.out / "claims" / e.get("file", f"{e.get('claim', '')}.837")  # S8: the file last sent (a broken or corrected claim)
+            if e.get("billed_on") and f.exists() and e["stage"] in ("adjudicated", "rejected", "reply_pending", "replied", "settled", "patient_balance", "review"):
+                billed = date.fromisoformat(e.get("adjudicated_on") or e["billed_on"])
                 self.world.accept_claims(f.read_text("utf-8"), billed)
-                if e["stage"] == "adjudicated" and e.get("claim") not in self.world.rejected:
+                if e.get("remit_date") and e.get("claim") not in self.world.rejected:
                     c = next(c for c in self.world.accepted if c.claim_id == e["claim"])
                     self.payer_for(e).adjudicate(c, billed)
         for d in self._all_cases().values():
@@ -208,7 +213,7 @@ class Stream:
 
     def end_day(self) -> date:
         last_visit = max(v for _, _, _, v in self.schedule())
-        return last_visit + timedelta(days=self.cfg.confirm_days + 14 + 21 + self.cfg.settle_days)
+        return last_visit + timedelta(days=self.cfg.confirm_days + 14 + 21 + self.cfg.settle_days + (100 if self.cfg.replies else 0))  # S8: room for up to three rounds of replies
 
     # ------------------------------------------------------------------------------------------ one encounter
     def _inactive(self, member: str) -> bool:
@@ -291,12 +296,18 @@ class Stream:
             self._advance(e, "billed")
         if e["stage"] == "billed":
             text = (self.out / "claims" / f"{e['claim']}.837").read_text("utf-8")
+            broken = self._reject_kind(e["claim"])  # S8: a seeded share of claims leave with a data-entry error the clearinghouse will reject
+            if broken:
+                text = break_837(text, broken)
+                self._write(f"{e['claim']}.sent.837", text, "claims")
+                e["file"] = f"{e['claim']}.sent.837"
             got = client.submit_claim(text)
             self._write(f"999_{e['claim']}.999", got["999"])
             self._write(f"277CA_{e['claim']}.277ca", got["277CA"])
             bad = [r for r in got["results"] if not r["ok"]]
             self._event(f"{eid}:ch", day, "5 clearinghouse", "Mock clearinghouse", "mock", e["claim"], "rejected" if bad else "accepted", bad[0]["reason"] if bad else "999 and 277CA accepted")
             if bad:
+                e["reject_reason"] = bad[0]["reason"]
                 self._advance(e, "rejected")
             else:
                 c = next(c for c in self.world.accepted if c.claim_id == e["claim"])
@@ -331,6 +342,7 @@ class Stream:
             self.state["issued"].append(cid)
             self._event(f"{cid}:835", day, "7 remit", "Payer sim", "mock", cid, d.outcome, f"835 issued: {d.outcome}" + (f" CARC {d.carc}" if d.carc else ""))
             self._commit()
+        self._replies_tick(day, client)  # S8: the bots reply to the payer's reply (no-op unless cfg.replies)
         for kind, cols in (("appointments", ["appointment_id", "payer_id", "provider_npi", "patient_ref", "appt_date", "booked_on", "cpt", "status"]),
                            ("visits", ["visit_id", "payer_id", "provider_npi", "patient_ref", "dos", "cpt", "units"]),
                            ("notes", ["visit_id", "note_date", "signed_date", "minutes", "elements"])):  # fmt: skip
@@ -394,6 +406,11 @@ class Stream:
     def _settled(self, day: date) -> bool:
         """Every encounter is billed and paid out, waiting for a coder, or rejected, and `react_days` have passed since the last remit."""
         encs = list(self.state["enc"].values())
+        if self.cfg.replies:  # S8: not settled until every claim is paid, sent to a person, or has a patient balance
+            if len(encs) < len(self.visits) or any(e["stage"] not in ("settled", "patient_balance", "review", "pending_coder") for e in encs):
+                return False
+            dates = [date.fromisoformat(x) for e in encs for x in ([e.get("remit_date")] + [r["answer_on"] for r in e.get("rounds", [])]) if x]
+            return day >= (max(dates) if dates else date.fromisoformat(max(e["visit_day"] for e in encs))) + timedelta(days=self.cfg.react_days)
         if len(encs) < len(self.visits) or any(e["stage"] not in ("adjudicated", "rejected", "pending_coder") for e in encs):
             return False
         remits = [date.fromisoformat(e["remit_date"]) for e in encs if e.get("remit_date")]
@@ -426,6 +443,8 @@ class Stream:
             "pended": sum(int(r["pended"]) for r in truth), "remits_issued": len(self.state["issued"]),
             "cards_for_stream_claims": cards, "coder_queue": len(pend), "emr": self.emr.counts(),
         }  # fmt: skip
+        if self.cfg.replies:
+            summary["replies"] = self._replies_finish()
         (self.out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True), encoding="utf-8")
         return summary
 
