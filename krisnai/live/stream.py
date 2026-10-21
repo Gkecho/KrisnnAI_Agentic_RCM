@@ -108,7 +108,7 @@ class Stream:
         self.visits: list[Visit] = visits if visits is not None else generate(cfg.seed, cfg.count, cfg.start)
         self.state = self._load()
         self.seen_events = {json.loads(ln)["key"] for ln in (out / "events.jsonl").read_text("utf-8").splitlines() if ln} if (out / "events.jsonl").exists() else set()
-        self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed, sample_rate=cfg.sample_rate))
+        self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed, sample_rate=cfg.sample_rate), reader=cfg.reader)
         self.coder.per_day = dict(self.state.get("coder_per_day", {}))
         self.payer = PayerSim(PAYER_ID, PAYER_NAME, book=demo_book(), config=PayerConfig(
             seed=cfg.seed, pend_rate=cfg.pend_rate, deny_rate=cfg.deny_rate, deviation_rate=cfg.deviation_rate))

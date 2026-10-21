@@ -1,11 +1,17 @@
 # ruff: noqa: E501  (regex tables and phrase pools read better on one line)
-"""The transcript coder for the live encounter stream: rules first, no model.
+"""The transcript coder for the live encounter stream: rules first, AI only as a checked second opinion.
 
-It reads a visit transcript and a signed flag, extracts the named note elements, and suggests an E/M code and one
-diagnosis. Then the exception-only policy of ADR-0002 decides the route:
+`krisnai.live.reader.read` turns any visit note into a `Reading`. This module works on that reading: it suggests an E/M code, the
+procedure / lab / imaging / therapy codes with units and diagnosis pointers, and the ICD-10 diagnoses from the catalog. Then the
+exception-only policy of ADR-0002 decides the route:
 
   * every deterministic check passes and the policy is on  -> auto-accepted "by policy" (a 10% sample still goes to a coder)
   * any check fails, the policy is off, or a cap is reached   -> routed to a coder WITH the reason
+
+The seven original checks are kept (signed, baseline, status, one_diagnosis, depth, mue, ncci). Four more are added when they apply:
+laterality required, time documented for timed services, procedure documentation, and "uncertainty" (anything the reader could not
+interpret ALWAYS routes to a coder). `reader="rules+ai"` additionally asks `krisnai.live.ai_reader.AiReader` for a proposal; the AI can
+add suggestions or raise a disagreement but never overrides the rules, and a disagreement is an uncertainty.
 
 Demo tenant only. The policy is off by default; the answer key lives in `transcripts.py` and this module never imports it.
 """
@@ -19,34 +25,20 @@ from datetime import date
 
 from krisnai.agents.a4_coding import config as a4
 from krisnai.agents.a4_coding import rules as a4rules
-from krisnai.agents.a5_prevention.config import DEFAULT_MUE
+from krisnai.agents.a5_prevention.config import DEFAULT_MUE, DEFAULT_NCCI
+from krisnai.live import catalog
+from krisnai.live.ai_reader import AiReader
+from krisnai.live.reader import Reading, ServiceHit, read
 
-# ---------------------------------------------------------------------------------------------------- extraction
-HPI_PATTERNS = {
-    "onset": r"\b(started|began|onset|since)\b",
-    "duration": r"\bfor (about |over )?(\w+ )?(hours?|days?|weeks?|months?)\b|\bover (a|the past|the last) (\w+ )?(week|month|day)",
-    "severity": r"\b\d+ out of (10|ten)\b|\b(mild|moderate|severe)\b",
-    "location": r"\b(left|right|lower|upper) (side|back|knee|chest|abdomen)\b|\b(in|on) my (\w+ )?(throat|back|chest|abdomen|side)\b",
-    "associated": r"\b(also|along with|with some|plus)\b[^.]{0,40}\b(fever|nausea|cough|fatigue|dizz\w+|headache|chills)\b",
-    "modifying": r"\b(worse when|better with|worse at|relieved by|gets worse|improves with)\b",
-}
-SYSTEMS = ("throat", "neck", "lungs", "heart", "abdomen", "skin", "back", "extremities", "eyes", "ears")
-DX = {  # keyword pattern -> (icd10, text)
-    r"pharyngitis|sore throat": ("J02.9", "Acute pharyngitis, unspecified"),
-    r"low back pain|back pain": ("M54.50", "Low back pain, unspecified"),
-    r"urinary tract infection|\buti\b": ("N39.0", "Urinary tract infection, site not specified"),
-    r"hypertension|high blood pressure": ("I10", "Essential (primary) hypertension"),
-    r"diabetes": ("E11.9", "Type 2 diabetes mellitus without complications"),
-    r"\bcough\b": ("R05.9", "Cough, unspecified"),
-    r"knee pain": ("M25.569", "Pain in unspecified knee"),
-}
-CHRONIC = {"I10", "E11.9"}  # a follow-up for these is expected to be documented in depth
-NEW_RE = re.compile(r"first (time|visit)|new patient|never been seen|not been here before", re.I)
-EST_RE = re.compile(r"last (here|seen|visit)|returning patient", re.I)
+CHRONIC = {"I10", "E11.9"}  # kept for callers of the old module; the live test is `Condition.chronic` in the catalog
+PROCEDURE_FAMILIES = ("procedure", "injection")  # billed with an E/M these need a modifier 25 decision
+READERS = ("rules", "rules+ai")
 
 
 @dataclass
 class Extraction:
+    """The old shape of a reading, kept for callers of `extract`."""
+
     elements: set[str]
     hpi_components: int
     systems: int
@@ -55,40 +47,9 @@ class Extraction:
     signed: bool
 
 
-def _section(text: str, start: str, end: str | None) -> str:
-    m = re.search(start, text, re.I)
-    if not m:
-        return ""
-    rest = text[m.end():]
-    if end:
-        e = re.search(end, rest, re.I)
-        rest = rest[: e.start()] if e else rest
-    return rest
-
-
 def extract(text: str, signed: bool) -> Extraction:
-    hpi = _section(text, r"what brings you in", r"\bexam\b")
-    n_hpi = sum(1 for p in HPI_PATTERNS.values() if re.search(p, hpi, re.I))
-    exam = _section(text, r"\bexam:", r"assessment")
-    systems = sum(1 for s in SYSTEMS if re.search(rf"\b{s}\b", exam, re.I))
-    assess = _section(text, r"assessment:", r"\bplan\b|signed")
-    dx, seen = [], set()
-    for pat, (code, name) in DX.items():
-        if re.search(pat, assess, re.I) and code not in seen:
-            seen.add(code)
-            dx.append((code, name))
-    els: set[str] = set()
-    if len(assess.split()) >= 2 and dx:
-        els.add("assessment")
-    after = _section(text, r"assessment:", None)
-    if re.search(r"\bplan\s*:|\b(prescribe|follow up|return in|refer)\b", after, re.I):
-        els.add("plan")
-    if n_hpi >= 3:
-        els.add("history_detailed")
-    if systems >= 2:
-        els.add("exam_expanded")
-    status = "new" if NEW_RE.search(text) else "established" if EST_RE.search(text) else "unknown"
-    return Extraction(els, n_hpi, systems, status, dx, signed and bool(re.search(r"signed electronically", text, re.I)))
+    rd = read(text, signed)
+    return Extraction(rd.elements, len(rd.hpi), len(rd.systems), rd.status, [(c.icd10, c.name) for c in rd.diagnoses], rd.signed)
 
 
 # ---------------------------------------------------------------------------------------------------- the decision
@@ -114,7 +75,7 @@ class Check:
 class CodingRecord:
     visit_id: str
     day: str
-    cpt: str
+    cpt: str  # the E/M code; for a visit with only timed therapy or the like, the first service code
     dx: list[tuple[str, str]]
     elements: list[str]
     checks: list[Check]
@@ -122,6 +83,11 @@ class CodingRecord:
     reason: str  # why it went to a coder; "" for auto
     approval: str  # "policy:<id>" for auto; "pending:coder" while a person has to decide
     note: str = ""
+    procedures: list[dict] = field(default_factory=list)  # service lines: cpt, units, modifiers, dx pointers, status, evidence
+    uncertainties: list[str] = field(default_factory=list)  # what the reader could not interpret
+    flags: list[str] = field(default_factory=list)  # worth a coder's attention but not a reason to stop (e.g. an unspecified code)
+    reader: str = "rules"
+    ai: dict = field(default_factory=dict)  # what the AI layer proposed, accepted, rejected (empty when it did not run)
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -130,25 +96,98 @@ class CodingRecord:
 
 
 REASON_OF = {"signed": "unsigned", "baseline": "missing_plan", "status": "status_unclear", "one_diagnosis": "two_problems",
-             "depth": "thin_chronic"}  # fmt: skip
+             "depth": "thin_chronic", "mue": "unit_limit", "ncci": "code_pair", "laterality": "laterality_missing",
+             "time_documented": "time_missing", "procedure_documented": "procedure_not_documented", "uncertainty": "reader_uncertain"}  # fmt: skip
 
 
-def _checks(ex: Extraction, cpt: str) -> list[Check]:
-    chronic = bool(ex.diagnoses) and ex.diagnoses[0][0] in CHRONIC
-    docs_low = cpt in ("99213", "99203")
-    mue = dict(DEFAULT_MUE).get(cpt, 1)
-    return [
-        Check("signed", ex.signed, "the note is signed" if ex.signed else "the note is not signed"),
-        Check("baseline", set(a4.BASELINE) <= ex.elements, "assessment and plan documented" if set(a4.BASELINE) <= ex.elements
-              else f"missing: {', '.join(e for e in a4.BASELINE if e not in ex.elements)}"),  # fmt: skip
-        Check("status", ex.status != "unknown", f"patient is {ex.status}" if ex.status != "unknown"
-              else "the transcript never says whether the patient is new or established"),  # fmt: skip
-        Check("one_diagnosis", len(ex.diagnoses) == 1, f"{len(ex.diagnoses)} diagnosis found"),
+def _letters(n: int) -> list[str]:
+    return [chr(ord("A") + i) for i in range(min(n, 12))]
+
+
+def _lines(rd: Reading) -> list[dict]:
+    """One service line per catalog service found, with units, modifiers and the diagnosis pointers."""
+    dx = rd.diagnoses
+    out = []
+    for s in rd.services:
+        pointers = _letters(len(dx))[:1]
+        for i, h in enumerate(dx[:12]):
+            c = catalog.condition_by_icd(h.icd10)
+            if c and any(re.search(rf"(?<![a-z]){re.escape(k)}", s.evidence, re.I) for k in c.keywords):
+                pointers = [chr(ord("A") + i)]
+                break
+        mods = {"left": ["LT"], "right": ["RT"], "bilateral": ["50"]}.get(s.laterality, []) if s.needs_laterality else []
+        out.append({"cpt": s.cpt, "name": s.name, "family": s.family, "units": s.units, "minutes": s.minutes, "modifiers": mods,
+                    "dx_pointers": pointers if dx else [], "laterality": s.laterality, "status": s.status, "source": s.source,
+                    "evidence": s.evidence})  # fmt: skip
+    return out
+
+
+def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool) -> list[Check]:
+    dx = rd.diagnoses
+    first = catalog.condition_by_icd(dx[0].icd10) if dx else None
+    chronic = bool(dx) and (dx[0].chronic or (first.chronic if first else False))
+    docs_low = em_billed and cpt in ("99213", "99203")
+    elements = rd.elements
+    status_ok = rd.status != "unknown" or not em_billed
+    checks = [
+        Check("signed", rd.signed, "the note is signed" if rd.signed else "the note is not signed"),
+        Check("baseline", set(a4.BASELINE) <= elements, "assessment and plan documented" if set(a4.BASELINE) <= elements
+              else f"missing: {', '.join(e for e in a4.BASELINE if e not in elements)}"),  # fmt: skip
+        Check("status", status_ok, f"patient is {rd.status}" if rd.status != "unknown"
+              else ("no E/M code is billed, so new or established does not matter" if status_ok
+                    else "the transcript never says whether the patient is new or established")),  # fmt: skip
+        Check("one_diagnosis", len(dx) == 1, f"{len(dx)} diagnosis found"),
         Check("depth", not (chronic and docs_low), "documentation fits the problem" if not (chronic and docs_low)
               else "a chronic-condition follow-up is documented as a minor visit"),  # fmt: skip
-        Check("mue", 1 <= mue, f"1 unit, limit {mue}"),
-        Check("ncci", True, "one procedure line, so no pair of codes to conflict"),
     ]
+    mue_map = dict(DEFAULT_MUE)
+    over = [f"{ln['cpt']}: {ln['units']} units, limit {mue_map.get(ln['cpt'], 1)}" for ln in lines if ln["units"] > mue_map.get(ln["cpt"], 1)]
+    if not lines:
+        limit = mue_map.get(cpt or "99213", 1)
+        checks.append(Check("mue", 1 <= limit, f"1 unit, limit {limit}"))
+    else:
+        checks.append(Check("mue", not over, "; ".join(over) if over else "every line is within its unit limit"))
+    codes = ([cpt] if em_billed and cpt else []) + [ln["cpt"] for ln in lines]
+    pairs = [f"{a} with {b}" for a, b, _ in DEFAULT_NCCI if a in codes and b in codes]
+    em_proc = em_billed and any(ln["family"] in PROCEDURE_FAMILIES for ln in lines)
+    if len(codes) <= 1:
+        checks.append(Check("ncci", True, "one procedure line, so no pair of codes to conflict"))
+    elif pairs or em_proc:
+        why = ([f"code pair listed in the edit table: {', '.join(pairs)}"] if pairs else []) + (
+            ["an E/M code with a procedure on the same day: a coder decides on modifier 25"] if em_proc else [])
+        checks.append(Check("ncci", False, "; ".join(why)))
+    else:
+        checks.append(Check("ncci", True, f"{len(codes)} codes, no listed pair conflicts"))
+
+    # ---- checks added for procedures, laterality, time and reader uncertainty: present only when they apply
+    needs_lat = [h for h in dx if h.needs_laterality] + [s for s in rd.services if s.needs_laterality]
+    if needs_lat:
+        missing = [getattr(h, "name", "") for h in needs_lat if h.laterality not in ("left", "right", "bilateral")]
+        checks.append(Check("laterality", not missing, "side (left, right or bilateral) documented" if not missing
+                            else f"side not documented for: {', '.join(missing)}"))  # fmt: skip
+    timed = [s for s in rd.services if s.needs_time]
+    if timed:
+        bad = [s.name for s in timed if not s.minutes or s.units < 1]
+        checks.append(Check("time_documented", not bad, "minutes documented" if not bad else f"minutes missing or too few for: {', '.join(bad)}"))
+    if lines:
+        problems = []
+        if not dx:
+            problems.append("no diagnosis to point to")
+        problems += [f"{ln['name']} is only ordered, not documented as done" for ln in lines if ln["status"] == "ordered" and ln["family"] in PROCEDURE_FAMILIES + ("therapy",)]
+        checks.append(Check("procedure_documented", not problems, "each service has evidence and a diagnosis" if not problems else "; ".join(problems)))
+    if rd.uncertainties:
+        shown = "; ".join(rd.uncertainties[:3]) + (f"; and {len(rd.uncertainties) - 3} more" if len(rd.uncertainties) > 3 else "")
+        checks.append(Check("uncertainty", False, f"the reader could not interpret: {shown}"))
+    return checks
+
+
+def _reason(failed: list[Check], rd: Reading) -> str:
+    first = failed[0].name
+    if first == "baseline" and "plan" in rd.elements and "assessment" not in rd.elements:
+        return "missing_assessment"
+    if first == "one_diagnosis" and not rd.diagnoses:
+        return "no_diagnosis"
+    return REASON_OF.get(first, first)
 
 
 def _sampled(visit_id: str, policy: Policy) -> bool:
@@ -160,18 +199,39 @@ def _sampled(visit_id: str, policy: Policy) -> bool:
 class Coder:
     policy: Policy = field(default_factory=Policy)
     per_day: dict[str, int] = field(default_factory=dict)
+    reader: str = "rules"  # "rules" | "rules+ai" (an AI proposal, validated by the rules; see ai_reader.py)
+    ai: AiReader | None = None
+
+    def __post_init__(self) -> None:
+        if self.reader not in READERS:
+            raise ValueError(f"reader must be one of {READERS}, not {self.reader!r}")
+
+    def read(self, text: str, signed: bool) -> Reading:
+        rd = read(text, signed)
+        if self.reader == "rules+ai":
+            if self.ai is None:
+                self.ai = AiReader()
+            rd = self.ai.apply(text, rd)
+        return rd
 
     def code(self, visit_id: str, text: str, signed: bool, day: date) -> CodingRecord:
-        ex = extract(text, signed)
-        family = {"new": "new", "established": "established"}.get(ex.status, "established")
-        cpt = a4rules.supported_level(family, ex.elements) if ex.status != "unknown" else ""
-        checks = _checks(ex, cpt or "99213")
+        rd = self.read(text, signed)
+        dx = [(h.icd10, h.name) for h in rd.diagnoses]
+        lines = _lines(rd)
+        therapy_only = bool(lines) and all(ln["family"] == "therapy" for ln in lines)
+        em_billed = not therapy_only
+        family = {"new": "new", "established": "established"}.get(rd.status, "established")
+        cpt = a4rules.supported_level(family, rd.elements) if rd.status != "unknown" and em_billed else ""
+        if not em_billed:
+            cpt = lines[0]["cpt"]
+        checks = _checks(rd, cpt or "99213", lines, em_billed)
         failed = [c for c in checks if not c.ok]
-        base = {"visit_id": visit_id, "day": day.isoformat(), "cpt": cpt, "dx": ex.diagnoses[:1] if len(ex.diagnoses) == 1 else ex.diagnoses,
-                "elements": sorted(ex.elements), "checks": checks}  # fmt: skip
+        flags = [f"{h.icd10} is an unspecified code ({h.name}); a coder may be able to document more" for h in rd.diagnoses if h.unspecified]
+        flags += [f"not coded: {n}" for n in rd.notes]
+        base = {"visit_id": visit_id, "day": day.isoformat(), "cpt": cpt, "dx": dx, "elements": sorted(rd.elements), "checks": checks,
+                "procedures": lines, "uncertainties": list(rd.uncertainties), "flags": flags, "reader": self.reader, "ai": dict(rd.ai)}  # fmt: skip
         if failed:
-            first = failed[0].name
-            return CodingRecord(**base, route="coder", reason=REASON_OF.get(first, first), approval="pending:coder",
+            return CodingRecord(**base, route="coder", reason=_reason(failed, rd), approval="pending:coder",
                                 note="; ".join(c.detail for c in failed))  # fmt: skip
         if not self.policy.enabled:
             return CodingRecord(**base, route="coder", reason="policy_off", approval="pending:coder",
@@ -186,3 +246,6 @@ class Coder:
         self.per_day[day.isoformat()] = used + 1
         return CodingRecord(**base, route="auto", reason="", approval=f"policy:{self.policy.policy_id}",
                             note="every deterministic check passed")  # fmt: skip
+
+
+__all__ = ["CHRONIC", "Check", "Coder", "CodingRecord", "Extraction", "Policy", "ServiceHit", "extract"]
