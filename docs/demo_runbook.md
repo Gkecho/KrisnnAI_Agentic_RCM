@@ -13,20 +13,20 @@ is on a mock practice with problems we planted, so we can check whether it found
    Docker with OpenEMR (and the Microsoft FHIR server if you show it). Stop Supabase and the Postgres containers.
 2. `krisnai demo` output exists in `out/demo` (`report.html`, `demo.sqlite`, `truth/`). To rebuild: see `docs/demo.md` (takes a while; do it the day before).
 3. Open these tabs: `out/demo/report.html`, `out/stage1/stage1_report.html`, the product preview (`product.html`), a terminal in the repo.
-4. Stedi test key in the environment of the terminal only (`STEDI_API_KEY`), never on screen. Rotate the key you pasted in chat earlier.
+4. Stedi test key in the environment of the terminal only (`set STEDI_API_KEY=...` in that window; I never need it in chat) (`STEDI_API_KEY`), never on screen. Rotate the key you pasted in chat earlier.
 5. Rehearse the three live commands once. If a live step fails, say so and move to the saved report. Do not improvise.
 
 ## The 12-minute path
 | Min | Show | What it proves | Say |
 |---|---|---|---|
-| 0-1 | Preview **My work** and **Agent activity** | The product shape | "This is where it is going. The next screens are the engine behind it." |
+| 0-1 | Preview: use the **Logged in as** dropdown. Open **Billing specialist** (My work, then Review on one item), then **Practice manager** (Morning brief) | Role-based product: each person sees only their own queue from the engine's output, and a Review workspace that explains the finding and records a decision (browser only) | "Each person gets only their own work, and every item says why. This is where it is going; the next screens are the engine behind it." |
 | 1-4 | `out/demo/report.html`: the shadow banner, then the work queue | A mock practice: files loaded, reconciliation gate passed, 15 agents ran, a ranked queue. Quote the counts shown on the page (the full run loaded 6,962 files and built 62,638 events as of 2026-10-14; `ui_data.json` is regenerated from it) | "Every item says why, what to do next, and the dollars. Nothing was sent." |
 | 4-6 | Report: the **planted** table vs the **decisions** table for A8 (denials) and A10 (underpayments) | Answer key vs findings. The simulator planted one payer denying a CPT at 60% (CARC 50) and one payer paying 30% under contract | "We hid the answers in a separate folder, then compared." Show `truth/` is separate |
 | 6-7 | Report: A15 leakage baseline and slices | Payer-wide patterns found beyond single claims | Read the slice with the largest dollars, then say the data is synthetic |
 | 7-9 | `krisnai stedi` (live) | A real call to a clearinghouse sandbox: 270 out, 271 parsed (copay $40, coinsurance 20%, deductible remaining $1,000) | "Real protocol, a test patient. Claim status, claims and remits are not available in their test mode, so those run on our mock." |
 | 9-10 | `out/stage1/stage1_report.html` | Bots against mock clearinghouse and portal; portal hands MFA, CAPTCHA and screen changes to a person | "It stops safely when a portal changes." Show a handed-off case |
 | 10-11 | FHIR: `krisnai openemr status`, then the pulled feeds | Appointments, visits and notes written to OpenEMR 7.0.3 and read back identical (50 patients, 665 appointments, 843 encounters, 790 notes) | "Same path a real EMR would use. OpenEMR is a stand-in, not a vendor EMR." |
-| 11-12 | Preview **Agent controls** and **Approval queue** | The honest gap | "Kill switch, maker-checker and policy history are the next build. Until then it only proposes." |
+| 11-12 | Preview: **Billing manager** > Workflow analytics (Capacity scenarios tab), then **Product tour** > Agent controls | Managers see their team's speed, quality, training needs and a capacity forecast; the staff are **synthetic** and the analysis finds the 9 strengths and weaknesses we planted, with none spurious | "The staff here are made up. It shows what a manager would see once task logging is connected. Kill switch, maker-checker and policy history are the next build; until then it only proposes." |
 
 ## What you can say
 - 15 agents run in shadow mode over claim, remit, ack, status and PM data, and each decision is recorded with its rules, inputs and dollars.
@@ -40,6 +40,7 @@ is on a mock practice with problems we planted, so we can check whether it found
 - Not "works with Epic or athenahealth". OpenEMR is open source, and the integration pattern is the same, not the vendor profiles.
 - Not "agents at levels L1 to L4". Every agent is L0 / shadow. The levels in the preview are the target.
 - Not "time saved". Nothing here measures staff time.
+- Not "it measured our staff". The manager screens use synthetic employees with a planted answer key; real staff analytics needs task-completion logging and the client's sign-off.
 
 ## Likely questions
 | Question | Honest answer |
@@ -55,4 +56,6 @@ is on a mock practice with problems we planted, so we can check whether it found
 2. Value ledger holdout (10%), so "confirmed" is measurable.
 3. Per-claim timeline query and the approval API.
 4. A6 and A7 can raise two cards for one claim (for example SYNC000357); suppress A7 when an open A6 rejection exists.
-5. Preview screens still use illustrative data. A static `ui_data.js` hand-off exists (`docs/ui.md`); wiring one preview screen to it is the quickest way to show real output inside the product picture.
+5. Some preview screens still use illustrative data (Approval queue, Claim timeline, Team & queues, Value ledger, Trust & QA, Agent controls; each is tagged "sample content" on screen). A static `ui_data.js` hand-off exists (`docs/ui.md`); wiring one preview screen to it is the quickest way to show real output inside the product picture.
+6. Staff-level analytics (manager logins) runs on synthetic staff. It needs task-completion logging in the client's systems and policy sign-off before it can run on real people.
+7. Front desk's queue is denials only: A1/A2 have no open tasks because every appointment in the demo run is in the past. Filing and appeal window tables are empty in the demo run.

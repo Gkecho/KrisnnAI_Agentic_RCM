@@ -84,6 +84,24 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
                {"a6_submission", "a7_ar", "a8_denial", "a10_underpay"})  # fmt: skip
     prio = [float(q["priority"]) for q in data["queue"]]
     assert prio == sorted(prio, reverse=True)
+    from collections import Counter
+
+    from krisnai.demo.export import QUEUE_PER_KEY
+
+    shown = Counter(f"{q['owner']}|{q['agent']}" for q in data["queue"])
+    tot = data["queue_totals"]
+    assert set(shown) <= set(tot) and all(n <= QUEUE_PER_KEY for n in shown.values())
+    assert all(tot[k]["open"] >= n for k, n in shown.items()), "the totals count everything that is open"
+    stats = data["queue_stats"]
+    assert set(stats) == set(tot) and all(stats[k]["open"] == tot[k]["open"] and stats[k]["value"] == tot[k]["value"] for k in tot)
+    assert all(sum(x["open"] for x in v["by_cause"]) == v["open"] for v in stats.values()), "every item has a cause"
+    st = data["staff"]
+    assert st["synthetic"] is True and st["employees"] and st["allocation"]
+    assert st["found_vs_planted"]["found"] == st["found_vs_planted"]["planted"]
+    assert {"billing", "coding"} <= set(st["scenarios"]) and {"history", "handle_time", "rework_minutes"} <= set(st)
+    ref = {"carc_routes", "rejection_routes", "ncci_pairs", "mue_limits", "fee_schedule", "auth_requirements",
+           "filing_windows", "appeal_windows", "policy"}  # fmt: skip
+    assert ref <= set(data["reference"]) and data["reference"]["carc_routes"] and data["reference"]["fee_schedule"]
     assert (out / "ui_data.js").read_text(encoding="utf-8").startswith("window.KRISNAI_LIVE = {")
     rp = data["replay"]
     assert rp["reconciliation"] and all(c["passed"] for c in rp["reconciliation"]), "the run's gate passed"

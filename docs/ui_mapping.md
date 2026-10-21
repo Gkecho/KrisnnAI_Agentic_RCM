@@ -1,8 +1,59 @@
 # UI mapping: the product preview and what this repo can feed it
 
-The preview is the "Product preview" section of the KrisnnAI site (`krisnai-site/product.html` and `product-x.js`; illustrative data, no PHI). This page
-says, per screen, what feeds it from `krisnai-rcm`, and what does not exist yet. Read-only today: the data reaches a page through `ui_data.json` /
-`ui_data.js` (see `docs/ui.md`). Checked against the preview files on 2026-10-16; the live `/app` is behind a sign-in and was not opened.
+The preview is the "Product preview" section of the KrisnnAI site (`krisnai-site/product.html`; no PHI). This page says, per screen, what feeds it from
+`krisnai-rcm`, and what does not exist yet. Read-only today: the data reaches the page through `ui_data.js` (see `docs/ui.md`, produced by
+`krisnai/demo/export.py`). Checked against the preview on 2026-10-19 (as of 2026-10-14 in the data). The live `/app` is behind a sign-in; the preview was
+checked locally with a stand-in login.
+
+## Logins: who sees what (preview, 2026-10-19)
+The sign-in page has no role choice. Inside the preview a **"Logged in as"** dropdown in the header lists ten staff roles, two managers and a Product tour. It
+starts on the signed-in role if the site knows it, else on Revenue owner. There is no automated demo path: a person explores freely. Each staff role has a
+queue (engine cards whose `owner` and `agent` match), a Work group (My work, plus Approval queue and Claim timeline where they apply), a Team group (Team &
+queues, Agent activity, Trust & QA) and three role-specific screens: **Results**, **Setup**, **Showcase**.
+
+| Login | Queue (engine owner / agent) | Open items (as of 2026-10-14) | Results | Setup | Showcase |
+|---|---|---|---|---|---|
+| Billing specialist | `biller`; `billing` with A6, A7 | 119 | My scorecard | Rules I rely on (rejection routes) | One item, end to end |
+| Denial specialist | every A8 denial (`billing`, `coding`, `front_desk`) | 238 | My scorecard | Rules I rely on (CARC routes) | One item, end to end |
+| AR lead | `ar_lead` (A7) | 112 | My scorecard | Rules I rely on (windows) | One item, end to end |
+| Payment poster | `payment_poster` (A11) | 39 | My scorecard | none | One item, end to end |
+| Finance | `finance` (A10, A11) | 303 | My scorecard | Rules I rely on (fee schedule) | One item, end to end |
+| Provider | `provider` (A3 signatures) | 371 | My scorecard | none | One item, end to end |
+| Coder | `coder`/`coding` with A4, A5 | 18 | My scorecard | Rules I rely on (NCCI, MUE) | One item, end to end |
+| Front desk | `front_desk` | 64 | My scorecard | Rules I rely on | One item, end to end |
+| Practice manager | `practice_manager` (A9) | 2 | Morning brief | Agent controls | One item, end to end |
+| Revenue owner / CFO | `revenue_assurance_lead` (A15) | 12 | Analytics, History replay, My scorecard | Agent controls, Connections | One item, end to end |
+| Billing manager | billing staff (billers, denial and AR specialists) | team view | Workflow analytics | n/a | n/a |
+| Coding manager | coders | team view | Workflow analytics | n/a | n/a |
+| Product tour (not a login) | none | n/a | Morning brief, Analytics, History replay, Value ledger | Agent controls, Connections | Claim journey, Day in fast-forward, What if, Agent report cards, Before / after |
+
+Front desk's queue is denials (A8) because A1 and A2 have no open tasks in the demo run: every appointment is in the past at the as-of date. The filing and
+appeal windows tables in "Rules I rely on" are empty in the demo run (the engine uses its 365-day default). Not a login: Patient billing
+(`patient_billing`, 518 items) and Compliance (`compliance_owner`, 6 items); engine cards for those owners are not shown to anyone yet.
+
+## Review workspace (My work, every role with a queue)
+Clicking **Review** on an item opens a workspace: *what the engine found* (rules passed or flagged, from the card), *where this fits in the workflow* (text
+copied from the site's Workflows page, labelled as a design example, not a result from this run), and decision options per action type (A1, A2, A4, A6,
+A7, A8, A10, A13 and the rest of the queue's action types). Choosing an override needs a typed reason. The last step shows "Recorded" with a demo label and
+"nothing was sent". Decisions live only in the browser session: no write-back, no approval API.
+
+## Manager logins: staff analytics (synthetic)
+`krisnai/demo/staff.py` builds a **synthetic** workforce (8 billing staff, 6 coders; fictional names, labelled synthetic on screen) with a planted answer key
+of strengths and weaknesses, then analyses it the way a real task log would be. It feeds `ui_data.staff` and these screens:
+
+| Screen | What it shows |
+|---|---|
+| Workflow analytics (home) | six tabs: Throughput (stacked bars, first-pass line), Speed vs quality (scatter), Skill matrix, Handling time (box plots), Rework cost, Capacity scenarios |
+| Team workload, Employee analysis | per-person load, speed and first-pass rate by task type, with a minimum sample size before anything is flagged |
+| Work allocation | suggested placement (most constrained task types first; a person with a quality gap on that task is excluded); accept, override with a warning, or accept all; a "Not placed" list with reasons |
+| Training plan | the evidence, the module, a possible mentor, assign |
+| Improvements | process changes the analysis points to |
+
+Capacity scenarios (12 weeks, shown over 6): even split, suggested allocation, + training closes the gaps, + 10% overtime, + an upstream fix halving the top
+denial cause. In the demo run the planted answer key is found 9 of 9 with none spurious; for billing, the suggested allocation clears 311 vs 263 right the
+first time in week 1, in 3 vs 5 weeks, with 6.7 vs 10.8 rework hours; the coding team uses about 45% of its time; 19 `a8_fix_task` items cannot be placed (no
+coder history); the billing ceiling is about 614 tasks a week. **These numbers come from simulated staff**; real staff analytics needs task-completion
+logging (not built) and the client's sign-off on measuring individuals. The 35-hour week and other assumptions are listed in `staff.assumptions`.
 
 ## Agent names in the preview
 A1 Gatekeeper · A2 Permit Clerk · A3 Note Chaser · A4 Code Whisperer · A5 Mirror · A6 Courier · A7 Hunter · A8 Advocate · A9 Coach · A10 Auditor ·
@@ -23,6 +74,10 @@ A11 Bookkeeper · A12 Concierge · A14 Captain · A15 Detective (full) / Scout (
 | **Value ledger** (detected vs confirmed by month, 10% holdout, latest confirmed) | A15 detected-vs-later-paid ledger, A11 postings | Partial. "Confirmed" needs the ERA match to be attributed; **the 10% holdout is not built** |
 | **Agent controls** (levels, kill switches by tenant / payer / agent, change log with gate evidence) | policy table (default allowed / L0 / shadow) | Policy table only. **Kill switch, blast-radius limits, versioned policy and the change log are not built** |
 | **Connections** (ports, swap-to) | adapters: disabled / stub, mock + Stedi clearinghouse, FHIR, portal | Mock and sandbox adapters exist; swapping is configuration. Eligibility verified live on Stedi only |
+| **My scorecard** (per role) | `ui_data.queue_stats`: per owner and agent, open count, dollars, by cause, by payer, age, due | Ready (real counts from the run) |
+| **Rules I rely on** (per role) | `ui_data.reference`: CARC and rejection routes, NCCI pairs, MUE limits, fee schedule, authorization requirements, filing and appeal windows | Ready, read-only. Windows tables are empty in the demo run |
+| **One item, end to end** (per role) | one real queue item plus the Workflows-page text | Item is real; the "without KrisnAI" comparison is a design example, labelled so |
+| **Workflow analytics, Team workload, Employee analysis, Work allocation, Training plan, Improvements** (managers) | `ui_data.staff` from `krisnai/demo/staff.py` | **Synthetic staff.** Needs task-completion logging and client policy sign-off to be real |
 | Showcase: Claim journey, Day in fast-forward, What if, Agent report cards, Before / after | demo content; What if and report cards could use replay; Before / after needs the holdout | Not fed |
 
 ## Worklist pills (Billing screen)
