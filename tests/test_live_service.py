@@ -188,3 +188,13 @@ def test_a_batch_and_a_single_visit_share_the_one_run_at_a_time_rule(tmp_path, m
     assert c.post("/api/run", json={"transcript": "single"}).status_code == 409
     gate.set()
     wait(c, first.json()["id"])
+
+
+def test_the_wide_generator_is_offered_as_a_ready_made_varied_batch(tmp_path):
+    c = client(tmp_path)
+    a = c.get("/api/wide", params={"n": 12, "seed": 5}).json()
+    assert len(a) == 12 and all(x["text"] and x["label"] for x in a)
+    assert a == c.get("/api/wide", params={"n": 12, "seed": 5}).json(), "the same seed gives the same visits"
+    assert a != c.get("/api/wide", params={"n": 12, "seed": 6}).json()
+    assert len(c.get("/api/wide", params={"n": 999}).json()) == service.MAX_BATCH
+    assert any(x["tests"] for x in a), "some visits carry a problem and say which"

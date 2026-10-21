@@ -100,6 +100,21 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
         return {"ok": True, "emr": sorted(emr_factories), "payer": [{"id": k, "label": PAYER_LABEL[k]} for k in PAYER_MODES],
                 "busy": any(r["status"] == "running" for r in runs.values()), "max_transcript": MAX_TRANSCRIPT, "max_batch": MAX_BATCH}  # fmt: skip
 
+    @app.get("/api/wide")
+    def get_wide(n: int = 25, seed: int = 7) -> list[dict]:
+        """Varied visits from the wide generator (the whole catalog, many kinds of problem), labelled with what each one tests."""
+        from krisnai.live.catalog import condition_by_icd
+        from krisnai.live.transcripts import generate_wide
+
+        out = []
+        for v in generate_wide(seed, max(1, min(n, MAX_BATCH)), date(2026, 10, 24)):
+            x = v.expected
+            c = condition_by_icd(x.dx)
+            tests = list(x.problems) + list(x.pressure) + (["coverage lapsed"] if x.lapsed else []) + (["other insurance first"] if x.other_primary else [])
+            out.append({"label": (c.name if c else x.dx) + (f" [{', '.join(t.replace('_', ' ') for t in tests[:3])}]" if tests else ""),
+                        "text": v.text, "signed": v.signed, "lapsed": bool(x.lapsed), "tests": tests})  # fmt: skip
+        return out
+
     @app.get("/api/samples")
     def get_samples() -> list[dict]:
         return samples()
