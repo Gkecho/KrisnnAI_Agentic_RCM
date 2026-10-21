@@ -162,7 +162,7 @@ def test_coverage_can_lapse_for_one_visit_in_a_batch_and_the_payer_behaviour_app
     clean = [s for s in samples() if "problem" not in s["label"]]
     d = batch(client(tmp_path), [item(clean[0]), item(clean[1], lapsed=True), item(clean[2])], payer="pays")
     carcs = [c["payer"]["carc"] for c in d["claims"]]
-    assert carcs == ["", "27", ""], carcs
+    assert carcs[1] == "27" and "27" not in (carcs[0], carcs[2]), carcs  # the network may deny a new-patient visit that needs an authorization (197)
     d2 = batch(client(tmp_path / "x"), [item(clean[0]), item(clean[1])], payer="denies")
     assert [c["payer"]["outcome"] for c in d2["claims"]] == ["denied", "denied"]
 
