@@ -117,3 +117,10 @@ def test_a_real_streamed_run_scores_reconciles_and_writes_its_reports(tmp_path):
     assert sc["coding"]["auto_wrong"] == [] and sc["coding"]["problem_missed"] == []
     assert sc["found"] <= sc["problems"] and (out / "scorecard.html").exists() and (out / "ledger.csv").exists()
     assert "Cash collected: 0.00" in (out / "scorecard.html").read_text("utf-8")
+    from krisnai.live.export import build
+
+    data = build(out)
+    assert len(data["claims"]) == 14 and len(data["book"]) == 10 and data["ledger"]["cash_collected"] == "0.00"
+    paid = [c for c in data["claims"] if c["payer"]]
+    assert paid and all(c["payer"]["claim_id"] == c["claim"] and c["events"] for c in paid), "each claim carries its truth row and its timeline"
+    assert all(c["coding"]["checks"] for c in data["claims"] if c["coding"])

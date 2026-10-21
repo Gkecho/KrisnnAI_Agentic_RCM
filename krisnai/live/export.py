@@ -7,11 +7,13 @@ is invented here, and the file says in its own header that it is a recorded synt
 
 from __future__ import annotations
 
+import csv
 import json
 from collections import Counter
 from pathlib import Path
 
-from krisnai.live.score import write_reports
+from krisnai.knowledge.demo import demo_book
+from krisnai.live.score import _decisions, write_reports
 
 NOTE = ("A recorded run on synthetic data, in shadow mode. The payer is our own simulator, so its rates and deviations are demo settings. "
         "'Real time' is a simulated clock, one day at a time.")
@@ -38,7 +40,20 @@ def build(run: Path) -> dict:
         ["Remit received from the payer", led["remits_read"]],
         ["Paid", outcomes.get("paid", 0)], ["Denied", outcomes.get("denied", 0)], ["Underpaid", outcomes.get("underpaid", 0)],
     ]  # fmt: skip
+    truth = {r["claim_id"]: r for r in csv.DictReader((run / "truth.csv").read_text("utf-8").splitlines())}
+    dec = _decisions(run)
+    claims = []
+    for eid, e in sorted(st["enc"].items()):
+        keys = {e["appt"], e["visit_id"], e.get("claim", "")} - {""}
+        work = [{"agent": ag, "action": d["action"], "title": d["title"], "day": d["known"][:10]}
+                for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
+        claims.append({
+            "id": eid, "claim": e.get("claim", ""), "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
+            "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""),
+            "payer": truth.get(e.get("claim", "")), "work": work, "events": [x for x in events if x["subject"] in keys],
+        })  # fmt: skip
     return {
+        "book": json.loads(demo_book().to_json()), "claims": claims,
         "note": NOTE, "start": st["config"]["start"], "end": st["day"], "encounters": len(st["enc"]), "summary": summary,
         "funnel": funnel, "events": events,
         "score": {

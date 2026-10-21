@@ -46,7 +46,8 @@ def _decisions(run: Path) -> dict[str, dict[str, list[dict]]]:
             p = json.loads(rec.action_payload)
             keys = [p[k] for k in ("claim", "appt", "visit") if p.get(k)] + list(p.get("claims") or [])
             for k in keys:
-                out[rec.agent_id][k].append({"action": rec.action_type, "known": known[rec.event_id].isoformat(), "text": json.dumps(p)})
+                out[rec.agent_id][k].append({"action": rec.action_type, "known": known[rec.event_id].isoformat(), "text": json.dumps(p),
+                                             "title": (p.get("card") or {}).get("title", "")})
     eng.dispose()
     return out
 
