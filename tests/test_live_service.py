@@ -39,13 +39,13 @@ def pick(label_part: str) -> dict:
 def test_health_and_samples(tmp_path):
     c = client(tmp_path)
     h = c.get("/api/health").json()
-    assert h["ok"] and h["emr"] == ["fake"] and {p["id"] for p in h["payer"]} == {"pays", "denies", "breaks_rules", "pends"}
+    assert h["ok"] and h["emr"] == ["fake"] and {p["id"] for p in h["payer"]} == {"random", "pays", "denies", "breaks_rules", "pends"}
     s = c.get("/api/samples").json()
     assert len(s) >= 8 and all(x["text"] and x["note"] for x in s) and any("problem" in x["label"] for x in s)
 
 
 def test_a_complete_visit_goes_all_the_way_to_a_payer_decision_and_a_remit(tmp_path):
-    d = run(client(tmp_path), next(s for s in samples() if "problem" not in s["label"]))
+    d = run(client(tmp_path), next(s for s in samples() if "problem" not in s["label"]), payer="pays")
     assert d["status"] == "done", d["error"]
     c = d["claims"][0]
     assert c["coding"]["checks"] and c["payer"] and c["payer"]["outcome"] == "paid" and c["stage"] == "adjudicated"
@@ -160,7 +160,7 @@ def test_a_batch_runs_every_visit_and_gives_each_its_own_claim_number(tmp_path):
 
 def test_coverage_can_lapse_for_one_visit_in_a_batch_and_the_payer_behaviour_applies_to_all(tmp_path):
     clean = [s for s in samples() if "problem" not in s["label"]]
-    d = batch(client(tmp_path), [item(clean[0]), item(clean[1], lapsed=True), item(clean[2])])
+    d = batch(client(tmp_path), [item(clean[0]), item(clean[1], lapsed=True), item(clean[2])], payer="pays")
     carcs = [c["payer"]["carc"] for c in d["claims"]]
     assert carcs == ["", "27", ""], carcs
     d2 = batch(client(tmp_path / "x"), [item(clean[0]), item(clean[1])], payer="denies")
