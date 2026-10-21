@@ -18,6 +18,7 @@ resumes without repeating or losing an encounter and finishes with the same deci
 from __future__ import annotations
 
 import csv
+import io
 import json
 import os
 import shutil
@@ -39,9 +40,11 @@ from krisnai.integrations.portal.bots import claim_status_bot
 from krisnai.integrations.portal.driver import HttpDriver
 from krisnai.integrations.portal.mock_portal import create_app as create_portal
 from krisnai.knowledge.demo import demo_book
+from krisnai.live.catalog import service_by_cpt
 from krisnai.live.coder import Coder, Policy
 from krisnai.live.emr import PROVIDER_NPI, EmrPort
-from krisnai.live.payer import PayerConfig, PayerSim
+from krisnai.live.network import Network
+from krisnai.live.payer import EXTRA_COLUMNS, PayerConfig, PayerSim
 from krisnai.live.reply_stage import RepliesMixin
 from krisnai.live.responder import break_837
 from krisnai.live.s1 import FEES, PAYER_ID, PAYER_NAME, SALT, TOKEN, _engine, _free_port, _Srv
@@ -112,12 +115,23 @@ class Stream(RepliesMixin):
         self.seen_events = {json.loads(ln)["key"] for ln in (out / "events.jsonl").read_text("utf-8").splitlines() if ln} if (out / "events.jsonl").exists() else set()
         self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed, sample_rate=cfg.sample_rate), reader=cfg.reader)
         self.coder.per_day = dict(self.state.get("coder_per_day", {}))
-        self.payer = PayerSim(PAYER_ID, PAYER_NAME, book=demo_book(), config=PayerConfig(
-            seed=cfg.seed, pend_rate=cfg.pend_rate, deny_rate=cfg.deny_rate, deviation_rate=cfg.deviation_rate))
-        self.payers: dict[str, PayerSim] = {PAYER_ID: self.payer}  # one payer today; the network of payers fills this in
-        self.world = LiveWorld(self.payer, cfg.start)
+        self.network: Network | None = None
+        if cfg.payers == "network":  # S6: six payers; rates left at the stream's defaults mean "each payer's own rates", a changed rate forces it for all
+            self.network = Network(cfg.seed, pend_rate=_forced(cfg, "pend_rate"), deny_rate=_forced(cfg, "deny_rate"), deviation_rate=_forced(cfg, "deviation_rate"))
+            self.payers: dict[str, PayerSim] = dict(self.network.payers)
+            self.payer = self.payers[PAYER_ID]
+        else:
+            self.payer = PayerSim(PAYER_ID, PAYER_NAME, book=demo_book(), config=PayerConfig(
+                seed=cfg.seed, pend_rate=cfg.pend_rate, deny_rate=cfg.deny_rate, deviation_rate=cfg.deviation_rate))
+            self.payers = {PAYER_ID: self.payer}  # one payer
+        self.world = LiveWorld(self.payer, cfg.start, self.payers)
         for member, active in self.state["members"].items():
             self.payers[self.state["enc"].get(member, {}).get("payer_id", PAYER_ID)].enrol(member, active)
+        for e in self.state["enc"].values():  # facts of the patient's coverage that the payer must hold again after a restart
+            if e.get("other_primary"):
+                self.payer_for(e).set_other_primary(e["member"])
+            for cpt in e.get("auth", []):
+                self.payer_for(e).grant_auth(e["member"], cpt)
         self._init_replies()  # S8
         self._rebuild_payer()
 
@@ -167,7 +181,7 @@ class Stream(RepliesMixin):
 
     def _rebuild_payer(self) -> None:
         """After a restart: replay the claims already submitted so the world and the payer hold what they held before."""
-        for eid in sorted(self.state["enc"]):
+        for eid in sorted(self.state["enc"], key=lambda k: (self.state["enc"][k].get("billed_on") or "", k)):  # in the order the payer first saw them (duplicates depend on it)
             e = self.state["enc"][eid]
             f = self.out / "claims" / e.get("file", f"{e.get('claim', '')}.837")  # S8: the file last sent (a broken or corrected claim)
             if e.get("billed_on") and f.exists() and e["stage"] in ("adjudicated", "rejected", "reply_pending", "replied", "settled", "patient_balance", "review"):
@@ -181,8 +195,11 @@ class Stream(RepliesMixin):
 
     # ------------------------------------------------------------------------------------------ payers
     def assign_payer(self, visit: Visit, eid: str) -> str:
-        """The id of the payer this visit's patient is insured with. One payer for now; the payer network replaces this."""
-        return PAYER_ID
+        """The id of the payer this visit's patient is insured with: the one payer, or (payers="network") a random pick weighted by market share.
+        The pick depends only on the seed and the visit's member, so the same patient always has the same payer and a rerun repeats it."""
+        if self.network is None:
+            return PAYER_ID
+        return self.network.pick_payer(f"{self.cfg.tag}:{visit.member}")
 
     def payer_for(self, e: dict) -> PayerSim:
         return self.payers[e.get("payer_id", PAYER_ID)]
@@ -213,7 +230,10 @@ class Stream(RepliesMixin):
 
     def end_day(self) -> date:
         last_visit = max(v for _, _, _, v in self.schedule())
-        return last_visit + timedelta(days=self.cfg.confirm_days + 14 + 21 + self.cfg.settle_days + (100 if self.cfg.replies else 0))  # S8: room for up to three rounds of replies
+        hold = max((int(getattr(v.expected, "bill_delay_days", 0) or 0) for v in self.visits), default=0)  # late-billed visits
+        slow = 30 + 30 if self.network is not None else 0  # the slowest network payer pays in 30 days, and 30 more when it pends
+        replies = 100 if self.cfg.replies else 0  # room for up to three rounds of replies
+        return last_visit + timedelta(days=self.cfg.confirm_days + 14 + 21 + self.cfg.settle_days + hold + slow + replies)
 
     # ------------------------------------------------------------------------------------------ one encounter
     def _inactive(self, member: str) -> bool:
@@ -225,27 +245,44 @@ class Stream(RepliesMixin):
         h = int(hashlib.sha256(f"{self.cfg.seed}:inactive:{member}".encode()).hexdigest(), 16)
         return (h % 10_000) < int(self.cfg.inactive_rate * 10_000)
 
+    def _member_for(self, i: int, eid: str) -> str:
+        """The patient (member id) of visit `i`: its own, unless an earlier visit in the list names the same member (a repeat visit by the
+        same patient, such as a duplicate), in which case the earlier visit's id."""
+        m = self.visits[i - 1].member
+        first = next((j for j, v in enumerate(self.visits, start=1) if v.member == m), i)
+        return eid if first == i else f"SYNST{self.cfg.tag}{first:05d}"
+
     def _advance_encounter(self, i: int, v: Visit, booking: date, visit_day: date, day: date, client: ClearinghouseClient, feeds: dict) -> None:
         eid = f"SYNST{self.cfg.tag}{i:05d}"
-        e = self.state["enc"].setdefault(eid, {"stage": "new", "member": eid, "visit_id": f"SYNVS{self.cfg.tag}{i:05d}L1", "appt": f"SYNAPS{self.cfg.tag}{i:05d}",
+        e = self.state["enc"].setdefault(eid, {"stage": "new", "member": self._member_for(i, eid), "visit_id": f"SYNVS{self.cfg.tag}{i:05d}L1", "appt": f"SYNAPS{self.cfg.tag}{i:05d}",
                                                "booking": booking.isoformat(), "visit_day": visit_day.isoformat(), "visit_type": v.visit_type})  # fmt: skip
         member = e["member"]
         if e["stage"] == "new" and day >= booking:
             pid, puuid = self.emr.ensure_patient(member)
-            active = not self._inactive(member)
-            appt_cpt = "99203" if TYPES.get(v.visit_type, ("", "", "established", ""))[2] == "new" else "99213"
-            self.emr.ensure_appointment(pid, e["appt"], visit_day, appt_cpt, PAYER_ID, booking)
+            exp = v.expected  # the answer key of a generated visit, used here only to set up the patient's coverage facts (None for a typed-in visit)
             e["payer_id"] = self.assign_payer(v, eid)
-            self.payer_for(e).enrol(member, active)
+            pay = self.payer_for(e)
+            active = not (self._inactive(member) or getattr(exp, "lapsed", False))
+            appt_cpt = "99203" if TYPES.get(v.visit_type, ("", "", "established", ""))[2] == "new" else "99213"
+            self.emr.ensure_appointment(pid, e["appt"], visit_day, appt_cpt, pay.payer_id, booking)
+            pay.enrol(member, active)
+            if getattr(exp, "other_primary", False):
+                pay.set_other_primary(member)
+                e["other_primary"] = True
+            if getattr(exp, "auth_on_file", False):  # an authorization the practice obtained before the visit
+                e["auth"] = list(getattr(exp, "services", ()))
+                for cpt in e["auth"]:
+                    pay.grant_auth(member, cpt)
             self.state["members"][member] = active
             e.update(pid=pid, puuid=puuid, appt_cpt=appt_cpt, active=active)
-            feeds["appointments"].append({"appointment_id": e["appt"], "payer_id": PAYER_ID, "provider_npi": PROVIDER_NPI, "patient_ref": member,
+            feeds["appointments"].append({"appointment_id": e["appt"], "payer_id": pay.payer_id, "provider_npi": PROVIDER_NPI, "patient_ref": member,
                                           "appt_date": visit_day.isoformat(), "booked_on": booking.isoformat(), "cpt": appt_cpt, "status": "booked"})  # fmt: skip
             self._event(f"{eid}:book", day, "1 appointment", "OpenEMR", "openemr", e["appt"], "ok", f"booked {booking} for {visit_day} (pid {pid})")
             self._advance(e, "booked")
         if e["stage"] == "booked":
             dob = seed._synthetic_person(member)["DOB"].replace("-", "")
-            req = write_270(PAYER_ID, PAYER_NAME, member, member, "Synthetic", dob, visit_day, e["appt"], 90000 + i, day)
+            pay = self.payer_for(e)
+            req = write_270(pay.payer_id, pay.name, member, member, "Synthetic", dob, visit_day, e["appt"], 90000 + i, day)
             t271 = client.check_eligibility(req)
             self._write(f"271_{e['appt']}.x12", t271)
             try:
@@ -263,7 +300,7 @@ class Stream(RepliesMixin):
             rec = e["coding"]
             signed = visit_day.isoformat() if v.signed else ""
             note = seed.encode(visit=vid, note_date=visit_day.isoformat(), signed=signed, minutes="", elements="|".join(rec["elements"]))
-            eno = self.emr.ensure_visit(e["pid"], e["puuid"], vid, visit_day, PAYER_ID, rec["cpt"] or "pending", note, v.text)
+            eno = self.emr.ensure_visit(e["pid"], e["puuid"], vid, visit_day, self.payer_for(e).payer_id, rec["cpt"] or "pending", note, v.text)
             e.update(eno=eno, claim=f"{e['pid']}-{eno}")
             feeds["notes"].append({"visit_id": vid, "note_date": visit_day.isoformat(), "signed_date": signed, "minutes": "", "elements": ",".join(rec["elements"])})
             self._event(f"{eid}:visit", day, "3 visit", "OpenEMR", "openemr", vid, "ok", f"encounter {eno}, a {'signed' if v.signed else 'UNSIGNED'} note and the transcript")
@@ -282,15 +319,17 @@ class Stream(RepliesMixin):
             self._event(f"{eid}:confirm", day, "3c coder", "Simulated coder", "coder", e["visit_id"], "confirmed",
                         f"{e['coding']['cpt']} confirmed in a quality check (a simulated person, labelled as such)")
             self._advance(e, "ready_to_bill")
-        if e["stage"] == "ready_to_bill":
+        if e["stage"] == "ready_to_bill" and day >= visit_day + timedelta(days=int(getattr(v.expected, "bill_delay_days", 0) or 0)):  # a late-billed visit waits
             rec = e["coding"]
+            pay = self.payer_for(e)
             approval = e.get("approval") or rec["approval"]
             dx = (rec["dx"][0][0], rec["dx"][0][1])
-            x837 = self.emr.charge_837(Charge(e["pid"], e["eno"], member, PAYER_ID, PAYER_NAME, [dx], [(rec["cpt"], CPT_TEXT, 1, FEES[rec["cpt"]])]), approval, visit_day)
+            fee = FEES.get(rec["cpt"]) or getattr(service_by_cpt(rec["cpt"]), "fee", "100.00")
+            x837 = self.emr.charge_837(Charge(e["pid"], e["eno"], member, pay.payer_id, pay.name, [dx], [(rec["cpt"], CPT_TEXT, 1, fee)]), approval, visit_day)
             self._write(f"837_{e['claim']}.837", x837)
             self._write(f"{e['claim']}.837", x837, "claims")
             e.update(billed_on=day.isoformat(), approval=approval)
-            feeds["visits"].append({"visit_id": e["visit_id"], "payer_id": PAYER_ID, "provider_npi": PROVIDER_NPI, "patient_ref": member,
+            feeds["visits"].append({"visit_id": e["visit_id"], "payer_id": pay.payer_id, "provider_npi": PROVIDER_NPI, "patient_ref": member,
                                     "dos": visit_day.isoformat(), "cpt": rec["cpt"], "units": "1"})  # fmt: skip
             self._event(f"{eid}:claim", day, "4 claim", "OpenEMR billing", "openemr", e["claim"], "ok", f"837P written by the EMR; approval {approval}")
             self._advance(e, "billed")
@@ -326,7 +365,8 @@ class Stream(RepliesMixin):
         self.world.advance(day)
         feeds: dict[str, list] = {"appointments": [], "visits": [], "notes": []}
         if not self.state.get("fee_schedule"):  # the practice's copy of its contract rates, from day one (A10 compares payments to it)
-            rows = ["payer_id,cpt,modifier,allowed_amount,effective_date"] + [f"{PAYER_ID},{c},,{a},2020-01-01" for c, a in sorted(self.payer.fees.items())]
+            rows = ["payer_id,cpt,modifier,allowed_amount,effective_date"] + (
+                self.network.fee_schedule_rows() if self.network is not None else [f"{PAYER_ID},{c},,{a},2020-01-01" for c, a in sorted(self.payer.fees.items())])
             self._write("fee_schedule.csv", "\n".join(rows) + "\n")
             self.state["fee_schedule"] = True
             self._commit()
@@ -419,8 +459,19 @@ class Stream(RepliesMixin):
         last = max(remits) if remits else date.fromisoformat(max(e["visit_day"] for e in encs))
         return day >= last + timedelta(days=self.cfg.react_days)
 
+    def _all_truth_extra_csv(self) -> str:
+        """Which payer decided each claim and why (network runs): claim id, payer, cause, CPTs, diagnoses, service date."""
+        rows = [list(csv.reader(io.StringIO(p.truth_extra_csv()))) for p in self.payers.values()]
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(EXTRA_COLUMNS)
+        w.writerows(sorted(r for part in rows for r in part[1:]))
+        return buf.getvalue()
+
     def finish(self) -> dict:
         (self.out / "truth.csv").write_text(self._all_truth_csv(), encoding="utf-8")
+        if self.network is not None:
+            (self.out / "truth_payers.csv").write_text(self._all_truth_extra_csv(), encoding="utf-8")
         stages: dict[str, int] = {}
         for e in self.state["enc"].values():
             stages[e["stage"]] = stages.get(e["stage"], 0) + 1
@@ -447,6 +498,12 @@ class Stream(RepliesMixin):
             summary["replies"] = self._replies_finish()
         (self.out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True), encoding="utf-8")
         return summary
+
+
+def _forced(cfg: StreamConfig, name: str) -> float | None:
+    """A rate the caller changed from the stream default is forced for every payer; left at the default it means each payer's own rate."""
+    default = StreamConfig.__dataclass_fields__[name].default
+    return None if getattr(cfg, name) == default else getattr(cfg, name)
 
 
 def _count(items) -> dict:  # noqa: ANN001

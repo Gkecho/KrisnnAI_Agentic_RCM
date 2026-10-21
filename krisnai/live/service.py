@@ -33,12 +33,13 @@ MAX_BATCH = 25
 MAX_BATCH_CHARS = 200_000
 _NONE = {"pend_rate": 0.0, "deny_rate": 0.0, "deviation_rate": 0.0}  # every mode sets all three: "pays" must really pay
 PAYER_MODES = {
+    "random": {},  # nothing forced: each visit gets its own payer (by market share) and its outcome from what the claim contains
     "pays": dict(_NONE),
     "denies": {**_NONE, "deny_rate": 1.0},
     "breaks_rules": {**_NONE, "deviation_rate": 1.0},
     "pends": {**_NONE, "pend_rate": 1.0},
 }
-PAYER_LABEL = {"pays": "Pays normally", "denies": "Denies it (an ordinary denial)", "breaks_rules": "Breaks its own published rules", "pends": "Asks for records first, then pays"}
+PAYER_LABEL = {"random": "Random (recommended)", "pays": "Pays normally", "denies": "Denies it (an ordinary denial)", "breaks_rules": "Breaks its own published rules", "pends": "Asks for records first, then pays"}
 LOCAL = {"127.0.0.1", "::1", "localhost", "testclient"}
 ORIGINS = ["http://127.0.0.1:8767", "http://localhost:8767"]
 
@@ -52,14 +53,14 @@ class BatchItem(BaseModel):
 
 class BatchRequest(BaseModel):
     items: list[BatchItem]
-    payer: str = "pays"
+    payer: str = "random"
     emr: str = "fake"
 
 
 class RunRequest(BaseModel):
     transcript: str
     signed: bool = True
-    payer: str = "pays"
+    payer: str = "random"
     coverage_lapsed: bool = False
     emr: str = "fake"
 
@@ -108,7 +109,7 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
         try:
             h = int(hashlib.sha256("".join(v.text for v in visits).encode()).hexdigest(), 16)
             cfg = StreamConfig(count=len(visits), seed=h % 1000, start=date(2026, 10, 21), per_day=5, engine=engine, bots=engine, serve=serve_ports,
-                               early_stop=True, sample_rate=0.0, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, **PAYER_MODES[payer])  # fmt: skip
+                               early_stop=True, sample_rate=0.0, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, payers="network", **PAYER_MODES[payer])  # fmt: skip
             run_stream(r["out"], cfg, emr_factories[emr](), visits=visits, log=lambda *_: None)
             r["status"] = "done"
         except Exception as e:  # noqa: BLE001

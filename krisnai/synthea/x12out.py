@@ -20,7 +20,9 @@ DENIAL_RARC = {  # CARC -> a plausible RARC, purely synthetic pairing
     "16": "MA130", "18": "N522", "50": "N115", "97": "N19", "27": "N30", "31": "N382", "197": "N54", "4": "N519",
 }  # fmt: skip
 
-EXTRA_RARC = {"185": "N290"}  # CARCs the simulator can plant that are not in the random draw above
+# CARCs the simulator can plant that are not in the random draw above
+# (96, 22 and 29: the live payer network; synthetic pairing)
+EXTRA_RARC = {"185": "N290", "96": "N130", "22": "MA04", "29": "N211"}
 
 
 def _seg(*elements: object) -> str:

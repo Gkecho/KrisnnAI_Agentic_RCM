@@ -21,9 +21,10 @@ from krisnai.synthea.x12out import _envelope, _seg
 
 
 class LiveWorld(MockWorld):
-    def __init__(self, payer: PayerSim, today: date):
+    def __init__(self, payer: PayerSim, today: date, payers: dict[str, PayerSim] | None = None):
         super().__init__(PmExtract(), None, today)
-        self.payer = payer
+        self.payer = payer  # the default payer (the only one unless a network is given)
+        self.payers: dict[str, PayerSim] = payers if payers else {payer.payer_id: payer}
         self.accepted: list[SimClaim] = []  # claims past the technical checks, waiting for the payer
         self.rejected: dict[str, str] = {}
         self.today = today
@@ -45,20 +46,21 @@ class LiveWorld(MockWorld):
             return "E1", "164", Decimal(0), "", None
         if claim_id in self.rejected:
             return "A3", "21", Decimal(0), "", claim
-        cat, code, paid, no, _, _ = self.payer.status(claim_id, self.today)
+        cat, code, paid, no, _, _ = self.payers.get(claim.payer_id, self.payer).status(claim_id, self.today)
         return cat, code, paid, no, claim
 
     def portal_reason(self, claim_id: str, category: str) -> tuple[str, bool] | None:
         """The reason line and whether a records request is open, for the mock portal."""
         if claim_id in self.rejected:
             return f"Returned: {self.rejected[claim_id]}", False
-        if claim_id in self.payer.cases:
-            _, _, _, _, reason, records = self.payer.status(claim_id, self.today)
-            return reason, records
+        for payer in self.payers.values():
+            if claim_id in payer.cases:
+                _, _, _, _, reason, records = payer.status(claim_id, self.today)
+                return reason, records
         return None
 
     def eligibility(self, payer_id: str, member_id: str, dos: date) -> EligibilityAnswer:
-        found, active = self.payer.eligibility(member_id)
+        found, active = self.payers.get(payer_id, self.payer).eligibility(member_id)  # routed to the payer the request names
         if not found:
             return EligibilityAnswer(found=False)
         return EligibilityAnswer(True, active, plan_end=None if active else dos - timedelta(days=30))
@@ -90,7 +92,7 @@ class LiveWorld(MockWorld):
                 if seg.id == "NM1" and seg[1] == "PR":
                     payer_ids = {"id": seg[9]}
         results: list[dict] = []
-        sims = self.payer.to_sim_claims(text, when)
+        sims = self.payers.get(payer_ids.get("id", ""), self.payer).to_sim_claims(text, when)  # the payer named in the 837 reads it
         for c in sims:
             self._store(c)
             why = self._technical_check(c, payer_ids.get("id", ""), c.billed)
