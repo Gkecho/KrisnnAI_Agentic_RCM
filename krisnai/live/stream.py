@@ -74,6 +74,9 @@ class StreamConfig:
     engine: bool = True
     bots: bool = True
     serve: bool = True  # real local servers (False: in-process, for tests)
+    tag: str = ""  # makes every id unique to one run (a typed-in visit must never reuse an earlier run's patient)
+    early_stop: bool = False  # stop once every claim is settled and the agents have had `react_days` to react (single visits)
+    react_days: int = 8
 
     def key(self) -> dict:
         d = asdict(self)
@@ -89,12 +92,12 @@ class Result:
 
 
 class Stream:
-    def __init__(self, cfg: StreamConfig, out: Path, emr: EmrPort, log=print, crash_after: int | None = None):  # noqa: ANN001
+    def __init__(self, cfg: StreamConfig, out: Path, emr: EmrPort, log=print, crash_after: int | None = None, visits: list[Visit] | None = None):  # noqa: ANN001
         self.cfg, self.out, self.emr, self.log, self.crash_after = cfg, out, emr, log, crash_after
         self.mutations = 0
         for d in ("inbox", "archive", "claims", "evidence"):
             (out / d).mkdir(parents=True, exist_ok=True)
-        self.visits: list[Visit] = generate(cfg.seed, cfg.count, cfg.start)
+        self.visits: list[Visit] = visits if visits is not None else generate(cfg.seed, cfg.count, cfg.start)
         self.state = self._load()
         self.seen_events = {json.loads(ln)["key"] for ln in (out / "events.jsonl").read_text("utf-8").splitlines() if ln} if (out / "events.jsonl").exists() else set()
         self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed))
@@ -178,14 +181,14 @@ class Stream:
         return (h % 10_000) < int(self.cfg.inactive_rate * 10_000)
 
     def _advance_encounter(self, i: int, v: Visit, booking: date, visit_day: date, day: date, client: ClearinghouseClient, feeds: dict) -> None:
-        eid = f"SYNST{i:05d}"
-        e = self.state["enc"].setdefault(eid, {"stage": "new", "member": eid, "visit_id": f"SYNVS{i:05d}L1", "appt": f"SYNAPS{i:05d}",
+        eid = f"SYNST{self.cfg.tag}{i:05d}"
+        e = self.state["enc"].setdefault(eid, {"stage": "new", "member": eid, "visit_id": f"SYNVS{self.cfg.tag}{i:05d}L1", "appt": f"SYNAPS{self.cfg.tag}{i:05d}",
                                                "booking": booking.isoformat(), "visit_day": visit_day.isoformat(), "visit_type": v.visit_type})  # fmt: skip
         member = e["member"]
         if e["stage"] == "new" and day >= booking:
             pid, puuid = self.emr.ensure_patient(member)
             active = not self._inactive(member)
-            appt_cpt = "99203" if TYPES[v.visit_type][2] == "new" else "99213"
+            appt_cpt = "99203" if TYPES.get(v.visit_type, ("", "", "established", ""))[2] == "new" else "99213"
             self.emr.ensure_appointment(pid, e["appt"], visit_day, appt_cpt, PAYER_ID, booking)
             self.payer.enrol(member, active)
             self.state["members"][member] = active
@@ -342,8 +345,21 @@ class Stream:
         end = self.end_day()
         while day <= end:
             self.tick(day, client, portal_url, eng)
+            if self.cfg.early_stop and self._settled(day):
+                break
             day += timedelta(days=1)
         client.close()
+
+    def _settled(self, day: date) -> bool:
+        """Every encounter is billed and paid out, waiting for a coder, or rejected, and `react_days` have passed since the last remit."""
+        encs = list(self.state["enc"].values())
+        if len(encs) < len(self.visits) or any(e["stage"] not in ("adjudicated", "rejected", "pending_coder") for e in encs):
+            return False
+        remits = [date.fromisoformat(e["remit_date"]) for e in encs if e.get("remit_date")]
+        if any(e.get("claim") and e["stage"] == "adjudicated" and e["claim"] not in self.state["issued"] for e in encs):
+            return False
+        last = max(remits) if remits else date.fromisoformat(max(e["visit_day"] for e in encs))
+        return day >= last + timedelta(days=self.cfg.react_days)
 
     def finish(self) -> dict:
         (self.out / "truth.csv").write_text(self.payer.truth_csv(), encoding="utf-8")
@@ -396,8 +412,8 @@ def _engine_for(out: Path):  # noqa: ANN201
     return eng
 
 
-def run_stream(out: Path, cfg: StreamConfig, emr: EmrPort, fresh: bool = False, log=print, crash_after: int | None = None) -> dict:  # noqa: ANN001
+def run_stream(out: Path, cfg: StreamConfig, emr: EmrPort, fresh: bool = False, log=print, crash_after: int | None = None, visits: list[Visit] | None = None) -> dict:  # noqa: ANN001
     if fresh and out.exists():
         shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
-    return Stream(cfg, out, emr, log, crash_after).run().summary
+    return Stream(cfg, out, emr, log, crash_after, visits).run().summary

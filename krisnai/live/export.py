@@ -19,6 +19,37 @@ NOTE = ("A recorded run on synthetic data, in shadow mode. The payer is our own 
         "'Real time' is a simulated clock, one day at a time.")
 
 
+def claim_traces(run: Path, st: dict, events: list[dict]) -> list[dict]:
+    """One trace per encounter: the coder's checks, the payer's hidden decision, the agents' work and the timeline."""
+    truth = {r["claim_id"]: r for r in csv.DictReader((run / "truth.csv").read_text("utf-8").splitlines())} if (run / "truth.csv").exists() else {}
+    dec = _decisions(run) if (run / "engine.sqlite").exists() else {}
+    claims = []
+    for eid, e in sorted(st["enc"].items()):
+        keys = {e["appt"], e["visit_id"], e.get("claim", "")} - {""}
+        work = [{"agent": ag, "action": d["action"], "title": d["title"], "day": d["known"][:10]}
+                for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
+        claims.append({
+            "id": eid, "claim": e.get("claim", ""), "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
+            "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""),
+            "payer": truth.get(e.get("claim", "")), "work": work, "events": [x for x in events if x["subject"] in keys],
+        })  # fmt: skip
+    return claims
+
+
+def trace_run(run: Path) -> dict:
+    """What the demo service returns for a run of typed-in visits: traces and the remit ledger, with no scoring (there is no answer key)."""
+    from krisnai.live.score import reconcile
+
+    st = json.loads((run / "state.json").read_text("utf-8"))
+    events = [json.loads(ln) for ln in (run / "events.jsonl").read_text("utf-8").splitlines() if ln] if (run / "events.jsonl").exists() else []
+    for ev in events:
+        ev.pop("key", None)
+    led = reconcile(run, None, st) if (run / "truth.csv").exists() else None
+    return {"claims": claim_traces(run, st, events), "events": events, "day": st.get("day"),
+            "ledger": {k: led[k] for k in ("remits_read", "billed_on_remits", "remitted_by_payer", "patient_responsibility",
+                                           "contractual_adjustment", "denied_billed", "cash_collected", "cash_note")} if led else None}  # fmt: skip
+
+
 def build(run: Path) -> dict:
     sc = write_reports(run)
     st = json.loads((run / "state.json").read_text("utf-8"))
@@ -40,18 +71,7 @@ def build(run: Path) -> dict:
         ["Remit received from the payer", led["remits_read"]],
         ["Paid", outcomes.get("paid", 0)], ["Denied", outcomes.get("denied", 0)], ["Underpaid", outcomes.get("underpaid", 0)],
     ]  # fmt: skip
-    truth = {r["claim_id"]: r for r in csv.DictReader((run / "truth.csv").read_text("utf-8").splitlines())}
-    dec = _decisions(run)
-    claims = []
-    for eid, e in sorted(st["enc"].items()):
-        keys = {e["appt"], e["visit_id"], e.get("claim", "")} - {""}
-        work = [{"agent": ag, "action": d["action"], "title": d["title"], "day": d["known"][:10]}
-                for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
-        claims.append({
-            "id": eid, "claim": e.get("claim", ""), "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
-            "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""),
-            "payer": truth.get(e.get("claim", "")), "work": work, "events": [x for x in events if x["subject"] in keys],
-        })  # fmt: skip
+    claims = claim_traces(run, st, events)
     return {
         "book": json.loads(demo_book().to_json()), "claims": claims,
         "note": NOTE, "start": st["config"]["start"], "end": st["day"], "encounters": len(st["enc"]), "summary": summary,

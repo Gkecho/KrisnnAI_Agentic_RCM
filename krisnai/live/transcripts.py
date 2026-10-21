@@ -74,7 +74,7 @@ class Visit:
     visit_type: str
     text: str
     signed: bool
-    expected: Expected
+    expected: Expected | None = None  # the answer key; a transcript someone typed in has none
     day: date = field(default_factory=lambda: date(2026, 10, 24))
 
 

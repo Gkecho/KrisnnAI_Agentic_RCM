@@ -186,6 +186,14 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 
 **Follow-ups, in the order I would take them:** (1) move A8, A5 and A7 onto the Knowledge Book so deviations are recognized; (2) inject clearinghouse rejections so A6 and the resubmission bot are exercised; (3) simulate bank deposits so A11's reconciliation and a real cash line exist; (4) post remits into OpenEMR through its ERA importer; (5) replace the simulated coder with a queue a person can work in the preview.
 
+## 5h. "Give it a transcript and it runs the whole workflow" (added after S5)
+`krisnai live serve` starts a small local service (`krisnai/live/service.py`, port 8780) and the preview's **Run a visit** screen talks to it: paste or pick a visit transcript, choose whether the note is signed, whether coverage has lapsed and how the payer behaves (pays, denies, breaks its own rules, asks for records first), and press Run. The same chain as the 50-encounter stream runs for that one visit on a simulated clock (about 7 seconds of real time with the real engine): the visit is recorded, the transcript coder decides, the EMR writes the claim, the clearinghouse and the payer respond, the engine's agents react, and the screen shows each step as it happens and then the whole trace (the coder's checks, what the payer did against the policy, the agents' work, the money with cash collected at 0.00).
+
+- **Safety:** it answers only on the machine it runs on (other callers get 403) and only to the preview's origin; one visit at a time (a second gets 409); a transcript is capped at 20,000 characters; it uses an in-memory EMR unless started with `--emr openemr`; synthetic data only (ADR-0002).
+- **What the first run showed:** a complete signed visit is auto-accepted, billed and paid; an unsigned or incomplete one stops at the coder with nothing billed; a denied visit gets an A8 task; a paid visit raises no agent work within eight simulated days of the remit (the 50-encounter run's patient statements came later).
+- **Limits:** it works only when the service runs on the same computer as the browser, so the deployed site cannot run it (it needs the local engine); the payer is our simulator; the transcript coder reads the wording of the generated transcripts well and has not been tried on real speech.
+- **Tests:** `tests/test_live_service.py` (10 fast, 1 slow with the real engine): a complete visit reaches a remit; the chosen payer behaviour changes the outcome; lapsed coverage is flagged and denied; a failed check stops at the coder; bad input is refused; one run at a time; failures are reported; non-local callers and other origins are refused.
+
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.
 - Payer behaviour is our own invention. Denial rates are not real payer statistics, and the screen must say so.

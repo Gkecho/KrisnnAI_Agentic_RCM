@@ -172,11 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--limit", type=int, default=50, help="seed: first N patients (0 = all)")
     oe.add_argument("--out", type=Path, help="pull: folder to write the three feeds into")
     lv = sub.add_parser("live", help="live encounter stream (demo only): run one encounter through the whole chain")
-    lv.add_argument("live_cmd", choices=["s1", "s2", "run", "score", "export"])
+    lv.add_argument("live_cmd", choices=["s1", "s2", "run", "score", "export", "serve"])
     lv.add_argument("--visit", type=int, default=0, help="s1: run the Nth synthetic transcript (1-50) through the coder")
     lv.add_argument("--count", type=int, default=50, help="s2: how many transcripts")
     lv.add_argument("--seed", type=int, default=7)
     lv.add_argument("--run", type=Path, default=Path("out/live_run50"), help="score: the run folder to score")
+    lv.add_argument("--port", type=int, default=8780, help="serve: the port for the local demo service")
+    lv.add_argument("--emr", choices=["fake", "openemr"], default="fake", help="serve: the EMR a typed-in visit is written to")
     lv.add_argument("--js", type=Path, help="export: where to write tools_stream.js for the product preview")
     lv.add_argument("--fresh", action="store_true", help="run: wipe the output folder first (otherwise a saved run resumes)")
     lv.add_argument("--fake-emr", action="store_true", help="run: use an in-memory EMR instead of the local OpenEMR (no Docker)")
@@ -418,6 +420,21 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
         return 0
     if args.cmd == "live":
+        if args.live_cmd == "serve":
+            import uvicorn
+
+            from krisnai.integrations.openemr import seed as oeseed
+            from krisnai.integrations.openemr.auth import OpenEmrAuth
+            from krisnai.live.emr import FakeEmr, OpenEmrPort
+            from krisnai.live.service import create_app
+
+            facts = {"fake": lambda: FakeEmr()}
+            if args.emr == "openemr":
+                facts["openemr"] = lambda: OpenEmrPort(oeseed._Server(OpenEmrAuth(args.work)))
+            out = args.out if args.out != Path("out/live_s1") else Path("out/live_service")
+            print(f"demo service on http://127.0.0.1:{args.port} (EMR: {', '.join(sorted(facts))}); this machine only; Ctrl+C to stop")
+            uvicorn.run(create_app(out, facts), host="127.0.0.1", port=args.port, log_level="warning")
+            return 0
         if args.live_cmd == "export":
             from krisnai.live.export import write_js
 
