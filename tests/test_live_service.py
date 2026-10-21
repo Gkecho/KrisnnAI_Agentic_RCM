@@ -127,6 +127,12 @@ def test_with_the_real_engine_a_denied_visit_gets_agent_work(tmp_path):
     d = run(client(tmp_path, engine=True), next(s for s in samples() if "problem" not in s["label"]), payer="denies")
     assert d["status"] == "done", d["error"]
     assert any(w["agent"] == "a8_denial" for w in d["claims"][0]["work"]), d["claims"][0]["work"]
+    ag = d["claims"][0]["agents"]
+    a8 = next(a for a in ag if a["agent"] == "a8_denial")
+    assert a8["raised"] and a8["rules"] and a8["facts"] and a8["level"] == "L0 shadow" and a8["did"] and a8["title"], "what it did, how, and what it looked at"
+    quiet = [a for a in ag if not a["raised"]]
+    assert quiet and all(a["rules"] and a["did"] for a in quiet), "agents that looked and found nothing are shown too, with their checks"
+    assert {a["name"] for a in ag} >= {"Mirror (A5)", "Code Whisperer (A4)", "Advocate (A8)"}
 
 
 def batch(c: TestClient, items: list[dict], **kw) -> dict:
