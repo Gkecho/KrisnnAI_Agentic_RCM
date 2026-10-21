@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """A payer simulator for the live encounter stream: it reads an 837 and decides, deterministically in S1.
 
 It is a stand-in written for the demo. It is NOT a model of any real payer: its fee schedule and its denial rules are
@@ -16,7 +17,7 @@ from krisnai.ingest.x12 import Transaction, read_transactions
 from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 
 CENT = Decimal("0.01")
-DEFAULT_FEES = {"99202": "95.00", "99203": "125.00", "99213": "90.00", "99214": "130.00", "99283": "210.00"}
+DEFAULT_FEES = {"99202": "95.00", "99203": "125.00", "99204": "190.00", "99213": "90.00", "99214": "130.00", "99283": "210.00"}
 COINSURANCE = Decimal("0.20")
 
 

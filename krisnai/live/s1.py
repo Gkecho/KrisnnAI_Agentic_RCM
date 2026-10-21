@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """S1 of the live encounter stream: ONE encounter through the whole chain, deterministic, one payer.
 
 appointment (OpenEMR REST) -> eligibility 270/271 (mock clearinghouse, answered by the payer sim)
@@ -31,7 +32,9 @@ from krisnai.integrations.clearinghouse.client import ClearinghouseClient
 from krisnai.integrations.clearinghouse.mock_server import create_app as create_clearinghouse
 from krisnai.integrations.clearinghouse.x12_out import write_270
 from krisnai.integrations.openemr import billing, seed
+from krisnai.live.coder import Coder, CodingRecord, Policy
 from krisnai.live.payer import PayerSim, remit_day
+from krisnai.live.transcripts import Visit
 from krisnai.live.world import LiveWorld
 from krisnai.model import Base
 from krisnai.ops import run_period
@@ -43,6 +46,7 @@ PAYER_ID, PAYER_NAME = "SYNAETNA", "SYNAETNA Demo Payer"
 CPT, CPT_TEXT, FEE = "99213", "Office visit, established patient", "110.00"
 DX = ("J02.9", "Acute pharyngitis, unspecified")
 ELEMENTS = "assessment|plan"
+FEES = {"99213": "110.00", "99214": "160.00", "99203": "150.00", "99204": "220.00"}
 CARD_FIELDS = ("agent", "action_type", "owner", "title", "expected_value")
 
 
@@ -108,8 +112,13 @@ def _w(folder: Path, name: str, text: str) -> str:
 
 
 def run_s1(work: Path, out: Path, as_of: date, *, deny_cpt: str | None = CPT, carc: str = "50",
-           approval: str = "policy:demo-s1-single-code", server=None, log=print) -> S1Result:  # noqa: ANN001
-    """Run the chain once. `server` is an OpenEMR seed._Server (built from the work folder when omitted)."""
+           approval: str = "policy:demo-s1-single-code", server=None, log=print, visit: Visit | None = None,
+           coder: Coder | None = None) -> S1Result:  # noqa: ANN001
+    """Run the chain once. `server` is an OpenEMR seed._Server (built from the work folder when omitted).
+
+    With a `visit` (S2) the transcript is coded by the exception-only coder: a visit that passes every check is charged by
+    policy; any other stops here, routed to a coder, with nothing billed.
+    """
     res = S1Result()
 
     def ev(step: str, tool: str, bot: str, subject: str, outcome: str, detail: str) -> None:
@@ -175,15 +184,37 @@ def run_s1(work: Path, out: Path, as_of: date, *, deny_cpt: str | None = CPT, ca
             "billing_facility": seed.FACILITY_ID, "provider_id": aid, "referral_source": "",
         })  # fmt: skip
         eno = int(enc["data"]["encounter"] if "encounter" in enc.get("data", {}) else enc["data"]["id"])
-        note = seed.encode(visit=vid, note_date=visit_day.isoformat(), signed=visit_day.isoformat(), minutes="",
-                           elements=ELEMENTS)  # fmt: skip
+        rec: CodingRecord | None = None
+        if visit is not None:
+            rec = (coder or Coder(Policy(enabled=True))).code(vid, visit.text, visit.signed, visit_day)
+        elements = "|".join(rec.elements) if rec else ELEMENTS
+        signed = visit_day.isoformat() if (visit is None or visit.signed) else ""
+        note = seed.encode(visit=vid, note_date=visit_day.isoformat(), signed=signed, minutes="",
+                           elements=elements)  # fmt: skip
         server.rest_json("POST", f"/patient/{pid}/document", params={"path": seed.DOC_CATEGORY},
                          files={"document": (f"note_{vid}.txt", note.encode(), "text/plain")})  # fmt: skip
-        ev("3 visit", "OpenEMR", "openemr", vid, "ok", f"encounter {eno} and a signed note on {visit_day}")
+        if visit is not None:
+            server.rest_json("POST", f"/patient/{pid}/document", params={"path": seed.DOC_CATEGORY},
+                             files={"document": (f"transcript_{vid}.txt", visit.text.encode(), "text/plain")})  # fmt: skip
+        ev("3 visit", "OpenEMR", "openemr", vid, "ok",
+           f"encounter {eno}, a {'signed' if signed else 'UNSIGNED'} note on {visit_day}" + (" and the transcript" if visit else ""))
+        cpt, dx, fee = CPT, DX, FEE
+        if rec is not None:
+            res.summary["coding"] = rec.to_dict()
+            if rec.route != "auto":
+                ev("3b coder", "Transcript coder", "coder", vid, "routed", f"to a coder: {rec.reason} ({rec.note})")
+                res.summary.update({"member": member, "patient_pid": pid, "encounter": eno, "routed_to_coder": rec.reason,
+                                    "payer_outcome": None, "cards_for_this_claim": []})  # fmt: skip
+                client.close()
+                (out / "events.jsonl").write_text("".join(json.dumps(e.__dict__) + "\n" for e in res.events), encoding="utf-8")
+                (out / "summary.json").write_text(json.dumps(res.summary, indent=1), encoding="utf-8")
+                return res
+            cpt, dx, fee, approval = rec.cpt, rec.dx[0], FEES[rec.cpt], rec.approval
+            ev("3b coder", "Transcript coder", "coder", vid, "auto-accepted", f"{cpt}, {dx[0]}; {rec.approval}")
 
         # 5. the charge (S1: one fixed code; S2 replaces this with the transcript coder) and OpenEMR's 837P
         made = billing.charge_and_837(
-            billing.Charge(pid, eno, member, PAYER_ID, PAYER_NAME, [DX], [(CPT, CPT_TEXT, 1, FEE)]), approval)
+            billing.Charge(pid, eno, member, PAYER_ID, PAYER_NAME, [dx], [(cpt, CPT_TEXT, 1, fee)]), approval)
         x837 = made["x12"]
         _w(inbox, f"837_{pid}-{eno}.837", x837)
         ev("4 claim", "OpenEMR billing", "openemr", f"{pid}-{eno}", "ok",
@@ -222,7 +253,7 @@ def run_s1(work: Path, out: Path, as_of: date, *, deny_cpt: str | None = CPT, ca
     rep = run_period(eng, 1, SALT, day, inbox=inbox, archive=out / "archive", mode="daily", allow_failed=True)
     cards = open_cards(eng, 1, day)
     mine = [c for c in cards if str(c.get("claim", "")) in {t["claim"] for t in truth}]
-    res.summary = {
+    res.summary |= {
         "member": member, "patient_pid": pid, "encounter": eno, "claim": f"{pid}-{eno}", "engine_day": day.isoformat(),
         "engine_status": rep.status, "files_loaded": rep.files_loaded, "files_failed": rep.files_failed,
         "payer_outcome": truth[0]["outcome"] if truth else None,

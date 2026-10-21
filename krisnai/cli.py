@@ -172,7 +172,11 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--limit", type=int, default=50, help="seed: first N patients (0 = all)")
     oe.add_argument("--out", type=Path, help="pull: folder to write the three feeds into")
     lv = sub.add_parser("live", help="live encounter stream (demo only): run one encounter through the whole chain")
-    lv.add_argument("live_cmd", choices=["s1"])
+    lv.add_argument("live_cmd", choices=["s1", "s2"])
+    lv.add_argument("--visit", type=int, default=0, help="s1: run the Nth synthetic transcript (1-50) through the coder")
+    lv.add_argument("--count", type=int, default=50, help="s2: how many transcripts")
+    lv.add_argument("--seed", type=int, default=7)
+    lv.add_argument("--policy", choices=["on", "off"], default="on", help="exception-only auto-accept (ADR-0002); off by default in real use")
     lv.add_argument("--work", type=Path, default=Path("out/openemr"))
     lv.add_argument("--out", type=Path, default=Path("out/live_s1"))
     lv.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 21), help="simulated booking day, YYYY-MM-DD")
@@ -397,9 +401,19 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
         return 0
     if args.cmd == "live":
-        from krisnai.live.s1 import run_s1
+        if args.live_cmd == "s2":
+            from krisnai.live.s2 import run_s2
 
-        res = run_s1(args.work, args.out, args.as_of, deny_cpt=args.deny_cpt or None, carc=args.carc)
+            print(json.dumps(run_s2(args.out if args.out != Path("out/live_s1") else Path("out/live_s2"), args.count,
+                                    args.seed, args.policy == "on"), indent=1, sort_keys=True))
+            return 0
+        from krisnai.live.coder import Coder, Policy
+        from krisnai.live.s1 import run_s1
+        from krisnai.live.transcripts import generate
+
+        visit = generate(args.seed, 50)[args.visit - 1] if args.visit else None
+        res = run_s1(args.work, args.out, args.as_of, deny_cpt=args.deny_cpt or None, carc=args.carc, visit=visit,
+                     coder=Coder(Policy(enabled=args.policy == "on", seed=args.seed)))
         print(json.dumps(res.summary, indent=1, sort_keys=True))
         return 0
     if args.cmd == "openemr":

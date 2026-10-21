@@ -1,6 +1,6 @@
 # Plan: a live encounter stream through the whole ecosystem
 
-Status: **S1 built and verified** (2026-10-21); S2 onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
+Status: **S1 and S2 built and verified** (2026-10-21); S2b onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
 
 ## 1. Goal
 Create dummy appointments and push them through the system one at a time, as if real visits were happening, with nobody typing data in:
@@ -108,6 +108,20 @@ No dates are committed. S1 is the first thing worth showing the boss.
 **What S1 is not:** the payer denies one configured CPT (no randomness), the code is fixed at 99213 (no transcript coder yet), the portal does not read the payer's state yet, and the agents react through the engine's daily batch, not instantly.
 
 **Left over for later milestones:** the payer id and tax id fields in our 837 parser come back empty or None for OpenEMR's claim (`REF*EIN` is not read); OpenEMR's ISA date is a fixed value; remit posting back into OpenEMR is untried.
+
+## 5c. S2 result (2026-10-21)
+`krisnai/live/transcripts.py` makes 50 synthetic visit transcripts for a seed (40 clean, 10 problematic: 3 missing plan, 2 two unrelated problems, 2 new-or-established never stated, 2 unsigned, 1 thin documentation for a chronic follow-up) with an answer key. `krisnai/live/coder.py` reads only the text and the signed flag, extracts the named note elements, suggests an E/M code (using A4's level table) and one diagnosis, runs seven checks, and applies the ADR-0002 policy. `krisnai live s2` scores it; `krisnai live s1 --visit N` runs transcript N through the whole chain.
+
+| Result (seed 7, policy on) | Count |
+|---|---|
+| clean visits auto-accepted with the right code and diagnosis | 35 of 40 |
+| clean visits sampled to a coder (10% quality check, deterministic) | 5 |
+| problematic visits routed to a coder with the right reason | 10 of 10 |
+| problematic visits auto-accepted | 0 |
+
+Also verified: the same holds for seeds 11, 23 and 99; with the policy off every clean visit goes to a coder (`policy_off`); the daily cap stops auto-accepts and says why; three hand-written transcripts in wording the generator never used are read correctly; an unsigned note is never coded; the coder module never imports the answer key. Live through OpenEMR: transcript 1 was auto-accepted (99214, I10, "policy:demo-exception-only-v1"), billed by OpenEMR's 837P and paid; transcript 6 (unsigned) stopped at the coder with nothing billed. Tests: `tests/test_live_s2.py` (13 fast, 1 slow).
+
+**Honest limits.** The transcripts and the reader were written by the same author, so the near-perfect score mostly shows the routing and policy logic works, not that rule-based coding can read real speech. Real transcripts would be longer, messier and need a language model or a certified coder's rules; the E/M level table is A4's placeholder, not the AMA or CMS guidelines. A routed visit stays pending: nothing resolves it yet (the person's decision and resume are S4/S5 work). The 5 "clean held back" in some runs are the 10% sample, by design.
 
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.
