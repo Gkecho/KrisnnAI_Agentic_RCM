@@ -172,10 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--limit", type=int, default=50, help="seed: first N patients (0 = all)")
     oe.add_argument("--out", type=Path, help="pull: folder to write the three feeds into")
     lv = sub.add_parser("live", help="live encounter stream (demo only): run one encounter through the whole chain")
-    lv.add_argument("live_cmd", choices=["s1", "s2", "run"])
+    lv.add_argument("live_cmd", choices=["s1", "s2", "run", "score", "export"])
     lv.add_argument("--visit", type=int, default=0, help="s1: run the Nth synthetic transcript (1-50) through the coder")
     lv.add_argument("--count", type=int, default=50, help="s2: how many transcripts")
     lv.add_argument("--seed", type=int, default=7)
+    lv.add_argument("--run", type=Path, default=Path("out/live_run50"), help="score: the run folder to score")
+    lv.add_argument("--js", type=Path, help="export: where to write tools_stream.js for the product preview")
     lv.add_argument("--fresh", action="store_true", help="run: wipe the output folder first (otherwise a saved run resumes)")
     lv.add_argument("--fake-emr", action="store_true", help="run: use an in-memory EMR instead of the local OpenEMR (no Docker)")
     lv.add_argument("--no-engine", action="store_true", help="run: skip the engine and the bots")
@@ -416,6 +418,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
         return 0
     if args.cmd == "live":
+        if args.live_cmd == "export":
+            from krisnai.live.export import write_js
+
+            data = write_js(args.run, args.js or args.run / "tools_stream.js")
+            print(f"{len(data['events'])} events, {data['encounters']} encounters -> {args.js or args.run / 'tools_stream.js'}")
+            return 0
+        if args.live_cmd == "score":
+            from krisnai.live.score import write_reports
+
+            sc = write_reports(args.run)
+            print(f"{sc['found']} of {sc['problems']} payer problems found; {len(sc['false_alarms'])} false alarms; report: {args.run / 'scorecard.html'}")
+            return 0
         if args.live_cmd == "run":
             from krisnai.integrations.openemr import seed as oeseed
             from krisnai.integrations.openemr.auth import OpenEmrAuth

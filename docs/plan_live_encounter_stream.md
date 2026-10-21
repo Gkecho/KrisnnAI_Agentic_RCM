@@ -1,6 +1,6 @@
 # Plan: a live encounter stream through the whole ecosystem
 
-Status: **S1, S2, S2b, S3 and S4 built and verified** (2026-10-21); S5 not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
+Status: **S1 to S5 built and verified** (2026-10-21). Remaining work is in the follow-ups at the end of section 5g. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
 
 ## 1. Goal
 Create dummy appointments and push them through the system one at a time, as if real visits were happening, with nobody typing data in:
@@ -153,9 +153,36 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 
 **The 50-encounter run against OpenEMR** (seed 7, policy on): 38 visits auto-accepted by policy, 2 sampled for a coder's quality check and confirmed by a **simulated** coder (labelled as simulated everywhere), 10 problematic visits left in the coder queue with their reasons (3 missing plan, 2 two problems, 2 unclear status, 2 unsigned, 1 thin chronic). 40 claims billed, 40 remits issued; the payer paid 31, denied 8 (3 for lapsed coverage that Gatekeeper's eligibility check had flagged before the visit, 4 ordinary or deviation denials, 1 wrong denial), underpaid 1, pended 4. The engine's agents raised: 8 denial tasks (A8: 2 appeals, 5 fixes, 1 write-off review, one for each denial) and 32 patient statements (A12).
 
-**What the run exposed (for S5, not hidden):** the one underpayment (claim 97-1768, paid 75.00 against a schedule that would have paid 100.00) produced **no A10 card**, although A10 ran 32 decisions: the stream does not load the contract fee schedule A10 needs, so it could not see the shortfall. The payer's deviations are therefore not yet all caught; scoring that is S5.
+**What the first run exposed, and the fix:** the one underpayment (claim 97-1768, paid 75.00 against a schedule that would have paid 100.00) produced **no A10 card**, although A10 ran 32 decisions: the stream had not loaded the practice's contract fee schedule, which A10 compares payments to. That was a gap in the stream, not in the agent; the stream now loads the practice's fee schedule on day one (`fee_schedule.csv`), and the rerun in section 5g shows A10 catching the underpayment. The first run is kept at `out/live_run50_nofee` for comparison.
 
 **Limits:** 'real time' is the simulated clock, run day by day; the simulated coder is a stand-in for a person; no clearinghouse rejections or corrected claims are injected yet (so A6 and the resubmission bot are not exercised); the payer's rates are demo settings. Streamed patients use fixed member ids, so running the stream again on the same OpenEMR reuses them instead of creating new ones. Tests: `tests/test_live_s4.py` (12 fast, 2 slow).
+
+## 5g. S5 result (2026-10-21): the scorecard, the reconciliation and the live view
+`krisnai live score --run <folder>` (`krisnai/live/score.py`) lays the agents' work beside the payer's hidden truth log and reads every 835 file back to reconcile it; `krisnai live export` turns a run into the data the preview shows (`tools_stream.js`). Reports: `scorecard.html`, `scorecard.json`, `ledger.csv`.
+
+**The 50-encounter run against OpenEMR (with the fee schedule loaded):**
+
+| What the payer did | Claims | Agent raised work | Missed |
+|---|---|---|---|
+| ordinary denial | 2 | 2 | 0 |
+| denial the book predicts (coverage lapsed) | 3 | 3 | 0 |
+| denial that contradicts the published rules (deviation) | 3 | 3 | 0 |
+| underpayment below the fee schedule (deviation) | 1 | 1 (A10 dispute review) | 0 |
+| paid correctly | 31 | none expected | 0 false alarms |
+
+**9 of 9 payer problems found, 0 false alarms.** The first run, without the fee schedule, found 8 of 9: it missed the underpayment. Eligibility: 3 patients had lapsed coverage and Gatekeeper raised a coverage exception for all 3, before the visit, with no false alarms on the 47 active patients. Coding against the answer key: 38 auto-accepted visits all had the right code and diagnosis; all 10 problem visits were routed with the right reason; A4 raised no findings.
+
+**The finding that matters most: 0 of the 3 payer deviations were recognized as contradicting the published rules.** The agents treated a wrong denial, an unpublished edit and a stale rule like any other denial and raised the normal denial work. No agent reads the Knowledge Book, so none could notice that the payer broke its own rules. This is the gap the deviation layer was built to expose; closing it means moving A8 (and A5, A7) onto the book, a separate change.
+
+**Reconciliation.** 40 remits read from the 835 files: billed 5,430.00; the payer says it paid 2,843.00; patient responsibility 710.75; contractual write-down 806.25; denied (billed) 1,070.00. The remits tie out to the payer's truth log with 0 mismatches; a remit in two files counts once; a claim with no remit is listed as awaiting. **Cash collected is always 0.00**: a remit is what the payer says it paid, and no bank deposits exist in this simulation, so none is shown as collected. Posting remits back into OpenEMR (its ERA importer) was not tried.
+
+**Live view.** The preview's "Tools in action" screen now has a section for the recorded run: the funnel from booking to payment, this scorecard, the money box with the cash line, and a day-by-day replay that lights up the tools in the diagram (28 simulated days with activity, 394 steps). It is labelled a recorded synthetic run. The rendering was checked with the real data in a script; it has not been looked at in a browser yet, and it is not deployed.
+
+**Tests:** `tests/test_live_s5.py` (6 fast, 1 slow): the tie-out, a tampered remit flagged, a double file counted once, a missing remit listed, every payer behaviour classified, found, missed, false alarm and recognized counted against a hand-made truth, and a real streamed run scored end to end.
+
+**Honest limits.** The score measures the loop against our own payer simulator on synthetic data, not accuracy against real payers; the deviation rate, the rates of denial and pend, and the mix of mistakes are demo settings; nine problems is a small sample; the same seed on the same OpenEMR reuses the same patients and claim ids, so a rerun repeats the same decisions.
+
+**Follow-ups, in the order I would take them:** (1) move A8, A5 and A7 onto the Knowledge Book so deviations are recognized; (2) inject clearinghouse rejections so A6 and the resubmission bot are exercised; (3) simulate bank deposits so A11's reconciliation and a real cash line exist; (4) post remits into OpenEMR through its ERA importer; (5) replace the simulated coder with a queue a person can work in the preview.
 
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.

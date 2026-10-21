@@ -270,6 +270,11 @@ class Stream:
     def tick(self, day: date, client: ClearinghouseClient, portal_url: str | None, eng) -> None:  # noqa: ANN001
         self.world.advance(day)
         feeds: dict[str, list] = {"appointments": [], "visits": [], "notes": []}
+        if not self.state.get("fee_schedule"):  # the practice's copy of its contract rates, from day one (A10 compares payments to it)
+            rows = ["payer_id,cpt,modifier,allowed_amount,effective_date"] + [f"{PAYER_ID},{c},,{a},2020-01-01" for c, a in sorted(self.payer.fees.items())]
+            self._write("fee_schedule.csv", "\n".join(rows) + "\n")
+            self.state["fee_schedule"] = True
+            self._commit()
         for i, v, booking, visit_day in self.schedule():
             if day >= booking:
                 self._advance_encounter(i, v, booking, visit_day, day, client, feeds)
