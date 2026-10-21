@@ -21,11 +21,11 @@ start out\stage1\stage1_report.html
 gone (the control run without the bot still has it). **What it does not prove:** that a real clearinghouse or payer answers this way. The mock accepts any
 replacement of a claim it returned, so it shows the transport and the loop, not whether a correction is right.
 
-### Stedi (built, not yet run against the live sandbox)
+### Stedi (eligibility verified live on the sandbox with a test key)
 `stedi.py` implements the same three calls over Stedi's **raw X12** healthcare endpoints (`eligibility/v3/raw-x12`, `claimstatus/v2/raw-x12`,
 `professionalclaims/v3/raw-x12-submission`, base `https://healthcare.us.stedi.com/2024-04-01`), so the repo's own 270/276/837 builders and 271/277/277CA
 parsers are used unchanged. Request and response shapes come from Stedi's published reference (checked 2026-10-16) and are tested with recorded-shape
-responses; **no call has been made to Stedi from this repo**. Safety: the key comes from `STEDI_API_KEY` only; non-local URLs need
+responses. **Verified live (test key): eligibility** (270 out, 271 parsed). Claim status and claim submission have not been run against Stedi's sandbox, which does not answer them in test mode. Safety: the key comes from `STEDI_API_KEY` only; non-local URLs need
 `KRISNAI_ALLOW_REAL_ENDPOINTS=1`; claim submission needs `KRISNAI_ALLOW_STEDI_SUBMIT=1` and an explicit test-key confirmation (a production key would send a
 real claim); a response in production mode stops the client unless `KRISNAI_ALLOW_STEDI_PRODUCTION=1`.
 
@@ -36,7 +36,7 @@ set KRISNAI_ALLOW_REAL_ENDPOINTS=1
 .venv\Scripts\python.exe -m krisnai.cli stedi
 .venv\Scripts\python.exe -m pytest tests/test_stedi.py -k live
 ```
-Known gaps: Stedi's test mode only answers its documented mock subscribers exactly (the Aetna mock is a dependent case; our 270 sends the subscriber
+Known gaps (the first live eligibility call has since worked, with the mock subscriber defaults in `krisnai stedi`): Stedi's test mode only answers its documented mock subscribers exactly (the Aetna mock is a dependent case; our 270 sends the subscriber
 loop only, so the first live call may return an AAA error to adjust), the auth header style (bare key vs `Key <key>`) should be confirmed on the first call
 (`KRISNAI_STEDI_AUTH_STYLE=key` switches it), and a new-style JSON eligibility API exists that this does not use.
 
