@@ -25,6 +25,7 @@ import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from krisnai.agents.a14_tower import open_cards
@@ -324,9 +325,20 @@ class Stream(RepliesMixin):
             rec = e["coding"]
             pay = self.payer_for(e)
             approval = e.get("approval") or rec["approval"]
-            dx = (rec["dx"][0][0], rec["dx"][0][1])
+            dxs = [(d[0], d[1]) for d in rec["dx"][:12]]  # every diagnosis the coder found, not only the first
             fee = FEES.get(rec["cpt"]) or getattr(service_by_cpt(rec["cpt"]), "fee", "100.00")
-            x837 = self.emr.charge_837(Charge(e["pid"], e["eno"], member, pay.payer_id, pay.name, [dx], [(rec["cpt"], CPT_TEXT, 1, fee)]), approval, visit_day)
+            procs = rec.get("procedures") or []
+            lines: list[tuple[str, str, int, str]] = []
+            mods: list[tuple[str, ...]] = []
+            if rec["cpt"] and not any(p["cpt"] == rec["cpt"] for p in procs):  # the visit itself (a therapy-only visit has no separate visit line)
+                lines.append((rec["cpt"], CPT_TEXT, 1, fee))
+                mods.append(())
+            for p in procs:  # every service the coder found in the text goes on the claim, with its units and side
+                units = int(p.get("units") or 1)
+                unit_fee = Decimal(getattr(service_by_cpt(p["cpt"]), "fee", "100.00"))
+                lines.append((p["cpt"], p["name"], units, f"{unit_fee * units:.2f}"))
+                mods.append(tuple(p.get("modifiers") or ()))
+            x837 = self.emr.charge_837(Charge(e["pid"], e["eno"], member, pay.payer_id, pay.name, dxs, lines, modifiers=tuple(mods)), approval, visit_day)
             self._write(f"837_{e['claim']}.837", x837)
             self._write(f"{e['claim']}.837", x837, "claims")
             e.update(billed_on=day.isoformat(), approval=approval)

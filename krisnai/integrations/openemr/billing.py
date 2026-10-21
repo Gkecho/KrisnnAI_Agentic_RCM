@@ -31,6 +31,7 @@ class Charge:
     dx: list[tuple[str, str]]  # (ICD-10 code, text)
     lines: list[tuple[str, str, int, str]]  # (CPT, text, units, fee as a decimal string)
     plan_name: str = "Demo PPO"
+    modifiers: tuple[tuple[str, ...], ...] = ()  # one tuple of modifiers per line, in the same order as `lines`
 
 
 def _docker(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -50,7 +51,8 @@ def charge_and_837(charge: Charge, approval: str, runner=_docker) -> dict:  # no
         "pid": charge.pid, "encounter": charge.encounter, "member": charge.member, "payer_id": charge.payer_id,
         "payer_name": charge.payer_name, "plan_name": charge.plan_name,
         "dx": [{"code": c, "text": t} for c, t in charge.dx],
-        "lines": [{"cpt": c, "text": t, "units": u, "fee": f} for c, t, u, f in charge.lines],
+        "lines": [{"cpt": c, "text": t, "units": u, "fee": f, "modifier": ":".join(charge.modifiers[i]) if i < len(charge.modifiers) else ""}
+                  for i, (c, t, u, f) in enumerate(charge.lines)],
     }  # fmt: skip
     run = runner("exec", "-i", CONTAINER, "php", REMOTE, stdin=json.dumps(body))
     if run.returncode or not run.stdout.strip():

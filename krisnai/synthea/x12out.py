@@ -78,7 +78,7 @@ def write_837(payer: PayerInfo, claims: list[SimClaim], ctrl: int, when: date) -
         for n, ln in enumerate(c.lines, start=1):
             body += [
                 _seg("LX", n),
-                _seg("SV1", f"HC:{ln.cpt}", _amt(ln.billed), "UN", ln.units, "", "", "1"),
+                _seg("SV1", "HC:" + ":".join((ln.cpt, *ln.mods)), _amt(ln.billed), "UN", ln.units, "", "", "1"),
                 _seg("DTP", "472", "D8", c.dos.strftime("%Y%m%d")),
             ]
     return _envelope("HC", "005010X222A1", "837", "005010X222A1", body, ctrl, SENDER, payer.payer_id, when)

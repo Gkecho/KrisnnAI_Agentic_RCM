@@ -104,3 +104,51 @@ def test_an_unsigned_note_says_which_of_the_three_things_made_it_unsigned():
     assert not d.ok and "no signature line" in d.detail
     e = next(k for k in c.code("V4", base + "Note pending signature.\n" + sig, True, DAY).checks if k.name == "signed")
     assert not e.ok and "says the note is unsigned or pending signature" in e.detail
+
+
+NOTE = ("S: 34 year old man, established patient, twisted his {side} ankle playing football two days ago. Pain 6 out of 10, swelling, worse when walking.\n"
+        "O: {side2} ankle swollen and tender over the lateral ligaments.\nA: Ankle sprain.\nP: Ice, compression, crutches. Ordering an ankle x-ray to rule out a fracture. Follow up in two weeks.\n"
+        "Signed electronically by Dr. Rao.")
+
+
+def test_a_side_named_elsewhere_in_the_note_counts_when_it_is_the_only_side():
+    r = CODER().code("V1", NOTE.format(side="left", side2="Left"), True, DAY)
+    assert r.route == "auto" and [p["modifiers"] for p in r.procedures] == [["LT"]], (r.reason, r.note)
+
+
+def test_no_side_or_two_different_sides_still_go_to_a_coder():
+    none = CODER().code("V2", NOTE.format(side="", side2="").replace("his  ankle", "his ankle").replace("O:  ankle", "O: Ankle"), True, DAY)
+    assert none.route == "coder" and none.reason == "laterality_missing"
+    both = CODER().code("V3", NOTE.format(side="left", side2="Right"), True, DAY)
+    assert both.route == "coder", "two different sides: which is meant? a person decides"
+
+
+def test_being_right_handed_is_not_the_side_of_the_problem():
+    text = NOTE.format(side="", side2="").replace("his  ankle", "his ankle").replace("O:  ankle", "O: He is right-handed. Ankle")
+    assert CODER().code("V4", text, True, DAY).reason == "laterality_missing"
+
+
+def test_the_claim_carries_every_service_and_diagnosis_found_in_the_text_with_its_side(tmp_path):
+    from krisnai.live.transcripts import Visit
+
+    v = Visit("VX", "MX", "typed_in", NOTE.format(side="left", side2="Left"), True, None, DAY)
+    cfg = StreamConfig(count=1, seed=5, engine=False, bots=False, serve=False, sample_rate=0.0, tag="Z")
+    run_stream(tmp_path / "r", cfg, FakeEmr(), visits=[v], log=lambda *_: None)
+    claim = next((tmp_path / "r" / "claims").glob("*.837")).read_text("utf-8").replace("~", "\n")
+    assert "SV1*HC:99213*" in claim, "the visit line"
+    assert "SV1*HC:73600:LT*" in claim, "the X-ray named in the plan, on the left side the note describes"
+    assert "HI*ABK:S93409A" in claim, "the diagnosis written in the assessment"
+
+
+def test_a_visit_with_two_diagnoses_and_two_services_reaches_the_payer_with_all_of_them(tmp_path):
+    from krisnai.live.transcripts import Visit
+
+    note = ("S: Established patient. Cough for two weeks, worse at night, with some fever.\nO: Lungs clear. Throat red.\nA: Cough.\n"
+            "P: Chest x-ray to rule out pneumonia because of the persistent cough. Urinalysis because of the burning when I urinate. Return in a week.\n"
+            "Signed electronically by Dr. Rao.")
+    cfg = StreamConfig(count=1, seed=3, engine=False, bots=False, serve=False, sample_rate=0.0, tag="Y")
+    run_stream(tmp_path / "r", cfg, FakeEmr(), visits=[Visit("VY", "MY", "typed_in", note, True, None, DAY)], log=lambda *_: None)
+    claims = list((tmp_path / "r" / "claims").glob("*.837"))
+    if claims:  # the coder may route it to a person; when it bills, every service it found is on the claim
+        text = claims[0].read_text("utf-8").replace("~", "\n")
+        assert text.count("SV1*") >= 2

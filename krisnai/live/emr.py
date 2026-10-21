@@ -131,7 +131,8 @@ class FakeEmr:
             raise billing.BillingError("a charge needs an approval record")
         payer = PayerInfo(charge.payer_id, charge.payer_name, Decimal("1"), 14)
         person = Person(charge.member, charge.member, "Synthetic", date(1980, 1, 1), "F")
-        lines = [SimLine(c, u, Decimal(f), Decimal("0")) for c, _, u, f in charge.lines]
+        lines = [SimLine(c, u, Decimal(f), Decimal("0"), mods=tuple(charge.modifiers[i]) if i < len(charge.modifiers) else ())
+                 for i, (c, _, u, f) in enumerate(charge.lines)]
         dos = self.visit_day.get(charge.encounter, day)
         claim = SimClaim(f"{charge.pid}-{charge.encounter}", payer, "1234567893", person, dos, [c.replace(".", "") for c, _ in charge.dx], lines, day)
         text = x12out.write_837(payer, [claim], 1, day)

@@ -145,16 +145,18 @@ class PayerSim:
         """What the book says should happen: (paid | denied, CARC, reason). The book silent or absent means 'paid'."""
         if self.book is None or claim.dos is None:
             return "paid", "", ""
-        cpt, member = claim.lines[0].cpt, claim.patient.ref
+        member = claim.patient.ref
         dates = {"service_date": claim.dos}
         if self.members.get(member) is False:
             return "denied", "27", "coverage was not active on the service date"
-        cov = self.book.lookup(self.payer_id, "coverage", cpt, dates, claim.submitted)
-        if cov.ok and cov.rule.content.get("covered") is False:
-            return "denied", "96", f"not covered ({cov.rule.rule_id} v{cov.rule.version})"
-        pa = self.book.lookup(self.payer_id, "prior_auth", cpt, dates, claim.submitted)
-        if pa.ok and pa.rule.content.get("required") and (member, cpt) not in self.auths:
-            return "denied", "197", f"prior authorization required and none on file ({pa.rule.rule_id} v{pa.rule.version})"
+        for ln in claim.lines:  # every line on the claim is tested against the published rules, not only the first
+            cpt = ln.cpt
+            cov = self.book.lookup(self.payer_id, "coverage", cpt, dates, claim.submitted)
+            if cov.ok and cov.rule.content.get("covered") is False:
+                return "denied", "96", f"not covered ({cov.rule.rule_id} v{cov.rule.version})"
+            pa = self.book.lookup(self.payer_id, "prior_auth", cpt, dates, claim.submitted)
+            if pa.ok and pa.rule.content.get("required") and (member, cpt) not in self.auths:
+                return "denied", "197", f"prior authorization required and none on file ({pa.rule.rule_id} v{pa.rule.version})"
         return "paid", "", ""
 
     def _stale_auth_applies(self, claim: SimClaim) -> bool:

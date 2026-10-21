@@ -49,7 +49,7 @@ foreach ($in['dx'] as $d) {
     $just .= 'ICD10|' . $d['code'] . ':';
 }
 foreach ($in['lines'] as $ln) {
-    BillingUtilities::addBilling($enc, 'CPT4', $ln['cpt'], $ln['text'], $pid, '1', $uid, '', (string) $ln['units'], $ln['fee'], '', $just, 0);
+    BillingUtilities::addBilling($enc, 'CPT4', $ln['cpt'], $ln['text'], $pid, '1', $uid, $ln['modifier'] ?? '', (string) $ln['units'], $ln['fee'], '', $just, 0);
 }
 BillingUtilities::updateClaim(true, $pid, $enc, $coId, 1, 1, 0, '', 'X12', $partnerId);
 $log = '';

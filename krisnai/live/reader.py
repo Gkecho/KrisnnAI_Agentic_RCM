@@ -759,13 +759,19 @@ def read(text: str, signed: bool = True) -> Reading:
     if any(h.needs_laterality for h in rd.diagnoses) or any(s.needs_laterality for s in catalog.SERVICES if _kw_hit(s, masked)):
         doc_sides = set()
         for a, b in zip(doc.bounds, doc.bounds[1:], strict=False):
-            lat, clash = lateral_of(masked[a:b])
+            lat, clash = lateral_of(re.sub(r"\b(?:left|right)[- ]handed\b", "", masked[a:b], flags=re.I))  # hand dominance is not a side of the problem
             if clash:
                 doc_sides |= {"left", "right"}
             elif lat in ("left", "right"):
                 doc_sides.add(lat)
         if doc_sides == {"left", "right"}:
             rd.uncertain("both left and right are mentioned in the note and a side is needed: which side is meant?")
+        elif len(doc_sides) == 1:  # one side is named somewhere in the note and no other: a clinician would read it as the side of the problem
+            only = next(iter(doc_sides))
+            for h in rd.diagnoses:
+                if h.needs_laterality and not h.laterality:
+                    h.laterality = only
+                    rd.note(f"{h.name}: side ({only}) taken from the note, where it is the only side mentioned")
     act_lat = {h.laterality for h in rd.diagnoses if h.laterality}
     if len(act_lat) == 1:
         rd.laterality = next(iter(act_lat))
