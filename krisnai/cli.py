@@ -172,10 +172,14 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--limit", type=int, default=50, help="seed: first N patients (0 = all)")
     oe.add_argument("--out", type=Path, help="pull: folder to write the three feeds into")
     lv = sub.add_parser("live", help="live encounter stream (demo only): run one encounter through the whole chain")
-    lv.add_argument("live_cmd", choices=["s1", "s2"])
+    lv.add_argument("live_cmd", choices=["s1", "s2", "run"])
     lv.add_argument("--visit", type=int, default=0, help="s1: run the Nth synthetic transcript (1-50) through the coder")
     lv.add_argument("--count", type=int, default=50, help="s2: how many transcripts")
     lv.add_argument("--seed", type=int, default=7)
+    lv.add_argument("--fresh", action="store_true", help="run: wipe the output folder first (otherwise a saved run resumes)")
+    lv.add_argument("--fake-emr", action="store_true", help="run: use an in-memory EMR instead of the local OpenEMR (no Docker)")
+    lv.add_argument("--no-engine", action="store_true", help="run: skip the engine and the bots")
+    lv.add_argument("--crash-after", type=int, default=None, help="run: test hook that kills the run at that step")
     lv.add_argument("--policy", choices=["on", "off"], default="on", help="exception-only auto-accept (ADR-0002); off by default in real use")
     lv.add_argument("--work", type=Path, default=Path("out/openemr"))
     lv.add_argument("--out", type=Path, default=Path("out/live_s1"))
@@ -412,6 +416,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
         return 0
     if args.cmd == "live":
+        if args.live_cmd == "run":
+            from krisnai.integrations.openemr import seed as oeseed
+            from krisnai.integrations.openemr.auth import OpenEmrAuth
+            from krisnai.live.emr import FakeEmr, OpenEmrPort
+            from krisnai.live.stream import StreamConfig, run_stream
+
+            emr = FakeEmr() if args.fake_emr else OpenEmrPort(oeseed._Server(OpenEmrAuth(args.work)))
+            out = args.out if args.out != Path("out/live_s1") else Path("out/live_run")
+            cfg = StreamConfig(count=args.count, seed=args.seed, policy_on=args.policy == "on", engine=not args.no_engine,
+                               bots=not args.no_engine)  # fmt: skip
+            print(json.dumps(run_stream(out, cfg, emr, fresh=args.fresh, crash_after=args.crash_after), indent=1, sort_keys=True))
+            return 0
         if args.live_cmd == "s2":
             from krisnai.live.s2 import run_s2
 

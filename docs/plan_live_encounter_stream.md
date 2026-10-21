@@ -1,6 +1,6 @@
 # Plan: a live encounter stream through the whole ecosystem
 
-Status: **S1, S2, S2b and S3 built and verified** (2026-10-21); S4 onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
+Status: **S1, S2, S2b, S3 and S4 built and verified** (2026-10-21); S5 not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
 
 ## 1. Goal
 Create dummy appointments and push them through the system one at a time, as if real visits were happening, with nobody typing data in:
@@ -145,6 +145,17 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 - **Tests:** `tests/test_live_s3.py` (11); the earlier live and portal tests still pass, and both slow end-to-end tests pass against OpenEMR. One additive change to the mock portal: a world may supply its own reason line and records-request flag; the old behaviour is unchanged for worlds that do not.
 
 **Not done:** the rates and the deviation mix are demo settings, not payer statistics; an ordinary denial is random, so the book cannot predict it (it is not counted as a deviation). Nothing scores the agents against the truth log yet (S5), and the single-encounter runner still uses a scripted denial; the S4 orchestrator will use the rates.
+
+## 5f. S4 result (2026-10-21): the orchestrator and clock
+`krisnai live run --count 50` (`krisnai/live/stream.py`, `emr.py`) pushes synthetic encounters through the whole chain on a simulated clock, with nobody typing anything in. Each simulated day it: books patients and appointments in the EMR and checks eligibility (booking day); creates the encounter, signed note and transcript and runs the transcript coder (visit day, three days later); has the EMR charge and write the 837P, sends it to the clearinghouse and lets the payer decide (billing); issues each 835 on its remit date; runs the status bot and, weekly, the portal bot against the payer's live state; and runs the engine's daily run (all agents, shadow mode) over whatever files arrived. The EMR sits behind a small interface (`OpenEmrPort`, and an in-memory `FakeEmr` for tests), so the orchestrator is tested without Docker.
+
+**Crash safety (the gate).** State is saved after every step (retrying through Windows file locks, which OneDrive caused for real during this build); every EMR write looks for the record first; every payer decision comes from a (seed, claim id) stream. Verified two ways: with the in-memory EMR, killing the run at five different points (including after a side effect and before the save) and resuming gave the same truth log byte for byte, the same stages and files, and no repeated event; and against the **real OpenEMR**, a 50-encounter run killed at step 150 and resumed ended with exactly 50 patients, 50 appointments, 50 encounters and 100 documents, none duplicated.
+
+**The 50-encounter run against OpenEMR** (seed 7, policy on): 38 visits auto-accepted by policy, 2 sampled for a coder's quality check and confirmed by a **simulated** coder (labelled as simulated everywhere), 10 problematic visits left in the coder queue with their reasons (3 missing plan, 2 two problems, 2 unclear status, 2 unsigned, 1 thin chronic). 40 claims billed, 40 remits issued; the payer paid 31, denied 8 (3 for lapsed coverage that Gatekeeper's eligibility check had flagged before the visit, 4 ordinary or deviation denials, 1 wrong denial), underpaid 1, pended 4. The engine's agents raised: 8 denial tasks (A8: 2 appeals, 5 fixes, 1 write-off review, one for each denial) and 32 patient statements (A12).
+
+**What the run exposed (for S5, not hidden):** the one underpayment (claim 97-1768, paid 75.00 against a schedule that would have paid 100.00) produced **no A10 card**, although A10 ran 32 decisions: the stream does not load the contract fee schedule A10 needs, so it could not see the shortfall. The payer's deviations are therefore not yet all caught; scoring that is S5.
+
+**Limits:** 'real time' is the simulated clock, run day by day; the simulated coder is a stand-in for a person; no clearinghouse rejections or corrected claims are injected yet (so A6 and the resubmission bot are not exercised); the payer's rates are demo settings. Streamed patients use fixed member ids, so running the stream again on the same OpenEMR reuses them instead of creating new ones. Tests: `tests/test_live_s4.py` (12 fast, 2 slow).
 
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.

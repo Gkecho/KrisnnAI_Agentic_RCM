@@ -118,6 +118,8 @@ class PayerSim:
             return "paid", "", ""
         cpt, member = claim.lines[0].cpt, claim.patient.ref
         dates = {"service_date": claim.dos}
+        if self.members.get(member) is False:
+            return "denied", "27", "coverage was not active on the service date"
         cov = self.book.lookup(self.payer_id, "coverage", cpt, dates, claim.submitted)
         if cov.ok and cov.rule.content.get("covered") is False:
             return "denied", "96", f"not covered ({cov.rule.rule_id} v{cov.rule.version})"
