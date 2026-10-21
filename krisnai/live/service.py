@@ -108,7 +108,7 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
         try:
             h = int(hashlib.sha256("".join(v.text for v in visits).encode()).hexdigest(), 16)
             cfg = StreamConfig(count=len(visits), seed=h % 1000, start=date(2026, 10, 21), per_day=5, engine=engine, bots=engine, serve=serve_ports,
-                               early_stop=True, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, **PAYER_MODES[payer])  # fmt: skip
+                               early_stop=True, sample_rate=0.0, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, **PAYER_MODES[payer])  # fmt: skip
             run_stream(r["out"], cfg, emr_factories[emr](), visits=visits, log=lambda *_: None)
             r["status"] = "done"
         except Exception as e:  # noqa: BLE001
@@ -161,7 +161,17 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
         if r is None:
             raise HTTPException(404, "no such run")
         out = r["out"]
-        data = trace_run(out) if (out / "state.json").exists() else {"claims": [], "events": [], "day": None, "ledger": None}
-        return {"id": rid, "status": r["status"], "error": r["error"], "seconds": round(time.time() - r["started"], 1), **data}
+        state = r["status"]  # read first: if it says done, the run had already finished writing when the trace below is read
+        data = r.get("last") or {"claims": [], "events": [], "day": None, "ledger": None}
+        if (out / "state.json").exists():
+            for attempt in range(8):  # the run replaces its state file as it goes; on Windows a read at that instant is refused, so try again
+                try:
+                    data = r["last"] = trace_run(out)
+                    break
+                except (OSError, ValueError):
+                    if state != "running" and attempt == 7:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+        return {"id": rid, "status": state, "error": r["error"], "seconds": round(time.time() - r["started"], 1), **data}
 
     return app

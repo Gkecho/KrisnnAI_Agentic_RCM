@@ -77,6 +77,7 @@ class StreamConfig:
     tag: str = ""  # makes every id unique to one run (a typed-in visit must never reuse an earlier run's patient)
     early_stop: bool = False  # stop once every claim is settled and the agents have had `react_days` to react (single visits)
     react_days: int = 8
+    sample_rate: float = 0.10  # the share of auto-accepts a coder still checks (0 for typed-in visits: the same transcript must always get the same answer)
     lapsed_ids: tuple[int, ...] = ()  # visits (1-based) whose coverage has lapsed, when chosen one by one
 
     def key(self) -> dict:
@@ -102,7 +103,7 @@ class Stream:
         self.visits: list[Visit] = visits if visits is not None else generate(cfg.seed, cfg.count, cfg.start)
         self.state = self._load()
         self.seen_events = {json.loads(ln)["key"] for ln in (out / "events.jsonl").read_text("utf-8").splitlines() if ln} if (out / "events.jsonl").exists() else set()
-        self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed))
+        self.coder = Coder(Policy(enabled=cfg.policy_on, seed=cfg.seed, sample_rate=cfg.sample_rate))
         self.coder.per_day = dict(self.state.get("coder_per_day", {}))
         self.payer = PayerSim(PAYER_ID, PAYER_NAME, book=demo_book(), config=PayerConfig(
             seed=cfg.seed, pend_rate=cfg.pend_rate, deny_rate=cfg.deny_rate, deviation_rate=cfg.deviation_rate))

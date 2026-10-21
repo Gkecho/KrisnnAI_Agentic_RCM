@@ -206,6 +206,8 @@ Every visit's trace now has a section **"What the agents did, and how"** (in "Ru
 
 What the first batch showed: for a paid visit the Gatekeeper, Code Whisperer, Mirror and Auditor each ran their checks and raised nothing; for the lapsed-coverage visit the Gatekeeper flagged the coverage three days before the visit and the Advocate raised a fix task after the denial. It also exposes a fact worth knowing: the Advocate's check "appeal window from table" answers no, because the denial tables have no filing-window row and it falls back to a 180-day default, which is the engine's own table and not the Knowledge Book.
 
+**Two fixes after 5j (found because the service tests passed only some of the time):** the status call could read a run's state file at the instant the run replaced it, which Windows refuses (it now retries, and reads the run's status before its trace so a trace is never half-finished and marked done); and the 10% quality-check sample depended on a run-specific id, so the same transcript could go to a coder on one run and not the next (the quality sample is now off for typed-in visits so the same transcript always gets the same answer; it stays on at 10% in the 50-encounter stream). I committed 5j before seeing these two failures, which I should not have done; this commit fixes them and the full live suite (92 tests) passes, with the service tests run five times in a row.
+
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.
 - Payer behaviour is our own invention. Denial rates are not real payer statistics, and the screen must say so.
