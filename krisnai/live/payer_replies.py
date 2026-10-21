@@ -40,6 +40,17 @@ APPEAL_BASE = {"authorization": 0.30, "bundling": 0.25, "medical_necessity": 0.3
 REAL_CONTRADICTION_P = 0.90  # a payer deviation, cited correctly
 
 
+@dataclass
+class ReplyClaim(SimClaim):
+    """A claim carrying one round's money. It reports the ORIGINAL payer claim number (CLP07), so the engine's matcher links the second remit to the original claim."""
+
+    pcn: str = ""
+
+    @property
+    def payer_claim_no(self) -> str:
+        return self.pcn
+
+
 def reply_id(claim_id: str, round_no: int) -> str:
     return f"{claim_id}-R{round_no}"
 
@@ -158,7 +169,7 @@ class ReplySim:
             scenario, carc = "denial", ans.carc
         if ans.outcome == "refused":
             lines[0].cas = [("CO", "45", billed)]
-        out = SimClaim(ans.reply_id, c.payer, c.provider_npi, c.patient, c.dos, list(c.dx), lines, c.submitted, scenario, carc)
+        out = ReplyClaim(ans.reply_id, c.payer, c.provider_npi, c.patient, c.dos, list(c.dx), lines, c.submitted, scenario, carc, pcn=c.payer_claim_no)
         return out
 
 
