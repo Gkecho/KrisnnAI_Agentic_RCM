@@ -78,6 +78,11 @@ class StreamConfig:
     early_stop: bool = False  # stop once every claim is settled and the agents have had `react_days` to react (single visits)
     react_days: int = 8
     sample_rate: float = 0.10  # the share of auto-accepts a coder still checks (0 for typed-in visits: the same transcript must always get the same answer)
+    # switches for the three parallel pieces of work; each is off by default so existing behaviour and tests are unchanged
+    payers: str = "single"  # S6: "single" (one payer, as before) or "network" (several payers, one picked per visit)
+    reader: str = "rules"  # S7: how transcripts are read: "rules" or "rules+ai" (an AI proposal, checked by the rules)
+    replies: bool = False  # S8: the bots answer the payer's replies (corrected claims, appeals, disputes, records)
+    reject_rate: float = 0.0  # S8: the share of claims sent with a data-entry error the clearinghouse will reject
     lapsed_ids: tuple[int, ...] = ()  # visits (1-based) whose coverage has lapsed, when chosen one by one
 
     def key(self) -> dict:
@@ -107,9 +112,10 @@ class Stream:
         self.coder.per_day = dict(self.state.get("coder_per_day", {}))
         self.payer = PayerSim(PAYER_ID, PAYER_NAME, book=demo_book(), config=PayerConfig(
             seed=cfg.seed, pend_rate=cfg.pend_rate, deny_rate=cfg.deny_rate, deviation_rate=cfg.deviation_rate))
+        self.payers: dict[str, PayerSim] = {PAYER_ID: self.payer}  # one payer today; the network of payers fills this in
         self.world = LiveWorld(self.payer, cfg.start)
         for member, active in self.state["members"].items():
-            self.payer.enrol(member, active)
+            self.payers[self.state["enc"].get(member, {}).get("payer_id", PAYER_ID)].enrol(member, active)
         self._rebuild_payer()
 
     # ------------------------------------------------------------------------------------------ state
@@ -164,9 +170,37 @@ class Stream:
                 self.world.accept_claims(f.read_text("utf-8"), billed)
                 if e["stage"] == "adjudicated" and e.get("claim") not in self.world.rejected:
                     c = next(c for c in self.world.accepted if c.claim_id == e["claim"])
-                    self.payer.adjudicate(c, billed)
-        for d in self.payer.cases.values():
+                    self.payer_for(e).adjudicate(c, billed)
+        for d in self._all_cases().values():
             d.issued = d.claim.claim_id in set(self.state["issued"])
+
+    # ------------------------------------------------------------------------------------------ payers
+    def assign_payer(self, visit: Visit, eid: str) -> str:
+        """The id of the payer this visit's patient is insured with. One payer for now; the payer network replaces this."""
+        return PAYER_ID
+
+    def payer_for(self, e: dict) -> PayerSim:
+        return self.payers[e.get("payer_id", PAYER_ID)]
+
+    def _all_cases(self) -> dict:
+        return {cid: d for p in self.payers.values() for cid, d in p.cases.items()}
+
+    def _all_truth_csv(self) -> str:
+        """The truth log of every payer in one file, sorted by claim id."""
+        if len(self.payers) == 1:
+            return self.payer.truth_csv()
+        import io
+
+        rows, header = [], None
+        for p in self.payers.values():
+            r = list(csv.reader(io.StringIO(p.truth_csv())))
+            header = header or r[0]
+            rows += r[1:]
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(header)
+        w.writerows(sorted(rows))
+        return buf.getvalue()
 
     # ------------------------------------------------------------------------------------------ the schedule
     def schedule(self) -> list[tuple[int, Visit, date, date]]:
@@ -196,7 +230,8 @@ class Stream:
             active = not self._inactive(member)
             appt_cpt = "99203" if TYPES.get(v.visit_type, ("", "", "established", ""))[2] == "new" else "99213"
             self.emr.ensure_appointment(pid, e["appt"], visit_day, appt_cpt, PAYER_ID, booking)
-            self.payer.enrol(member, active)
+            e["payer_id"] = self.assign_payer(v, eid)
+            self.payer_for(e).enrol(member, active)
             self.state["members"][member] = active
             e.update(pid=pid, puuid=puuid, appt_cpt=appt_cpt, active=active)
             feeds["appointments"].append({"appointment_id": e["appt"], "payer_id": PAYER_ID, "provider_npi": PROVIDER_NPI, "patient_ref": member,
@@ -265,7 +300,7 @@ class Stream:
                 self._advance(e, "rejected")
             else:
                 c = next(c for c in self.world.accepted if c.claim_id == e["claim"])
-                d = self.payer.adjudicate(c, day)
+                d = self.payer_for(e).adjudicate(c, day)
                 e["remit_date"] = d.remit_date.isoformat()
                 self._event(f"{eid}:payer", day, "6 payer", "Payer sim", "mock", e["claim"], "received", f"claim received; remit expected {d.remit_date}")
                 self._advance(e, "adjudicated")
@@ -287,7 +322,7 @@ class Stream:
         for i, v, booking, visit_day in self.schedule():
             if day >= booking:
                 self._advance_encounter(i, v, booking, visit_day, day, client, feeds)
-        for d in self.payer.remits_due(day):
+        for d in [x for p in self.payers.values() for x in p.remits_due(day)]:
             cid = d.claim.claim_id
             if cid in self.state["issued"]:
                 continue
@@ -318,7 +353,7 @@ class Stream:
         for ev in rep.events:
             self._event(f"status:{ev.subject}:{ev.outcome}:{ev.detail}", day, "9 status bot", "Status bot", "status", ev.subject, ev.outcome, ev.detail)
         if portal_url and day.toordinal() % 7 == 0:
-            pend = [cid for cid, d in sorted(self.payer.cases.items()) if not d.issued and d.received and (day - d.received).days >= 10][:5]
+            pend = [cid for cid, d in sorted(self._all_cases().items()) if not d.issued and d.received and (day - d.received).days >= 10][:5]
             if pend:
                 drv = HttpDriver(portal_url)
                 try:
@@ -368,7 +403,7 @@ class Stream:
         return day >= last + timedelta(days=self.cfg.react_days)
 
     def finish(self) -> dict:
-        (self.out / "truth.csv").write_text(self.payer.truth_csv(), encoding="utf-8")
+        (self.out / "truth.csv").write_text(self._all_truth_csv(), encoding="utf-8")
         stages: dict[str, int] = {}
         for e in self.state["enc"].values():
             stages[e["stage"]] = stages.get(e["stage"], 0) + 1
