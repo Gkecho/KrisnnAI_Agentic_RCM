@@ -182,6 +182,17 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 21), help="simulated booking day, YYYY-MM-DD")
     lv.add_argument("--deny-cpt", default="99213", help="the CPT the demo payer denies ('' = pay everything)")
     lv.add_argument("--carc", default="50")
+    kb = sub.add_parser("knowledge", help="Payer Knowledge Book (demo ruleset): look up a rule or compute a deadline")
+    kb.add_argument("kb_cmd", choices=["lookup", "deadline"])
+    kb.add_argument("--payer", default="SYNAETNA")
+    kb.add_argument("--service", default="97110", help="CPT, or * for none")
+    kb.add_argument("--family", default="coverage", help="lookup: coverage | prior_auth | medical_necessity | billing | denial_appeal")
+    kb.add_argument("--route", default="appeal", choices=["appeal", "corrected_claim"], help="deadline route")
+    kb.add_argument("--service-date", type=date.fromisoformat)
+    kb.add_argument("--denial-date", type=date.fromisoformat, help="the date the denial was notified")
+    kb.add_argument("--as-of", type=date.fromisoformat, required=True, help="evaluation date (the simulation clock)")
+    kb.add_argument("--plan")
+    kb.add_argument("--state")
     ops = sub.add_parser("ops", help="daily and backfill runs over an inbox folder (shadow mode throughout)")
     ops_sub = ops.add_subparsers(dest="ops_cmd", required=True)
     ops_daily = ops_sub.add_parser("daily", help="load the inbox, check it, advance every agent to --as-of")
@@ -415,6 +426,22 @@ def main(argv: list[str] | None = None) -> int:
         res = run_s1(args.work, args.out, args.as_of, deny_cpt=args.deny_cpt or None, carc=args.carc, visit=visit,
                      coder=Coder(Policy(enabled=args.policy == "on", seed=args.seed)))
         print(json.dumps(res.summary, indent=1, sort_keys=True))
+        return 0
+    if args.cmd == "knowledge":
+        from dataclasses import asdict
+
+        from krisnai.knowledge import deadline as kb_deadline
+        from krisnai.knowledge.demo import demo_book
+
+        dates = {k: v for k, v in (("service_date", args.service_date), ("denial_notification_date", args.denial_date)) if v}
+        book = demo_book()
+        if args.kb_cmd == "lookup":
+            f = book.lookup(args.payer, args.family, args.service, dates, args.as_of, args.plan, args.state)
+            out = {"rule": asdict(f.rule) if f.rule else None, "problem": asdict(f.problem) if f.problem else None}
+        else:
+            r = kb_deadline(book, args.route, args.payer, args.service, dates, args.as_of, args.plan, args.state)
+            out = {"deadline": asdict(r.deadline) if r.deadline else None, "problem": asdict(r.problem) if r.problem else None}
+        print(json.dumps(out, indent=1, default=str))
         return 0
     if args.cmd == "openemr":
         from krisnai.integrations.openemr import docker as oedocker

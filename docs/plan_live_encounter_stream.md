@@ -1,6 +1,6 @@
 # Plan: a live encounter stream through the whole ecosystem
 
-Status: **S1 and S2 built and verified** (2026-10-21); S2b onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
+Status: **S1, S2 and S2b built and verified** (2026-10-21); S3 onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
 
 ## 1. Goal
 Create dummy appointments and push them through the system one at a time, as if real visits were happening, with nobody typing data in:
@@ -122,6 +122,16 @@ No dates are committed. S1 is the first thing worth showing the boss.
 Also verified: the same holds for seeds 11, 23 and 99; with the policy off every clean visit goes to a coder (`policy_off`); the daily cap stops auto-accepts and says why; three hand-written transcripts in wording the generator never used are read correctly; an unsigned note is never coded; the coder module never imports the answer key. Live through OpenEMR: transcript 1 was auto-accepted (99214, I10, "policy:demo-exception-only-v1"), billed by OpenEMR's 837P and paid; transcript 6 (unsigned) stopped at the coder with nothing billed. Tests: `tests/test_live_s2.py` (13 fast, 1 slow).
 
 **Honest limits.** The transcripts and the reader were written by the same author, so the near-perfect score mostly shows the routing and policy logic works, not that rule-based coding can read real speech. Real transcripts would be longer, messier and need a language model or a certified coder's rules; the E/M level table is A4's placeholder, not the AMA or CMS guidelines. A routed visit stays pending: nothing resolves it yet (the person's decision and resume are S4/S5 work). The 5 "clean held back" in some runs are the 10% sample, by design.
+
+## 5d. S2b result (2026-10-21): Payer Knowledge Book v1
+`krisnai/knowledge/` (agents may import it, unlike the payer simulator): `book.py` (rule records, versions, point-in-time lookup, JSON save and load), `deadlines.py` (appeal and corrected-claim routes), `demo.py` (the demo ruleset for fictional payer SYNAETNA, every rule labelled "client-confirmed demo ruleset, not official payer policy"). `krisnai knowledge lookup|deadline --as-of <date>` queries it.
+
+- **Date handling:** each rule names the date it is judged on. Coverage and prior authorization use the service date; the appeal window uses the denial-notification date; corrected claims run from the service date on their own clock. The evaluation date is always passed in; a test fails if the module reads the computer's clock.
+- **Gate checks, all passing:** a December 2025 service gets the 2025 coverage rule (20 visits) and a January 2026 service the 2026 rule (12), including when evaluated in October 2026 and on the 31 December / 1 January boundary; the appeal deadline moves from 180 to 120 days when the notification date crosses into 2026 (2026-01-02 gives 2026-05-02); an old service with a recent denial is judged on the denial date, not rejected for age; an old denial comes back as expired, not as an appeal to file; a missing rule, a missing event date, a fact marked unknown, two rules that overlap with equal scope, and a plan-specific rule when the plan is unknown each return a problem that names an owner and what to ask, never a guess.
+- **Point in time:** a rule the book learned on 2026-03-01 is invisible to an evaluation on 2026-02-01; retiring a version affects only later evaluations; old versions are kept.
+- **Tests:** `tests/test_knowledge.py`, 20 tests.
+
+**Not done in v1:** the rules live in a JSON file, not a database table; no change-detection pipeline; no public payer documents (the UHC, Aetna, Humana, Cigna and BCBS comparison report is not in this repo); **agents do not read the book yet** (A5 and A8 still use their own filing-window table and the engine's 365-day default). Wiring the payer simulator to the book is S3; moving A5, A7 and A8 onto it is a separate, later change.
 
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.
