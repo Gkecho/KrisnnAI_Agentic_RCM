@@ -127,3 +127,58 @@ def test_with_the_real_engine_a_denied_visit_gets_agent_work(tmp_path):
     d = run(client(tmp_path, engine=True), next(s for s in samples() if "problem" not in s["label"]), payer="denies")
     assert d["status"] == "done", d["error"]
     assert any(w["agent"] == "a8_denial" for w in d["claims"][0]["work"]), d["claims"][0]["work"]
+
+
+def batch(c: TestClient, items: list[dict], **kw) -> dict:
+    r = c.post("/api/batch", json={"items": items, **kw})
+    assert r.status_code == 200, r.text
+    return wait(c, r.json()["id"])
+
+
+def item(sample: dict, **kw) -> dict:
+    return {"transcript": sample["text"], "signed": sample["signed"], **kw}
+
+
+def test_a_batch_runs_every_visit_and_gives_each_its_own_claim_number(tmp_path):
+    clean = [s for s in samples() if "problem" not in s["label"]]
+    problem = pick("problem")
+    d = batch(client(tmp_path), [item(clean[0]), item(problem, signed=False), item(clean[1])])
+    assert d["status"] == "done", d["error"]
+    cs = d["claims"]
+    assert [c["id"][-5:] for c in cs] == ["00001", "00002", "00003"], "results come back in the order they were given"
+    assert cs[0]["claim"] and cs[2]["claim"] and cs[0]["claim"] != cs[2]["claim"]
+    assert cs[1]["stage"] == "pending_coder" and cs[1]["claim"] == "" and cs[1]["payer"] is None
+    assert cs[0]["payer"]["claim_id"] == cs[0]["claim"] and cs[2]["payer"]["claim_id"] == cs[2]["claim"]
+    assert d["ledger"]["remits_read"] == 2
+
+
+def test_coverage_can_lapse_for_one_visit_in_a_batch_and_the_payer_behaviour_applies_to_all(tmp_path):
+    clean = [s for s in samples() if "problem" not in s["label"]]
+    d = batch(client(tmp_path), [item(clean[0]), item(clean[1], lapsed=True), item(clean[2])])
+    carcs = [c["payer"]["carc"] for c in d["claims"]]
+    assert carcs == ["", "27", ""], carcs
+    d2 = batch(client(tmp_path / "x"), [item(clean[0]), item(clean[1])], payer="denies")
+    assert [c["payer"]["outcome"] for c in d2["claims"]] == ["denied", "denied"]
+
+
+def test_a_batch_has_limits_and_says_which_visit_is_wrong(tmp_path):
+    c = client(tmp_path)
+    ok = {"transcript": "a visit"}
+    assert c.post("/api/batch", json={"items": []}).status_code == 400
+    assert c.post("/api/batch", json={"items": [ok] * (service.MAX_BATCH + 1)}).status_code == 400
+    bad = c.post("/api/batch", json={"items": [ok, {"transcript": "  "}]})
+    assert bad.status_code == 400 and "visit 2" in bad.json()["detail"]
+    big = {"transcript": "x" * service.MAX_TRANSCRIPT}
+    assert c.post("/api/batch", json={"items": [big] * 11}).status_code == 413
+    assert c.post("/api/batch", json={"items": [ok], "payer": "nonsense"}).status_code == 400
+
+
+def test_a_batch_and_a_single_visit_share_the_one_run_at_a_time_rule(tmp_path, monkeypatch):
+    gate = threading.Event()
+    monkeypatch.setattr(service, "run_stream", lambda *a, **k: gate.wait(10))
+    c = client(tmp_path)
+    first = c.post("/api/batch", json={"items": [{"transcript": "a"}, {"transcript": "b"}]})
+    assert first.status_code == 200 and first.json()["visits"] == 2
+    assert c.post("/api/run", json={"transcript": "single"}).status_code == 409
+    gate.set()
+    wait(c, first.json()["id"])

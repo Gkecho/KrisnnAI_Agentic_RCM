@@ -29,7 +29,7 @@ def claim_traces(run: Path, st: dict, events: list[dict]) -> list[dict]:
         work = [{"agent": ag, "action": d["action"], "title": d["title"], "day": d["known"][:10]}
                 for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
         claims.append({
-            "id": eid, "claim": e.get("claim", ""), "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
+            "id": eid, "claim": e.get("claim", "") if e.get("billed_on") else "", "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
             "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""),
             "payer": truth.get(e.get("claim", "")), "work": work, "events": [x for x in events if x["subject"] in keys],
         })  # fmt: skip

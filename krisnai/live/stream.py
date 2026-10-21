@@ -77,12 +77,14 @@ class StreamConfig:
     tag: str = ""  # makes every id unique to one run (a typed-in visit must never reuse an earlier run's patient)
     early_stop: bool = False  # stop once every claim is settled and the agents have had `react_days` to react (single visits)
     react_days: int = 8
+    lapsed_ids: tuple[int, ...] = ()  # visits (1-based) whose coverage has lapsed, when chosen one by one
 
     def key(self) -> dict:
         d = asdict(self)
         for k in ("engine", "bots", "serve"):
             d.pop(k)
         d["start"] = self.start.isoformat()
+        d["lapsed_ids"] = list(self.lapsed_ids)  # JSON has no tuples: compare like with like when a saved run resumes
         return d
 
 
@@ -176,6 +178,9 @@ class Stream:
     # ------------------------------------------------------------------------------------------ one encounter
     def _inactive(self, member: str) -> bool:
         import hashlib
+
+        if self.cfg.lapsed_ids:  # chosen one by one (a typed-in batch): the visit's number is the last five digits of its id
+            return int(member[-5:]) in self.cfg.lapsed_ids
 
         h = int(hashlib.sha256(f"{self.cfg.seed}:inactive:{member}".encode()).hexdigest(), 16)
         return (h % 10_000) < int(self.cfg.inactive_rate * 10_000)

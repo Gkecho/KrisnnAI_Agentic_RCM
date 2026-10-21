@@ -15,7 +15,7 @@ import hashlib
 import threading
 import time
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,15 +29,31 @@ from krisnai.live.stream import StreamConfig, run_stream
 from krisnai.live.transcripts import Visit, generate
 
 MAX_TRANSCRIPT = 20_000
+MAX_BATCH = 25
+MAX_BATCH_CHARS = 200_000
+_NONE = {"pend_rate": 0.0, "deny_rate": 0.0, "deviation_rate": 0.0}  # every mode sets all three: "pays" must really pay
 PAYER_MODES = {
-    "pays": {},
-    "denies": {"deny_rate": 1.0},
-    "breaks_rules": {"deviation_rate": 1.0},
-    "pends": {"pend_rate": 1.0},
+    "pays": dict(_NONE),
+    "denies": {**_NONE, "deny_rate": 1.0},
+    "breaks_rules": {**_NONE, "deviation_rate": 1.0},
+    "pends": {**_NONE, "pend_rate": 1.0},
 }
 PAYER_LABEL = {"pays": "Pays normally", "denies": "Denies it (an ordinary denial)", "breaks_rules": "Breaks its own published rules", "pends": "Asks for records first, then pays"}
 LOCAL = {"127.0.0.1", "::1", "localhost", "testclient"}
 ORIGINS = ["http://127.0.0.1:8767", "http://localhost:8767"]
+
+
+class BatchItem(BaseModel):
+    transcript: str
+    signed: bool = True
+    lapsed: bool = False
+    label: str = ""
+
+
+class BatchRequest(BaseModel):
+    items: list[BatchItem]
+    payer: str = "pays"
+    emr: str = "fake"
 
 
 class RunRequest(BaseModel):
@@ -81,23 +97,37 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
     @app.get("/api/health")
     def health() -> dict:
         return {"ok": True, "emr": sorted(emr_factories), "payer": [{"id": k, "label": PAYER_LABEL[k]} for k in PAYER_MODES],
-                "busy": any(r["status"] == "running" for r in runs.values()), "max_transcript": MAX_TRANSCRIPT}  # fmt: skip
+                "busy": any(r["status"] == "running" for r in runs.values()), "max_transcript": MAX_TRANSCRIPT, "max_batch": MAX_BATCH}  # fmt: skip
 
     @app.get("/api/samples")
     def get_samples() -> list[dict]:
         return samples()
 
-    def _work(rid: str, req: RunRequest) -> None:
+    def _work(rid: str, visits: list[Visit], payer: str, emr: str, lapsed_ids: tuple[int, ...], all_lapsed: bool) -> None:
         r = runs[rid]
         try:
-            h = int(hashlib.sha256(req.transcript.encode()).hexdigest(), 16)
-            cfg = StreamConfig(count=1, seed=h % 1000, start=date(2026, 10, 21), per_day=1, engine=engine, bots=engine, serve=serve_ports,
-                               early_stop=True, tag=rid, inactive_rate=1.0 if req.coverage_lapsed else 0.0, settle_days=3, **PAYER_MODES[req.payer])  # fmt: skip
-            visit = Visit(f"V{rid}", f"M{rid}", "typed_in", req.transcript, req.signed, None, date(2026, 10, 24))
-            run_stream(r["out"], cfg, emr_factories[req.emr](), visits=[visit], log=lambda *_: None)
+            h = int(hashlib.sha256("".join(v.text for v in visits).encode()).hexdigest(), 16)
+            cfg = StreamConfig(count=len(visits), seed=h % 1000, start=date(2026, 10, 21), per_day=5, engine=engine, bots=engine, serve=serve_ports,
+                               early_stop=True, tag=rid, inactive_rate=1.0 if all_lapsed else 0.0, lapsed_ids=lapsed_ids, settle_days=3, **PAYER_MODES[payer])  # fmt: skip
+            run_stream(r["out"], cfg, emr_factories[emr](), visits=visits, log=lambda *_: None)
             r["status"] = "done"
         except Exception as e:  # noqa: BLE001
             r["status"], r["error"] = "error", f"{type(e).__name__}: {e}"[:300]
+
+    def _launch(visits: list[Visit], payer: str, emr: str, lapsed_ids: tuple[int, ...] = (), all_lapsed: bool = False) -> dict:
+        if payer not in PAYER_MODES:
+            raise HTTPException(400, f"payer must be one of {sorted(PAYER_MODES)}")
+        if emr not in emr_factories:
+            raise HTTPException(400, f"emr must be one of {sorted(emr_factories)}")
+        with lock:
+            if any(r["status"] == "running" for r in runs.values()):
+                raise HTTPException(409, "a run is already going; wait for it to finish")
+            rid = hashlib.sha256(f"{time.time()}{len(runs)}".encode()).hexdigest()[:6].upper()
+            (work_root / "runs").mkdir(parents=True, exist_ok=True)
+            runs[rid] = {"status": "running", "out": work_root / "runs" / rid, "started": time.time(), "error": ""}
+            vs = [Visit(f"V{rid}{n}", f"M{rid}{n}", "typed_in", v.text, v.signed, None, date(2026, 10, 24) + timedelta(days=(n - 1) // 5)) for n, v in enumerate(visits, start=1)]
+            threading.Thread(target=_work, args=(rid, vs, payer, emr, lapsed_ids, all_lapsed), daemon=True).start()
+        return {"id": rid, "visits": len(visits)}
 
     @app.post("/api/run")
     def start(req: RunRequest) -> dict:
@@ -105,18 +135,25 @@ def create_app(work_root: Path, emr_factories: dict[str, Callable[[], EmrPort]],
             raise HTTPException(400, "give it a transcript")
         if len(req.transcript) > MAX_TRANSCRIPT:
             raise HTTPException(413, f"a transcript can be at most {MAX_TRANSCRIPT} characters")
-        if req.payer not in PAYER_MODES:
-            raise HTTPException(400, f"payer must be one of {sorted(PAYER_MODES)}")
-        if req.emr not in emr_factories:
-            raise HTTPException(400, f"emr must be one of {sorted(emr_factories)}")
-        with lock:
-            if any(r["status"] == "running" for r in runs.values()):
-                raise HTTPException(409, "a visit is already running; wait for it to finish")
-            rid = hashlib.sha256(f"{time.time()}{len(runs)}".encode()).hexdigest()[:6].upper()
-            (work_root / "runs").mkdir(parents=True, exist_ok=True)
-            runs[rid] = {"status": "running", "out": work_root / "runs" / rid, "started": time.time(), "error": ""}
-            threading.Thread(target=_work, args=(rid, req), daemon=True).start()
-        return {"id": rid}
+        return _launch([Visit("v", "m", "typed_in", req.transcript, req.signed)], req.payer, req.emr, all_lapsed=req.coverage_lapsed)
+
+    @app.post("/api/batch")
+    def start_batch(req: BatchRequest) -> dict:
+        if not req.items:
+            raise HTTPException(400, "give it at least one transcript")
+        if len(req.items) > MAX_BATCH:
+            raise HTTPException(400, f"at most {MAX_BATCH} visits in one batch")
+        total = 0
+        for n, it in enumerate(req.items, start=1):
+            if not it.transcript.strip():
+                raise HTTPException(400, f"visit {n} is empty")
+            if len(it.transcript) > MAX_TRANSCRIPT:
+                raise HTTPException(413, f"visit {n} is longer than {MAX_TRANSCRIPT} characters")
+            total += len(it.transcript)
+        if total > MAX_BATCH_CHARS:
+            raise HTTPException(413, f"a batch can hold at most {MAX_BATCH_CHARS} characters in all")
+        visits = [Visit("v", "m", "typed_in", it.transcript, it.signed) for it in req.items]
+        return _launch(visits, req.payer, req.emr, lapsed_ids=tuple(n for n, it in enumerate(req.items, start=1) if it.lapsed))
 
     @app.get("/api/run/{rid}")
     def status(rid: str) -> dict:
