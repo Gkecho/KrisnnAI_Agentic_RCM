@@ -1,6 +1,6 @@
 # Plan: a live encounter stream through the whole ecosystem
 
-Status: **S1, S2 and S2b built and verified** (2026-10-21); S3 onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
+Status: **S1, S2, S2b and S3 built and verified** (2026-10-21); S4 onward not started. Decisions in section 4 are confirmed by Gk. Synthetic data only, local only, shadow mode.
 
 ## 1. Goal
 Create dummy appointments and push them through the system one at a time, as if real visits were happening, with nobody typing data in:
@@ -132,6 +132,19 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 - **Tests:** `tests/test_knowledge.py`, 20 tests.
 
 **Not done in v1:** the rules live in a JSON file, not a database table; no change-detection pipeline; no public payer documents (the UHC, Aetna, Humana, Cigna and BCBS comparison report is not in this repo); **agents do not read the book yet** (A5 and A8 still use their own filing-window table and the engine's 365-day default). Wiring the payer simulator to the book is S3; moving A5, A7 and A8 onto it is a separate, later change.
+
+## 5e. S3 result (2026-10-21): the independent payer
+`krisnai/live/payer.py` is now a seeded payer. For each claim it draws from a random stream seeded by (seed, claim id), so the same seed, config and claims give a **byte-identical truth log regardless of arrival order** (tested, including a reversed order).
+
+- **It follows what it published.** It reads the Knowledge Book: a service the book says is not covered, or that needs a prior authorization the claim lacks, is denied (CARC 96 or 197). Demo book: a 2026 therapy visit without an authorization is denied; the same visit with a 2025 service date is paid; granting an authorization changes the answer.
+- **It behaves like a payer.** At configured rates a claim pends for records (remit 35 days out instead of 14) or is denied for an ordinary reason (CARC 50, 16, 18, 97, 4).
+- **It deviates from what it published, on purpose.** At a configured rate it makes one of four mistakes: `wrong_denial` (CARC 31 although coverage was confirmed), `stale_version` (a prior-authorization rule that was not in force on the service date, only for a service whose rule actually changed between years), `unpublished_rule` (an edit that is not in the book) or `underpay_off_schedule` (10 to 25% under the fee schedule). Each shows in the truth log with what the book said it should have been; with the rate at zero there are no deviations.
+- **Truth log:** `PayerSim.truth_csv()` (one row per decision: outcome, CARC, published outcome and reason, deviation kind, pended, billed, allowed, paid). `krisnai live s1` now writes `truth.csv` next to `truth.jsonl`, outside the engine's inbox.
+- **The outside world sees the payer's state over time.** `LiveWorld` answers claim-status requests and the mock portal from the payer's own state on the simulation clock: a pended claim shows "Pending: in review" with a records request until its remit date, then "Finalized: paid or denied". The portal bot read exactly this in a test. `remits_due(day)` hands out each 835 once, in claim order, when its date comes.
+- **Rejection and denial stay distinct:** a clearinghouse technical rejection is held in the world, never reaches the payer, and never appears in the truth log.
+- **Tests:** `tests/test_live_s3.py` (11); the earlier live and portal tests still pass, and both slow end-to-end tests pass against OpenEMR. One additive change to the mock portal: a world may supply its own reason line and records-request flag; the old behaviour is unchanged for worlds that do not.
+
+**Not done:** the rates and the deviation mix are demo settings, not payer statistics; an ordinary denial is random, so the book cannot predict it (it is not counted as a deviation). Nothing scores the agents against the truth log yet (S5), and the single-encounter runner still uses a scripted denial; the S4 orchestrator will use the rates.
 
 ## 6. Risks and limits
 - OpenEMR's billing needs SQL setup and a PHP helper; this is fragile across OpenEMR versions, so pin 7.0.3.

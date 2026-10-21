@@ -238,6 +238,7 @@ def run_s1(work: Path, out: Path, as_of: date, *, deny_cpt: str | None = CPT, ca
         _w(inbox, f"835_{claim.claim_id}.835", x12out.write_835(claim.payer, remit, [claim], 7001))
         truth.append({"claim": claim.claim_id, "outcome": d.outcome, "reason": d.reason, "remit": remit.isoformat()})
         ev("6 payer", "Payer sim", "mock", claim.claim_id, d.outcome, f"{d.reason}; remit {remit}")
+    (out / "truth.csv").write_text(payer.truth_csv(), encoding="utf-8")
     (out / "truth.jsonl").write_text("".join(json.dumps(t) + "\n" for t in truth), encoding="utf-8")
 
     # 8. the feeds, read back out of OpenEMR through FHIR, for this patient only

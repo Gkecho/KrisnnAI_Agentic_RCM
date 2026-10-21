@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """The clearinghouse's picture of the live stream: eligibility and claim intake answered from a PayerSim.
 
 It subclasses the existing MockWorld so the same mock clearinghouse service serves it. It makes technical
@@ -11,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from krisnai.ingest.x12 import X12Error, read_transactions
-from krisnai.integrations.clearinghouse.claim_store import PmExtract
+from krisnai.integrations.clearinghouse.claim_store import PmExtract, StoredClaim, StoredLine
 from krisnai.integrations.clearinghouse.mock_world import EligibilityAnswer, MockWorld
 from krisnai.live.payer import PayerSim
 from krisnai.synthea import x12out
@@ -25,6 +26,36 @@ class LiveWorld(MockWorld):
         self.payer = payer
         self.accepted: list[SimClaim] = []  # claims past the technical checks, waiting for the payer
         self.rejected: dict[str, str] = {}
+        self.today = today
+
+    def advance(self, day: date) -> None:
+        """Move the simulation clock; status requests and the portal show what the payer would show on this day."""
+        self.today = day
+
+    def _store(self, c: SimClaim) -> None:
+        p = c.patient
+        self.extract.claims[c.claim_id] = StoredClaim(
+            c.claim_id, c.payer.payer_id, c.payer.name, p.ref, p.last, p.first, p.dob.strftime("%Y%m%d"), p.sex, c.billed,
+            c.dos, list(c.dx), c.provider_npi, [StoredLine(ln.cpt, ln.billed, str(ln.units)) for ln in c.lines])
+
+    def claim_state(self, claim_id: str):  # noqa: ANN201
+        """(category, code, paid, payer claim number, claim) as of the world's clock, from the payer's own state."""
+        claim = self.extract.claims.get(claim_id)
+        if claim is None:
+            return "E1", "164", Decimal(0), "", None
+        if claim_id in self.rejected:
+            return "A3", "21", Decimal(0), "", claim
+        cat, code, paid, no, _, _ = self.payer.status(claim_id, self.today)
+        return cat, code, paid, no, claim
+
+    def portal_reason(self, claim_id: str, category: str) -> tuple[str, bool] | None:
+        """The reason line and whether a records request is open, for the mock portal."""
+        if claim_id in self.rejected:
+            return f"Returned: {self.rejected[claim_id]}", False
+        if claim_id in self.payer.cases:
+            _, _, _, _, reason, records = self.payer.status(claim_id, self.today)
+            return reason, records
+        return None
 
     def eligibility(self, payer_id: str, member_id: str, dos: date) -> EligibilityAnswer:
         found, active = self.payer.eligibility(member_id)
@@ -61,6 +92,7 @@ class LiveWorld(MockWorld):
         results: list[dict] = []
         sims = self.payer.to_sim_claims(text, when)
         for c in sims:
+            self._store(c)
             why = self._technical_check(c, payer_ids.get("id", ""), c.billed)
             if why:
                 c.scenario = "rejection"

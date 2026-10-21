@@ -159,6 +159,10 @@ def create_app(world: MockWorld, user: str, password: str, layout: int = 1, max_
             reason = "Denied: see remittance advice"
         elif category == "P1" and int(hashlib.sha256(claim_id.encode()).hexdigest(), 16) % 3 == 0:
             reason = "Records requested: medical records for the date of service"
+        hook = getattr(world, "portal_reason", None)  # a world that tracks live payer state supplies its own reason
+        live = hook(claim_id, category) if hook else None
+        if live is not None:
+            reason = live[0]
         body = (f"<h2 id='{ids['title']}'>Claim {escape(claim_id)}</h2>"
                 f"<p>Payer claim number: <span id='payer-claim-no'>{escape(payer_no)}</span></p>"
                 f"<p>Status: <span id='{ids['status']}'>{escape(STATUS_TEXT.get(category, category))}</span></p>"
@@ -173,6 +177,10 @@ def create_app(world: MockWorld, user: str, password: str, layout: int = 1, max_
             return RedirectResponse("/login", status_code=303)
         category, _, _, _, claim = world.claim_state(claim_id)
         asked = category == "P1" and int(hashlib.sha256(claim_id.encode()).hexdigest(), 16) % 3 == 0
+        hook = getattr(world, "portal_reason", None)
+        live = hook(claim_id, category) if hook else None
+        if live is not None:
+            asked = live[1]
         text = "Please send the medical records for the date of service within 30 days." if asked else "No request."
         return _page("Records request", f"<p id='request-text'>{escape(text)}</p>"
                      f"<p id='request-open'>{'yes' if asked else 'no'}</p>")  # fmt: skip
