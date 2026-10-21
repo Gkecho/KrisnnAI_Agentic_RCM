@@ -105,7 +105,14 @@ def claim_traces(run: Path, st: dict, events: list[dict]) -> list[dict]:
         keys = {e["appt"], e["visit_id"], e.get("claim", "")} - {""}
         work = [{"agent": ag, "action": d["action"], "title": d["title"], "day": d["known"][:10]}
                 for ag, by in sorted(dec.items()) for k in sorted(keys) for d in by.get(k, [])]  # fmt: skip
+        cf = None
+        f = run / "claims" / f"{e.get('claim', '')}.837"
+        if e.get("billed_on") and f.exists():  # the form is read back from the claim file itself, so it shows exactly what was sent
+            from krisnai.live.claim_form import claim_form
+
+            cf = claim_form(f.read_text("utf-8"))
         claims.append({
+            "form": cf["form"] if cf else None, "edi": cf["lines"] if cf else None,
             "id": eid, "claim": e.get("claim", "") if e.get("billed_on") else "", "visit_type": e["visit_type"], "booking": e["booking"], "visit_day": e["visit_day"],
             "active": e.get("active"), "stage": e["stage"], "coding": e.get("coding"), "approval": e.get("approval", ""), "payer_id": e.get("payer_id", ""),
             "payer": truth.get(e.get("claim", "")), "work": work,
