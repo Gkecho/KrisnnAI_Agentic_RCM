@@ -237,6 +237,8 @@ class Reading:
     plan_present: bool = False
     signature_present: bool = False
     signed: bool = False  # the caller's flag AND a signature in the text
+    signed_flag: bool = True  # the caller's own flag, on its own (so a failure can say which of the three things was wrong)
+    unsigned_wording: bool = False  # the text itself says unsigned, not signed or pending signature
     uncertainties: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # things seen and deliberately not coded (history, declined services ...)
     candidates: list[str] = field(default_factory=list)  # conditions mentioned outside any assessment: shown to a coder, never coded
@@ -573,6 +575,8 @@ def read(text: str, signed: bool = True) -> Reading:
     sig_present = bool(SIG_RE.search(t)) and not UNSIGNED_RE.search(t)
     masked = SIG_RE.sub(lambda m: " " * len(m.group(0)), t)
     rd.signature_present = sig_present
+    rd.signed_flag = bool(signed)
+    rd.unsigned_wording = bool(UNSIGNED_RE.search(t))
     rd.signed = bool(signed) and sig_present
     if not masked.strip():
         rd.uncertain("the transcript is empty")

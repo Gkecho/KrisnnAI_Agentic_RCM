@@ -132,6 +132,18 @@ def _missing_indication(rd: Reading, text: str) -> list[str]:
     return out
 
 
+def _unsigned_why(rd: Reading) -> str:
+    """Why a note counts as unsigned: three different things can cause it, and the fix is different for each."""
+    why = []
+    if not rd.signed_flag:
+        why.append("the record marks the note unsigned (the 'note is signed' box, or the '# unsigned' label)" + (", although the transcript has a signature line" if rd.signature_present else ""))
+    if rd.unsigned_wording:
+        why.append("the transcript itself says the note is unsigned or pending signature")
+    elif not rd.signature_present:
+        why.append("the transcript has no signature line (for example 'Signed electronically by Dr. Name')")
+    return "the note is not signed: " + "; and ".join(why) if why else "the note is not signed"
+
+
 def _letters(n: int) -> list[str]:
     return [chr(ord("A") + i) for i in range(min(n, 12))]
 
@@ -163,7 +175,7 @@ def _checks(rd: Reading, cpt: str, lines: list[dict], em_billed: bool, text: str
     status_ok = rd.status != "unknown" or not em_billed
     kinds = sorted({k for h in dx if (c := catalog.condition_by_icd(h.icd10)) and (k := c.visit_kind)} | {s.family for s in rd.services if s.family in ("preventive", "emergency")})
     checks = [
-        Check("signed", rd.signed, "the note is signed" if rd.signed else "the note is not signed"),
+        Check("signed", rd.signed, "the note is signed" if rd.signed else _unsigned_why(rd)),
         Check("baseline", set(a4.BASELINE) <= elements, "assessment and plan documented" if set(a4.BASELINE) <= elements
               else f"missing: {', '.join(e for e in a4.BASELINE if e not in elements)}"),  # fmt: skip
         Check("status", status_ok, f"patient is {rd.status}" if rd.status != "unknown"

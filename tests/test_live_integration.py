@@ -87,3 +87,20 @@ def test_a_thirty_visit_run_goes_through_six_payers_replies_and_settles(tmp_path
     rows = list(csv.DictReader((tmp_path / "r" / "truth.csv").read_text("utf-8").splitlines()))
     assert len(rows) == s["replies"]["claims"]
     assert (tmp_path / "r" / "truth_payers.csv").exists() and len({r["payer_id"] for r in csv.DictReader((tmp_path / "r" / "truth_payers.csv").read_text("utf-8").splitlines())}) >= 3
+
+
+def test_an_unsigned_note_says_which_of_the_three_things_made_it_unsigned():
+    base = ("Provider: You were last here in June, correct? Patient: Yes, I am a returning patient.\n"
+            "Provider: What brings you in today? Patient: My throat is sore. It started three days ago.\n"
+            "Provider: Let me examine you. Exam: Throat shows redness.\nProvider: Assessment: acute pharyngitis.\n"
+            "Provider: Plan: rest and fluids, return in a week.\n")
+    sig = "Signed electronically by Dr. Demo Provider."
+    c = CODER()
+    a = c.code("V1", base + sig, True, DAY)
+    assert a.route == "auto" and a.reason == "", "text with a signature line and the flag on is signed (so editing the text fixes it)"
+    b = next(k for k in c.code("V2", base + sig, False, DAY).checks if k.name == "signed")
+    assert not b.ok and "marks the note unsigned" in b.detail and "has a signature line" in b.detail
+    d = next(k for k in c.code("V3", base, True, DAY).checks if k.name == "signed")
+    assert not d.ok and "no signature line" in d.detail
+    e = next(k for k in c.code("V4", base + "Note pending signature.\n" + sig, True, DAY).checks if k.name == "signed")
+    assert not e.ok and "says the note is unsigned or pending signature" in e.detail
