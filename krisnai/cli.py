@@ -171,6 +171,13 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--feeds", type=Path, help="seed: folder with appointments.csv, visits.csv, notes.csv")
     oe.add_argument("--limit", type=int, default=50, help="seed: first N patients (0 = all)")
     oe.add_argument("--out", type=Path, help="pull: folder to write the three feeds into")
+    lv = sub.add_parser("live", help="live encounter stream (demo only): run one encounter through the whole chain")
+    lv.add_argument("live_cmd", choices=["s1"])
+    lv.add_argument("--work", type=Path, default=Path("out/openemr"))
+    lv.add_argument("--out", type=Path, default=Path("out/live_s1"))
+    lv.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 21), help="simulated booking day, YYYY-MM-DD")
+    lv.add_argument("--deny-cpt", default="99213", help="the CPT the demo payer denies ('' = pay everything)")
+    lv.add_argument("--carc", default="50")
     ops = sub.add_parser("ops", help="daily and backfill runs over an inbox folder (shadow mode throughout)")
     ops_sub = ops.add_subparsers(dest="ops_cmd", required=True)
     ops_daily = ops_sub.add_parser("daily", help="load the inbox, check it, advance every agent to --as-of")
@@ -388,6 +395,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fhir_seed(FhirClient(args.url), args.feeds), sort_keys=True))
         else:
             print(json.dumps(fhir_pull(FhirClient(args.url), args.out, args.since), sort_keys=True))
+        return 0
+    if args.cmd == "live":
+        from krisnai.live.s1 import run_s1
+
+        res = run_s1(args.work, args.out, args.as_of, deny_cpt=args.deny_cpt or None, carc=args.carc)
+        print(json.dumps(res.summary, indent=1, sort_keys=True))
         return 0
     if args.cmd == "openemr":
         from krisnai.integrations.openemr import docker as oedocker
