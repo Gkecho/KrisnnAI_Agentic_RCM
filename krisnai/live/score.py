@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
@@ -78,6 +79,7 @@ def score(run: Path) -> dict:
     dec = _decisions(run)
     by_class: dict[str, dict] = {k: {"label": v, "n": 0, "found": 0, "missed": [], "recognized": 0} for k, v in LABEL.items()}
     false_alarms: list[dict] = []
+    recog = _recognitions(run)
     for r in truth:
         k = _kind(r)
         c = by_class[k]
@@ -89,10 +91,11 @@ def score(run: Path) -> dict:
                     false_alarms.append({"claim": r["claim_id"], "agent": ag, "action": d["action"]})
             continue
         got = dec.get(agent, {}).get(r["claim_id"], [])
+        by_cards = bool(got) and any(w in d["text"].lower() for d in got for w in ("knowledge book", "published rule", "contradicts"))
+        if k == "denied_deviation" and (by_cards or r["claim_id"] in recog):  # S8: the responder's recognition events count too
+            c["recognized"] += 1
         if got:
             c["found"] += 1
-            if k == "denied_deviation" and any(w in d["text"].lower() for d in got for w in ("knowledge book", "published rule", "contradicts")):
-                c["recognized"] += 1
         else:
             c["missed"].append({"claim": r["claim_id"], "outcome": r["outcome"], "carc": r["carc"], "deviation": r["deviation"]})
     # coverage lapsed before the visit: did Gatekeeper (A1) raise a coverage exception?
@@ -139,7 +142,39 @@ def score(run: Path) -> dict:
         "note": "scored against the payer simulator's own hidden decisions: a measure of the loop on synthetic data, not of accuracy on real payers",
     }  # fmt: skip
     out["ledger"] = reconcile(run, truth, st)
+    out["replies"] = replies_section(st, truth, recog)  # S8, additive
     return out
+
+
+def _recognitions(run: Path) -> set[str]:
+    """Claims where the S8 responder said the payer contradicted its own published rule (from events.jsonl)."""
+    p = run / "events.jsonl"
+    if not p.exists():
+        return set()
+    rows = (json.loads(ln) for ln in p.read_text("utf-8").splitlines() if ln)
+    return {r["subject"] for r in rows if r["step"] == "8 reply: recognized"}
+
+
+def replies_section(st: dict, truth: list[dict], recog: set[str]) -> dict:
+    """Replies sent by kind, the payer's answer to each, and how many claims ended settled. Zeros when replies were off."""
+    sent: dict[str, int] = defaultdict(int)
+    answers: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    approvals: dict[str, int] = defaultdict(int)
+    for e in st["enc"].values():
+        for r in e.get("rounds", []):
+            sent[r["plan"]["kind"]] += 1
+            approvals[r["plan"]["approval"]] += 1
+            if r.get("answer"):
+                answers[r["answer"]["kind"]][r["answer"]["outcome"]] += 1
+    billed = [e for e in st["enc"].values() if e.get("billed_on")]
+    settled = [e for e in billed if e["stage"] in ("settled", "patient_balance")]
+    dev = {r["claim_id"] for r in truth if r["deviation"] in DEVIATION_DENIALS}
+    return {
+        "enabled": bool(st["config"].get("replies")), "sent_by_kind": dict(sent), "outcome_by_kind": {k: dict(v) for k, v in answers.items()},
+        "approvals": dict(approvals), "claims_billed": len(billed), "settled": len(settled), "settled_share": round(len(settled) / len(billed), 3) if billed else 0.0,
+        "in_review": sum(1 for e in billed if e["stage"] == "review"), "recognized_claims": len(recog), "recognized_true": len(recog & dev), "recognized_false": len(recog - dev),
+        "note": "second-round answers come from the payer simulator's reply rules (krisnai/live/payer_replies.py), not from any real payer",
+    }  # fmt: skip
 
 
 def _amt(x: str) -> Decimal:
@@ -150,7 +185,11 @@ def reconcile(run: Path, truth: list[dict] | None = None, st: dict | None = None
     """Read every 835 issued, build a per-claim ledger, and tie it to the truth log. Cash collected is always 0 here."""
     truth = truth if truth is not None else _truth(run)
     st = st or json.loads((run / "state.json").read_text("utf-8"))
-    files = sorted({p for d in ("inbox", "archive") for p in (run / d).rglob("835_*.835")}, key=lambda p: p.name)
+    allfiles = sorted({p for d in ("inbox", "archive") for p in (run / d).rglob("835_*.835")}, key=lambda p: p.name)
+    # S8: a second remit (the payer's answer to a reply) carries the claim id `<claim>-R<n>` and only that round's money; it is read
+    # on its own so the first remit is never counted twice, and it ties out to truth_replies.csv instead of truth.csv
+    files = [p for p in allfiles if not _REPLY_FILE.search(p.name)]
+    reply_files = [p for p in allfiles if _REPLY_FILE.search(p.name)]
     rows: dict[str, dict] = {}
     for p in files:
         for tx in read_transactions(p.read_text("utf-8")):
@@ -168,6 +207,8 @@ def reconcile(run: Path, truth: list[dict] | None = None, st: dict | None = None
         t = by_truth.get(cid)
         if t is None or _amt(t["paid"]) != r["paid"]:
             tie_out.append({"claim": cid, "remit": str(r["paid"]), "truth": t["paid"] if t else None})
+    second = _second_remits(run, reply_files)
+    tie_out += second["mismatches"]
     issued = set(st.get("issued", []))
     total = lambda f: sum((r[f] for r in rows.values()), Decimal(0))  # noqa: E731
     return {
@@ -181,7 +222,27 @@ def reconcile(run: Path, truth: list[dict] | None = None, st: dict | None = None
         "cash_collected": "0.00",
         "cash_note": "A remit is what the payer says it paid. No bank deposits exist in this simulation, so no cash has been collected and none is shown as collected.",
         "by_claim": [{**{k: (str(v) if isinstance(v, Decimal) else v) for k, v in r.items() if k != "files"}} for r in sorted(rows.values(), key=lambda x: x["claim"])],
+        # S8, additive: "remitted_by_payer" above stays the FIRST remits only
+        "second_remits_read": len(second["rows"]), "remitted_by_replies": str(second["paid"]),
+        "remitted_total": str(total("paid") + second["paid"]),
+        "by_reply": [{"reply": rid, "paid": str(v["paid"]), "patient_resp": str(v["patient_resp"])} for rid, v in sorted(second["rows"].items())],
     }  # fmt: skip
+
+
+_REPLY_FILE = re.compile(r"-R\d+\.835$")
+
+
+def _second_remits(run: Path, files: list[Path]) -> dict:
+    rows: dict[str, dict] = {}
+    for p in files:
+        for tx in read_transactions(p.read_text("utf-8")):
+            for seg in tx.segments:
+                if seg.id == "CLP":
+                    rows[seg[1]] = {"paid": _amt(seg[4]), "patient_resp": _amt(seg[5])}
+    tf = run / "truth_replies.csv"
+    truth = {r["reply_id"]: r for r in csv.DictReader(tf.read_text("utf-8").splitlines())} if tf.exists() else {}
+    bad = [{"claim": rid, "remit": str(v["paid"]), "truth": truth[rid]["paid"] if rid in truth else None} for rid, v in rows.items() if rid not in truth or _amt(truth[rid]["paid"]) != v["paid"]]
+    return {"rows": rows, "paid": sum((v["paid"] for v in rows.values()), Decimal(0)), "mismatches": bad}
 
 
 def write_reports(run: Path) -> dict:

@@ -111,3 +111,7 @@ class LiveWorld(MockWorld):
         )  # fmt: skip
         c277 = x12out.write_277ca(sims[0].payer, sims, self.next_ctrl(), when) if sims else ""
         return ack, c277, results
+
+    def release(self, claim_id: str) -> None:
+        """S8: a corrected claim for this id passed the technical checks, so it is no longer shown as rejected (idempotent)."""
+        self.rejected.pop(claim_id, None)
