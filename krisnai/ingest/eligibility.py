@@ -35,10 +35,13 @@ def parse_271(tx: Transaction, salt: str) -> list[Elig271Rec]:
         if sid == "NM1" and seg[1] == "PR" and cur is None:
             payer_name, payer_code = seg[3], seg[9]
         elif sid == "HL":
-            if cur is not None:
-                out.append(cur)
+            prior = cur
+            if cur is not None and not (cur["active"] is None and seg[3] == "23"):
+                out.append(cur)  # a subscriber loop with no coverage lines of its own (a dependent follows) is not an answer
             cur = {"ref": "", "member": "", "service": None, "begin": None, "end": None, "active": None,
-                   "other": None, "copay": None, "coins": None, "ded": None} if seg[3] == "22" else None  # fmt: skip
+                   "other": None, "copay": None, "coins": None, "ded": None} if seg[3] in ("22", "23") else None  # fmt: skip
+            if cur is not None and seg[3] == "23" and prior is not None:
+                cur["member"], cur["ref"] = prior["member"], prior["ref"]  # the dependent is covered under the subscriber's member id
             want_other = False
         elif cur is None:
             continue

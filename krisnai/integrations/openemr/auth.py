@@ -28,7 +28,8 @@ SCOPES = [
     "user/patient.read", "user/patient.write", "user/appointment.read", "user/appointment.write",
     "user/encounter.read", "user/encounter.write", "user/document.read", "user/document.write",
     "user/soap_note.read", "user/soap_note.write", "user/practitioner.read", "user/facility.read",
-    "user/facility.write",
+    "user/facility.write", "user/Coverage.read", "user/insurance.read", "user/insurance.write",
+    "user/insurance_company.read", "user/insurance_company.write", "user/message.write",
 ]  # fmt: skip
 REFRESH_MARGIN = 60  # seconds before expiry at which a new token is fetched
 
@@ -66,7 +67,10 @@ class OpenEmrAuth:
 
     def ensure_client(self) -> dict:
         if self._client_file.exists():
-            return json.loads(self._client_file.read_text(encoding="utf-8"))
+            have = json.loads(self._client_file.read_text(encoding="utf-8"))
+            if set(have["scope"].split()) >= set(SCOPES):
+                return have
+            # scopes were added since this client was registered: register a new one (the old one stays unused)
         body = {
             "application_type": "private", "redirect_uris": [REDIRECT], "client_name": CLIENT_NAME,
             "token_endpoint_auth_method": "client_secret_post", "contacts": ["local@example.test"],

@@ -59,11 +59,15 @@ class LiveWorld(MockWorld):
                 return reason, records
         return None
 
-    def eligibility(self, payer_id: str, member_id: str, dos: date) -> EligibilityAnswer:
+    def eligibility(self, payer_id: str, member_id: str, dos: date, dependent: dict | None = None) -> EligibilityAnswer:
         found, active = self.payers.get(payer_id, self.payer).eligibility(member_id)  # routed to the payer the request names
         if not found:
             return EligibilityAnswer(found=False)
-        return EligibilityAnswer(True, active, plan_end=None if active else dos - timedelta(days=30))
+        payer = self.payers.get(payer_id, self.payer)
+        if dependent is not None:  # a dependent is covered unless the payer sim was told otherwise
+            active = active and payer.dependents.get(f"{member_id}|{dependent['first'].upper()}", True)
+        return EligibilityAnswer(True, active, plan_end=None if active else dos - timedelta(days=30),
+                                 other_payer=payer.cob.get(member_id, ""), copay=payer.copays.get(member_id))  # fmt: skip
 
     def _technical_check(self, claim: SimClaim, raw_payer_id: str, charge: Decimal) -> str:
         if not claim.claim_id:

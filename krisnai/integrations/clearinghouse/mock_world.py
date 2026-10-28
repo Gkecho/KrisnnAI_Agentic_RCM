@@ -27,6 +27,7 @@ class EligibilityAnswer:
     active: bool = True
     plan_end: date | None = None
     other_payer: str = ""
+    copay: Decimal | None = None  # the visit copayment the plan reports (EB*B); None = the payer gives none
 
 
 class MockWorld:
@@ -46,7 +47,7 @@ class MockWorld:
         return self._ctrl
 
     # ------------------------------------------------------------------------------ eligibility
-    def eligibility(self, payer_id: str, member_id: str, dos: date) -> EligibilityAnswer:
+    def eligibility(self, payer_id: str, member_id: str, dos: date, dependent: dict | None = None) -> EligibilityAnswer:
         appt = self.extract.find_appointment(payer_id, member_id, dos)
         if appt is None:
             return EligibilityAnswer(found=False)
@@ -58,8 +59,12 @@ class MockWorld:
         return EligibilityAnswer(True, True)
 
     def write_271(self, payer_id: str, payer_name: str, member_id: str, last: str, first: str, dos: date,
-                  ref: str, ans: EligibilityAnswer, when: date) -> str:  # fmt: skip
+                  ref: str, ans: EligibilityAnswer, when: date, dependent: dict | None = None) -> str:  # fmt: skip
         ctrl = self.next_ctrl()
+        if dependent is not None:  # the answer is about the dependent (HL 23) under the subscriber
+            return self._write_271_dependent(
+                payer_id, payer_name, member_id, last, first, dos, ref, ans, when, ctrl, dependent
+            )
         body = [
             _seg("BHT", "0022", "11", f"SYN271R{ctrl}", when.strftime("%Y%m%d"), "1200"),
             _seg("HL", 1, "", "20", 1),
@@ -69,6 +74,14 @@ class MockWorld:
             _seg("HL", 3, 2, "22", 0),
             _seg("TRN", "2", ref, SENDER),
             _seg("NM1", "IL", "1", last, first, "", "", "", "MI", member_id),
+        ]
+        body += self._coverage(dos, ans)
+        return _envelope("HB", "005010X279A1", "271", "005010X279A1", body, ctrl, payer_id, SENDER, when)
+
+    @staticmethod
+    def _coverage(dos: date, ans: EligibilityAnswer) -> list[str]:
+        """The date and benefit lines of a 271 answer (plan dates, active or not, other payer, copay, coinsurance, deductible)."""
+        body = [
             _seg("DTP", "291", "D8", dos.strftime("%Y%m%d")),
             _seg("DTP", "346", "D8", (dos - timedelta(days=365)).strftime("%Y%m%d")),
         ]
@@ -78,9 +91,31 @@ class MockWorld:
         if ans.other_payer:
             body += [_seg("EB", "R", "IND", "30"),
                      _seg("NM1", "PR", "2", ans.other_payer, "", "", "", "", "PI", "OTHERPAY")]  # fmt: skip
+        if ans.active and ans.copay is not None:
+            body.append(_seg("EB", "B", "IND", "98", "", "", "", _amt(ans.copay)))
         if ans.active:
             body.append(_seg("EB", "A", "IND", "98", "", "", "", "", PLAN_COINSURANCE))
             body.append(_seg("EB", "C", "IND", "30", "", "", "29", _amt(Decimal(0))))
+        return body
+
+    def _write_271_dependent(self, payer_id: str, payer_name: str, member_id: str, last: str, first: str, dos: date,
+                             ref: str, ans: EligibilityAnswer, when: date, ctrl: int, dep: dict) -> str:  # fmt: skip
+        """271 for a dependent: the subscriber is named (HL 22), the coverage lines sit under the dependent (HL 23, NM1*03)."""
+        body = [
+            _seg("BHT", "0022", "11", f"SYN271R{ctrl}", when.strftime("%Y%m%d"), "1200"),
+            _seg("HL", 1, "", "20", 1),
+            _seg("NM1", "PR", "2", payer_name, "", "", "", "", "PI", payer_id),
+            _seg("HL", 2, 1, "21", 1),
+            _seg("NM1", "1P", "2", "SYNTHETIC CLINIC", "", "", "", "", "XX", "1888888800"),
+            _seg("HL", 3, 2, "22", 1),
+            _seg("NM1", "IL", "1", last, first, "", "", "", "MI", member_id),
+            _seg("HL", 4, 3, "23", 0),
+            _seg("TRN", "2", ref, SENDER),
+            _seg("NM1", "03", "1", dep["last"], dep["first"]),
+            _seg("DMG", "D8", dep["dob"] or "19700101"),
+            _seg("INS", "N", dep["relation"]),
+            *self._coverage(dos, ans),
+        ]
         return _envelope("HB", "005010X279A1", "271", "005010X279A1", body, ctrl, payer_id, SENDER, when)
 
     def write_271_not_found(self, payer_id: str, payer_name: str, member_id: str, ref: str, when: date) -> str:
@@ -180,13 +215,21 @@ def parse_inbound_270(text: str) -> list[dict]:
             raise X12Error(f"expected a 270, got {tx.st01}")
         payer_id = payer_name = ""
         cur = None
+        in_dep = False
         for seg in tx.segments:
             if seg.id == "NM1" and seg[1] == "PR":
                 payer_name, payer_id = seg[3], seg[9]
             elif seg.id == "NM1" and seg[1] == "IL":
                 cur = {"payer_id": payer_id, "payer_name": payer_name, "member": seg[9], "last": seg[3],
-                       "first": seg[4], "dos": None, "ref": ""}  # fmt: skip
+                       "first": seg[4], "dos": None, "ref": "", "dependent": None}  # fmt: skip
                 out.append(cur)
+            elif seg.id == "NM1" and seg[1] == "03" and cur is not None:
+                cur["dependent"] = {"last": seg[3], "first": seg[4], "dob": "", "relation": ""}
+                in_dep = True
+            elif seg.id == "DMG" and in_dep and cur is not None:
+                cur["dependent"]["dob"] = seg[2]
+            elif seg.id == "INS" and in_dep and cur is not None:
+                cur["dependent"]["relation"] = seg[2]
             elif seg.id == "TRN" and seg[1] == "1" and cur is None:
                 pass
             elif seg.id == "DTP" and seg[1] == "291" and cur is not None:

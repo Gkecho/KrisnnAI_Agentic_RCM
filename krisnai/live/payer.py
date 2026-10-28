@@ -108,6 +108,9 @@ class PayerSim:
     auths: set[tuple[str, str]] = field(default_factory=set)  # (member, CPT) with an authorization on file
     cases: dict[str, Decision] = field(default_factory=dict)
     profile: PayerProfile | None = None  # set for a payer of the network: decisions then come from the claim's content
+    copays: dict[str, Decimal] = field(default_factory=dict)  # member -> visit copayment the 271 reports (none listed = none reported)
+    cob: dict[str, str] = field(default_factory=dict)  # member -> name of the other payer this 271 says is primary (EB*R)
+    dependents: dict[str, bool] = field(default_factory=dict)  # "member|FIRST NAME" -> dependent covered; none listed = covered
     other_primary: set[str] = field(default_factory=set)  # members whose other insurance is primary (this payer denies with CARC 22)
     seen: dict[tuple, str] = field(default_factory=dict)  # (member, service date, CPTs) -> first claim id, to spot duplicates
 

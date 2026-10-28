@@ -16,8 +16,34 @@ from krisnai.synthea.x12out import BILLING_NPI, CLINIC, SENDER, TAX_ID, _amt, _e
 
 
 def write_270(payer_id: str, payer_name: str, member_id: str, last: str, first: str, dob: str, dos: date,
-              ref: str, ctrl: int, when: date, npi: str = BILLING_NPI) -> str:  # fmt: skip
-    """Eligibility inquiry for one subscriber and one date of service (general benefit inquiry, EQ*30)."""
+              ref: str, ctrl: int, when: date, npi: str = BILLING_NPI,
+              dependent: tuple[str, str, str, str] | None = None) -> str:  # fmt: skip
+    """Eligibility inquiry for one subscriber and one date of service (general benefit inquiry, EQ*30).
+
+    `dependent` = (last, first, birth date YYYYMMDD, relationship code): when the patient is not the policyholder, the
+    question is asked about that person in a dependent level (HL 23) under the subscriber.
+    Relationship codes (INS02): 01 spouse, 19 child, G8 other.
+    """
+    if dependent is not None:
+        d_last, d_first, d_dob, d_rel = dependent
+        body = [
+            _seg("BHT", "0022", "13", ref, when.strftime("%Y%m%d"), "1200"),
+            _seg("HL", 1, "", "20", 1),
+            _seg("NM1", "PR", "2", payer_name, "", "", "", "", "PI", payer_id),
+            _seg("HL", 2, 1, "21", 1),
+            _seg("NM1", "1P", "2", CLINIC, "", "", "", "", "XX", npi),
+            _seg("HL", 3, 2, "22", 1),
+            _seg("NM1", "IL", "1", last, first, "", "", "", "MI", member_id),
+            _seg("DMG", "D8", dob or "19700101"),
+            _seg("HL", 4, 3, "23", 0),
+            _seg("TRN", "1", ref, SENDER.ljust(10, "0")[:10]),
+            _seg("NM1", "03", "1", d_last, d_first),
+            _seg("DMG", "D8", d_dob or "19700101"),
+            _seg("INS", "N", d_rel),
+            _seg("DTP", "291", "D8", dos.strftime("%Y%m%d")),
+            _seg("EQ", "30"),
+        ]
+        return _envelope("HS", "005010X279A1", "270", "005010X279A1", body, ctrl, SENDER, payer_id, when)
     body = [
         _seg("BHT", "0022", "13", ref, when.strftime("%Y%m%d"), "1200"),
         _seg("HL", 1, "", "20", 1),

@@ -54,12 +54,12 @@ def create_app(world: MockWorld, token: str | None = None, today: date | None = 
         except X12Error as e:
             raise HTTPException(status_code=400, detail=str(e)) from None
         s = subs[0]
-        ans = world.eligibility(s["payer_id"], s["member"], s["dos"])
+        ans = world.eligibility(s["payer_id"], s["member"], s["dos"], s["dependent"])
         app.state.log.append(("eligibility", ans.found, s["ref"]))
         if not ans.found:
             return world.write_271_not_found(s["payer_id"], s["payer_name"], s["member"], s["ref"], _when())
         return world.write_271(s["payer_id"], s["payer_name"], s["member"], s["last"], s["first"], s["dos"],
-                               s["ref"], ans, _when())  # fmt: skip
+                               s["ref"], ans, _when(), s["dependent"])  # fmt: skip
 
     @app.post("/v1/claim-status", response_class=PlainTextResponse)
     async def claim_status(request: Request, authorization: str | None = Header(default=None)) -> str:
