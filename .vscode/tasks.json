@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Database: start and load the canonical schema",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["tools/data_model/db_up.py"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Database: reset (drop and rebuild krisnnai_canonical)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["tools/data_model/db_up.py", "--reset"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Data model: rebuild workbook, remap, dictionary, SQL and diagrams",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["tools/data_model/build_all.py"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Data dictionary: open in browser",
+      "type": "shell",
+      "command": "start \"\" \"${workspaceFolder}\\docs\\data_model\\KrisnnAI-Data-Dictionary.html\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests (verbose, every test shown)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["-m", "pytest", "-v"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint (ruff)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["-m", "ruff", "check", "."],
+      "problemMatcher": []
+    }
+  ]
+}

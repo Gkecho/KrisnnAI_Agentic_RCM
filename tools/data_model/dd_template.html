@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KrisnnAI Data Dictionary</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1c2430;--mute:#5d6877;--line:#d9dee5;--navy:#1f3864;--accent:#2b5fb3;--m:#d7ecd0;--i:#fbefc4;--o:#e6e8eb;--add:#fde3d4;--hover:#eef2f8;--new:#ffe9a8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10151c;--panel:#18202a;--ink:#e6eaf0;--mute:#9aa6b6;--line:#2c3746;--navy:#2a4a85;--accent:#7aa7ec;--m:#23412a;--i:#4a4020;--o:#2b323c;--add:#553524;--hover:#202b3a;--new:#6b5200}}
+:root[data-theme="dark"]{--bg:#10151c;--panel:#18202a;--ink:#e6eaf0;--mute:#9aa6b6;--line:#2c3746;--navy:#2a4a85;--accent:#7aa7ec;--m:#23412a;--i:#4a4020;--o:#2b323c;--add:#553524;--hover:#202b3a;--new:#6b5200}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Arial,Helvetica,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;display:flex;gap:10px;align-items:center;padding:10px 16px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0 8px 0 0;font-weight:700}
+header input[type=search]{flex:1;min-width:180px;max-width:420px;padding:7px 10px;border-radius:6px;border:0;font:inherit}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 11px;border-radius:6px;cursor:pointer}
+button:hover{background:var(--hover)}
+header button{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3)}
+header button:hover{background:rgba(255,255,255,.26)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.danger{color:#b3261e}
+.wrap{display:flex;min-height:calc(100vh - 56px)}
+nav{width:290px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:10px 8px;overflow:auto;max-height:calc(100vh - 56px);position:sticky;top:56px}
+nav .tabs{display:flex;gap:4px;margin-bottom:8px}
+nav .tabs button{flex:1;padding:5px 4px;font-size:12px}
+nav .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+nav h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:12px 6px 4px}
+nav a{display:flex;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:5px;color:var(--ink);text-decoration:none;cursor:pointer;font-size:13px}
+nav a:hover{background:var(--hover)}nav a.on{background:var(--accent);color:#fff}
+nav a small{color:inherit;opacity:.65}
+main{flex:1;min-width:0;padding:18px 22px 60px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{margin:0 0 4px;font-size:20px}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
+.pm{background:var(--m)}.pi{background:var(--i)}.po{background:var(--o)}.padd{background:var(--add)}.pnew{background:var(--new)}tr.rev td{background:var(--new)}.why{margin-top:5px;font-size:12px;color:var(--mute)}.why b{color:var(--ink)}.rv{display:inline-block;padding:0 6px;border-radius:8px;font-size:10px;font-weight:700;background:var(--new);border:1px solid var(--line);margin-left:4px;font-family:Arial}
+.meta{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;margin-top:10px}
+.meta div:nth-child(odd){color:var(--mute);font-weight:700}
+table{border-collapse:collapse;width:100%}
+th{background:var(--navy);color:#fff;text-align:left;padding:7px 8px;font-size:12px;position:sticky;top:0}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+tr:hover td{background:var(--hover)}
+td.n{font-family:Consolas,monospace;font-weight:700;white-space:nowrap}
+td.t{font-family:Consolas,monospace;color:var(--mute);white-space:nowrap}
+.scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+a.lnk{color:var(--accent);cursor:pointer;text-decoration:underline}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.pill{font-size:12px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.restricted{color:#b3261e;font-weight:700}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:0;width:min(640px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{padding:16px 18px}
+dialog h3{margin:0 0 10px}
+label{display:block;margin:9px 0 3px;font-weight:700;font-size:12px;color:var(--mute)}
+input[type=text],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:56px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:#b3261e;margin-top:8px;min-height:18px;font-size:13px}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.muted{color:var(--mute)}
+.small{font-size:12px}
+@media(max-width:820px){.wrap{flex-direction:column}nav{width:auto;max-height:260px;position:static;border-right:0;border-bottom:1px solid var(--line)}main{padding:14px 16px 50px}.meta{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>KrisnnAI Data Dictionary</h1>
+  <input id="q" type="search" placeholder="Search tables, columns, descriptions…" aria-label="Search">
+  <button id="bAddT">+ Table</button>
+  <button id="bAddC">+ Field</button>
+  <button id="bExp">Export…</button>
+  <button id="bImp">Import JSON</button>
+  <button id="bTheme" title="Toggle light/dark">◐</button>
+  <input id="file" type="file" accept=".json,application/json" hidden>
+</header>
+<div class="wrap">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+
+<dialog id="dT"><form method="dialog" id="fT">
+  <h3>Add a table</h3>
+  <div class="row"><div><label>Table name (snake_case)</label><input type="text" id="tName" placeholder="e.g. referral"></div>
+  <div><label>Group</label><select id="tGroup"></select></div></div>
+  <div class="row"><div><label>Kind</label><select id="tKind"><option>header</option><option>detail</option><option>event</option><option>reference</option><option>registry</option><option>other</option></select></div>
+  <div><label>Priority</label><select id="tPri"><option>Mandatory</option><option selected>Important</option><option>Optional</option></select></div></div>
+  <label>What one row is</label><textarea id="tWhat"></textarea>
+  <label>Why it exists</label><textarea id="tPurpose"></textarea>
+  <label>Metrics served</label><textarea id="tMetrics"></textarea>
+  <label>Fallback ladder (best to weakest)</label><textarea id="tFb"></textarea>
+  <label><input type="checkbox" id="tStd" checked> Add the standard columns (<span class="small">id, tenant_id, source, is_reconstructed, known_at, loaded_at</span>)</label>
+  <div class="err" id="eT"></div>
+  <div class="actions"><button type="button" id="cT">Cancel</button><button class="primary" id="sT">Add table</button></div>
+</form></dialog>
+
+<dialog id="dC"><form method="dialog" id="fC">
+  <h3 id="cTitle">Add a field</h3>
+  <label>To table</label><select id="cTable"></select>
+  <div class="row"><div><label>Column name (snake_case)</label><input type="text" id="cName"></div>
+  <div><label>Type</label><input type="text" id="cType" placeholder="e.g. VARCHAR(50), DATE, DECIMAL(12,2)"></div></div>
+  <div class="row"><div><label>Priority</label><select id="cPri"><option>Mandatory</option><option selected>Important</option><option>Optional</option></select></div>
+  <div><label>Links to table</label><select id="cLink"></select></div></div>
+  <label><input type="checkbox" id="cRes"> Restricted (never shown in reports or logs)</label>
+  <label>Why we need it</label><textarea id="cDesc"></textarea>
+  <label>If the source does not send it</label><textarea id="cFb"></textarea>
+  <div class="err" id="eC"></div>
+  <div class="actions"><button type="button" id="cC">Cancel</button><button class="primary" id="sC">Save field</button></div>
+</form></dialog>
+
+<dialog id="dE"><form method="dialog">
+  <h3>Export</h3>
+  <p class="muted small">Your additions are saved in this browser automatically. Export to keep or share them.</p>
+  <div class="actions" style="justify-content:flex-start;flex-wrap:wrap">
+    <button type="button" id="xJson">JSON (full model)</button>
+    <button type="button" id="xHtml">HTML (this page with your additions)</button>
+    <button type="button" id="xCsv">CSV (all columns)</button>
+    <button type="button" id="xReset" class="danger">Remove my additions</button>
+    <button type="button" id="cE">Close</button>
+  </div>
+</form></dialog>
+
+<script id="seed" type="application/json">__DATA__</script>
+<script>
+(function(){
+"use strict";
+var KEY="krisnnai-dd-model-v1", seed=JSON.parse(document.getElementById("seed").textContent), M;
+function load(){try{var s=localStorage.getItem(KEY);if(s){var o=JSON.parse(s);if(o&&o.tables)return o;}}catch(e){}return JSON.parse(JSON.stringify(seed));}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(M));}catch(e){}}
+M=load();
+var view={mode:"table",table:null,tab:"tables",pri:"All",q:""};
+var $=function(id){return document.getElementById(id)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function pc(p){return p==="Mandatory"?"pm":p==="Important"?"pi":"po"}
+function byName(n){return M.tables.find(function(t){return t.name===n})}
+function groups(){var g=[];M.tables.forEach(function(t){if(g.indexOf(t.group)<0)g.push(t.group)});return g}
+function refsTo(n){var out=[];M.tables.forEach(function(t){var cs=t.cols.filter(function(c){return c.link===n}).map(function(c){return c.name});if(cs.length)out.push({t:t.name,cols:cs})});return out}
+
+function nav(){
+  var h='<div class="tabs">'+["tables","tbd","allowed"].map(function(k){return '<button data-tab="'+k+'" class="'+(view.tab===k?"on":"")+'">'+({tables:"Tables",tbd:"TBD",allowed:"Values"})[k]+'</button>'}).join("")+'</div>';
+  if(view.tab==="tables"){
+    groups().forEach(function(g){
+      h+='<h3>'+esc(g)+'</h3>';
+      M.tables.filter(function(t){return t.group===g}).forEach(function(t){
+        h+='<a data-t="'+esc(t.name)+'" class="'+(view.table===t.name&&view.mode==="table"?"on":"")+'"><span>'+esc(t.name)+(t.added?" ★":"")+(nrev(t)?" ●":"")+'</span><small>'+t.cols.length+'</small></a>';
+      });
+    });
+  }
+  $("nav").innerHTML=h;
+}
+
+function nrev(t){return t.cols.filter(function(c){return c.rev}).length}
+function badge(t){var s='<span class="badge '+pc(t.priority)+'">'+esc(t.priority)+'</span>';if(t.added)s+='<span class="badge padd">Added by you</span>';else if(/^New/.test(t.status||""))s+='<span class="badge padd">New: not yet reviewed</span>';if(nrev(t))s+='<span class="badge pnew">'+nrev(t)+' new in review</span>';return s}
+
+function mainTable(){
+  var t=byName(view.table); if(!t){mainHome();return}
+  var cols=t.cols.filter(function(c){return view.pri==="All"||(view.pri==="New in review"?!!c.rev:c.priority===view.pri)});
+  var h='<div class="card"><h2>'+esc(t.name)+badge(t)+'</h2><div class="muted">'+esc(t.group)+' · '+esc(t.kind)+' · '+t.cols.length+' columns</div>'
+   +'<div class="meta"><div>One row is</div><div>'+esc(t.what)+'</div><div>Why it exists</div><div>'+esc(t.purpose)+'</div><div>Metrics served</div><div>'+esc(t.metrics)+'</div><div>Fallback ladder</div><div>'+esc(t.fallback)+'</div>';
+  var rb=refsTo(t.name);
+  if(rb.length)h+='<div>Referenced by</div><div>'+rb.map(function(r){return '<a class="lnk" data-t="'+esc(r.t)+'">'+esc(r.t)+'</a> <span class="muted small">('+esc(r.cols.join(", "))+')</span>'}).join(" · ")+'</div>';
+  h+='</div><div class="tools"><button data-addc="'+esc(t.name)+'" class="primary">+ Field</button>'+(t.added?'<button data-delt="'+esc(t.name)+'" class="danger">Delete this table</button>':'')+'</div></div>';
+  h+='<div class="tools">'+["All","Mandatory","Important","Optional","New in review"].map(function(p){return '<span class="pill '+(view.pri===p?"on":"")+'" data-pri="'+p+'">'+p+'</span>'}).join("")+'<span class="muted small" style="align-self:center">'+cols.length+' shown</span></div>';
+  h+='<div class="scroll"><table><thead><tr><th>Column</th><th>Type</th><th>Priority</th><th>Links to</th><th>Why we need it</th><th>If the source does not send it</th><th></th></tr></thead><tbody>';
+  cols.forEach(function(c){
+    h+='<tr'+(c.rev?' class="rev"':'')+'><td class="n">'+esc(c.name)+(c.rev?'<span class="rv">'+esc(c.rev)+'</span>':'')+(c.restricted?' <span class="restricted" title="Restricted">⚑</span>':'')+(c.added?' ★':'')+'</td><td class="t">'+esc(c.type)+'</td><td><span class="badge '+pc(c.priority)+'" style="margin:0">'+esc(c.priority)+'</span></td><td>'+(c.link?'<a class="lnk" data-t="'+esc(c.link)+'">'+esc(c.link)+'</a>':'')+'</td><td>'+esc(c.desc)+(c.rev?'<div class="why"><b>Why added:</b> '+esc(c.why)+'<br><b>Wanted by:</b> '+esc(c.agents)+'</div>':'')+'</td><td>'+esc(c.fb)+'</td><td>'
+      +(c.added?'<button data-editc="'+esc(c.name)+'" class="small">Edit</button> <button data-delc="'+esc(c.name)+'" class="small danger">Delete</button>':'')+'</td></tr>';
+  });
+  $("main").innerHTML=h+'</tbody></table></div>';
+}
+
+function whatsNew(){
+  var rows=[];M.tables.forEach(function(t){t.cols.forEach(function(c){if(c.rev)rows.push([t,c])})});
+  if(!rows.length)return"";
+  return '<div class="card"><h2>New in this review <span class="badge pnew">'+rows.length+'</span></h2><p class="muted small">After mapping every agent field onto the model, these columns were added or reworded. Each says why and which agents want it. The same rows are highlighted inside each table (use the New in review filter).</p></div>'
+   +'<div class="scroll" style="margin-bottom:14px"><table><thead><tr><th>Table</th><th>Column</th><th>Change</th><th>Why</th><th>Agents that want it</th></tr></thead><tbody>'
+   +rows.map(function(x){return '<tr class="rev"><td><a class="lnk" data-t="'+esc(x[0].name)+'">'+esc(x[0].name)+'</a></td><td class="n">'+esc(x[1].name)+'</td><td>'+esc(x[1].rev)+'</td><td>'+esc(x[1].why)+'</td><td>'+esc(x[1].agents)+'</td></tr>'}).join("")+'</tbody></table></div>'}
+function mainHome(){
+  var nT=M.tables.length,nC=M.tables.reduce(function(a,t){return a+t.cols.length},0),ad=M.tables.filter(function(t){return t.added}).length+M.tables.reduce(function(a,t){return a+t.cols.filter(function(c){return c.added}).length},0);
+  $("main").innerHTML='<div class="card"><h2>Canonical data model</h2><p>'+nT+' tables · '+nC+' columns'+(ad?' · <b>'+ad+' added by you</b>':'')+'. Pick a table on the left, or search above.</p>'
+   +'<p class="muted small">Every table has an internal <code>&lt;table&gt;_id</code> used for all links, and the client\'s own number in a restricted column (⚑). Priorities: Mandatory, Important, Optional. Tables and fields marked ★ were added here and live in this browser until you export them.</p></div>'
+   +whatsNew()
+   +'<div class="scroll"><table><thead><tr><th>Table</th><th>Group</th><th>Priority</th><th>One row is</th><th>Cols</th></tr></thead><tbody>'
+   +M.tables.map(function(t){return '<tr><td class="n"><a class="lnk" data-t="'+esc(t.name)+'">'+esc(t.name)+'</a>'+(t.added?' ★':'')+'</td><td>'+esc(t.group)+'</td><td><span class="badge '+pc(t.priority)+'" style="margin:0">'+esc(t.priority)+'</span></td><td>'+esc(t.what)+'</td><td>'+t.cols.length+'</td></tr>'}).join("")+'</tbody></table></div>';
+}
+
+function mainTbd(){
+  $("main").innerHTML='<div class="card"><h2>TBD tables</h2><p class="muted">Reserved, not yet designed. The last column says where each plugs into the locked tables.</p></div><div class="scroll"><table><thead><tr><th>Table</th><th>Phase</th><th>What it would hold</th><th>Tier</th><th>Enables</th><th>Plugs into</th><th>Until then</th></tr></thead><tbody>'
+   +M.tbd.map(function(r){return '<tr><td class="n">'+esc(r.name)+'</td><td>'+esc(r.phase)+'</td><td>'+esc(r.what)+'</td><td>'+esc(r.tier)+'</td><td>'+esc(r.enables)+'</td><td>'+esc(r.plugs)+'</td><td>'+esc(r.until)+'</td></tr>'}).join("")+'</tbody></table></div>';
+}
+function mainAllowed(){
+  $("main").innerHTML='<div class="card"><h2>Allowed values</h2><p class="muted">Short coded lists kept as text on the row.</p></div><div class="scroll"><table><thead><tr><th>Column</th><th>Allowed values</th></tr></thead><tbody>'
+   +M.allowed.map(function(r){return '<tr><td class="n">'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>'}).join("")+'</tbody></table></div>';
+}
+function mainSearch(q){
+  var s=q.toLowerCase(),tm=M.tables.filter(function(t){return t.name.toLowerCase().indexOf(s)>=0||(t.what||"").toLowerCase().indexOf(s)>=0});
+  var cm=[];M.tables.forEach(function(t){t.cols.forEach(function(c){if((c.name+" "+c.desc+" "+c.fb).toLowerCase().indexOf(s)>=0)cm.push([t.name,c])})});
+  var h='<div class="card"><h2>Search: “'+esc(q)+'”</h2><div class="muted">'+tm.length+' tables · '+cm.length+' columns'+(cm.length>300?' (first 300 shown)':'')+'</div></div>';
+  if(tm.length)h+='<div class="card"><b>Tables</b><br>'+tm.map(function(t){return '<a class="lnk" data-t="'+esc(t.name)+'">'+esc(t.name)+'</a>'}).join(" · ")+'</div>';
+  h+='<div class="scroll"><table><thead><tr><th>Table</th><th>Column</th><th>Type</th><th>Priority</th><th>Why we need it</th></tr></thead><tbody>'
+   +cm.slice(0,300).map(function(x){return '<tr><td><a class="lnk" data-t="'+esc(x[0])+'">'+esc(x[0])+'</a></td><td class="n">'+esc(x[1].name)+'</td><td class="t">'+esc(x[1].type)+'</td><td>'+esc(x[1].priority)+'</td><td>'+esc(x[1].desc)+'</td></tr>'}).join("")+'</tbody></table></div>';
+  $("main").innerHTML=h;
+}
+function render(){
+  nav();
+  if(view.q){mainSearch(view.q)}
+  else if(view.tab==="tbd")mainTbd();
+  else if(view.tab==="allowed")mainAllowed();
+  else if(view.mode==="home")mainHome();
+  else mainTable();
+}
+function go(name){view.tab="tables";view.mode="table";view.table=name;view.q="";$("q").value="";view.pri="All";render();window.scrollTo(0,0)}
+
+/* ---------- add / edit ---------- */
+var editing=null;
+function fillSelects(){
+  $("tGroup").innerHTML=groups().map(function(g){return '<option>'+esc(g)+'</option>'}).join("")+'<option value="__new">+ new group…</option>';
+  $("cTable").innerHTML=M.tables.map(function(t){return '<option>'+esc(t.name)+'</option>'}).join("");
+  $("cLink").innerHTML='<option value="">(none)</option>'+M.tables.map(function(t){return '<option>'+esc(t.name)+'</option>'}).join("");
+}
+var NAME=/^[a-z][a-z0-9_]*$/;
+function openAddTable(){fillSelects();["tName","tWhat","tPurpose","tMetrics","tFb"].forEach(function(i){$(i).value=""});$("eT").textContent="";$("dT").showModal()}
+function openCol(table,col){
+  fillSelects();editing=col?{table:table,name:col.name}:null;
+  $("cTitle").textContent=col?"Edit field":"Add a field";
+  $("cTable").value=table||(view.table||M.tables[0].name);$("cTable").disabled=!!col;
+  $("cName").value=col?col.name:"";$("cType").value=col?col.type:"";$("cPri").value=col?col.priority:"Important";$("cLink").value=col?col.link:"";
+  $("cRes").checked=col?col.restricted:false;$("cDesc").value=col?col.desc:"";$("cFb").value=col?col.fb:"";$("eC").textContent="";$("dC").showModal();
+}
+function stdCols(n){
+  function C(name,type,pri,desc,fb){return{name:name,type:type,priority:pri,link:"",restricted:false,desc:desc,fb:fb,added:true}}
+  return[C(n+"_id","BIGINT","Mandatory","Internal identity ID. Every join and link between tables uses this.","Generated by us"),
+   C("tenant_id","INT","Mandatory","The client organisation the row belongs to.","Always set by us"),
+   C("source","VARCHAR(20)","Mandatory","Where the row came from: feed, API, PM export, rebuilt from another record.","Always set by us"),
+   C("is_reconstructed","BIT","Mandatory","1 if the row was rebuilt from other data, so reports can mark it less reliable.","Always set by us"),
+   C("known_at","DATETIME2(0)","Mandatory","When the data became known (point in time).","Always set by us"),
+   C("loaded_at","DATETIME2(0)","Mandatory","When the row was loaded.","Always set by us")];
+}
+$("sT").onclick=function(ev){
+  ev.preventDefault();var n=$("tName").value.trim(),g=$("tGroup").value;
+  if(!NAME.test(n))return $("eT").textContent="Table name: lowercase letters, digits and underscores, starting with a letter.";
+  if(byName(n))return $("eT").textContent="A table with that name already exists.";
+  if(g==="__new"){g=(prompt("New group name")||"").trim();if(!g)return $("eT").textContent="Pick a group."}
+  M.tables.push({name:n,group:g,kind:$("tKind").value,priority:$("tPri").value,status:"Added by you",what:$("tWhat").value.trim(),purpose:$("tPurpose").value.trim(),metrics:$("tMetrics").value.trim(),fallback:$("tFb").value.trim(),cols:$("tStd").checked?stdCols(n):[],added:true});
+  save();$("dT").close();go(n);
+};
+$("cT").onclick=function(){$("dT").close()};
+$("sC").onclick=function(ev){
+  ev.preventDefault();var tn=$("cTable").value,t=byName(tn),n=$("cName").value.trim();
+  if(!NAME.test(n))return $("eC").textContent="Column name: lowercase letters, digits and underscores, starting with a letter.";
+  if(!$("cType").value.trim())return $("eC").textContent="Give a type, e.g. VARCHAR(50).";
+  var dup=t.cols.some(function(c){return c.name===n&&(!editing||editing.name!==n)});
+  if(dup)return $("eC").textContent="That table already has a column called "+n+".";
+  var col={name:n,type:$("cType").value.trim(),priority:$("cPri").value,link:$("cLink").value,restricted:$("cRes").checked,desc:$("cDesc").value.trim(),fb:$("cFb").value.trim(),added:true};
+  if(editing){var i=t.cols.findIndex(function(c){return c.name===editing.name});t.cols[i]=col}else t.cols.push(col);
+  save();$("dC").close();go(tn);
+};
+$("cC").onclick=function(){$("dC").close()};
+
+/* ---------- export / import ---------- */
+function dl(name,text,type){var b=new Blob([text],{type:type}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
+$("bExp").onclick=function(){$("dE").showModal()};$("cE").onclick=function(){$("dE").close()};
+$("xJson").onclick=function(){dl("krisnnai-data-model.json",JSON.stringify(M,null,1),"application/json")};
+$("xCsv").onclick=function(){
+  function q(s){s=String(s==null?"":s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+  var r=[["table","group","column","type","priority","links_to","restricted","why","fallback","added_by_user","in_review","why_added","agents"].join(",")];
+  M.tables.forEach(function(t){t.cols.forEach(function(c){r.push([t.name,t.group,c.name,c.type,c.priority,c.link,c.restricted?"yes":"",c.desc,c.fb,(t.added||c.added)?"yes":"",c.rev||"",c.why||"",c.agents||""].map(q).join(","))})});
+  dl("krisnnai-data-model.csv","﻿"+r.join("\r\n"),"text/csv");
+};
+$("xHtml").onclick=function(){
+  var d=document.documentElement.cloneNode(true);d.querySelector("#seed").textContent=JSON.stringify(M).replace(/</g,"\\u003c");
+  dl("KrisnnAI-Data-Dictionary.html","<!doctype html>\n"+d.outerHTML,"text/html");
+};
+$("xReset").onclick=function(){
+  if(!confirm("Remove every table and field you added in this browser? The original dictionary stays."))return;
+  M.tables=M.tables.filter(function(t){return!t.added});M.tables.forEach(function(t){t.cols=t.cols.filter(function(c){return!c.added})});
+  save();$("dE").close();view.table=null;view.mode="home";render();
+};
+$("bImp").onclick=function(){$("file").click()};
+$("file").onchange=function(){
+  var f=this.files[0];if(!f)return;var r=new FileReader();
+  r.onload=function(){try{var o=JSON.parse(r.result);if(!o.tables||!o.tables.length)throw 0;M=o;save();view.mode="home";view.table=null;render()}catch(e){alert("That file is not a data dictionary JSON.")}};
+  r.readAsText(f);this.value="";
+};
+$("bTheme").onclick=function(){var r=document.documentElement,dark=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",dark?"light":"dark")};
+
+/* ---------- events ---------- */
+document.addEventListener("click",function(e){
+  var el=e.target.closest("[data-t],[data-tab],[data-pri],[data-addc],[data-delt],[data-editc],[data-delc]");if(!el)return;
+  if(el.dataset.t)return go(el.dataset.t);
+  if(el.dataset.tab){view.tab=el.dataset.tab;view.q="";$("q").value="";return render()}
+  if(el.dataset.pri){view.pri=el.dataset.pri;return render()}
+  if(el.dataset.addc)return openCol(el.dataset.addc);
+  if(el.dataset.editc){var t=byName(view.table);return openCol(view.table,t.cols.find(function(c){return c.name===el.dataset.editc}))}
+  if(el.dataset.delc){if(confirm("Delete field "+el.dataset.delc+"?")){var t2=byName(view.table);t2.cols=t2.cols.filter(function(c){return c.name!==el.dataset.delc});save();render()}return}
+  if(el.dataset.delt){if(confirm("Delete table "+el.dataset.delt+" and its fields?")){M.tables=M.tables.filter(function(t){return t.name!==el.dataset.delt});save();view.table=null;view.mode="home";render()}}
+});
+$("q").addEventListener("input",function(){view.q=this.value.trim();if(view.q.length===1)return;render()});
+$("bAddT").onclick=openAddTable;$("bAddC").onclick=function(){openCol(view.table&&byName(view.table)?view.table:null)};
+view.mode="home";render();
+})();
+</script>
+</body>
+</html>

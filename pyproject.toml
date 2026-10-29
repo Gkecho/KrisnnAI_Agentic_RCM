@@ -36,7 +36,7 @@ testpaths = ["tests"]
 markers = ["slow: builds a large synthetic history (about a minute); skip with -m \"not slow\""]
 
 [tool.ruff]
-extend-exclude = ["migrations/versions"]
+extend-exclude = ["migrations/versions", "tools/data_model"]  # generator scripts, dense by design
 line-length = 120
 target-version = "py312"
 

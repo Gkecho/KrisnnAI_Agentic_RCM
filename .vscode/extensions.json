@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "anthropic.claude-code",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-mssql.mssql",
+    "bierner.markdown-mermaid",
+    "ms-azuretools.vscode-docker",
+    "GrapeCity.gc-excelviewer"
+  ]
+}

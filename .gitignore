@@ -11,3 +11,4 @@ __pycache__/
 *.bak
 *.mdf
 *.ldf
+.env.db

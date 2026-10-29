@@ -1,0 +1,37 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests", "-v"],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.ruff_cache": true,
+    "**/*.egg-info": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/out": true,
+    "tools/data_model/build": true
+  },
+  "files.associations": {
+    "*.sql": "sql"
+  },
+  "mssql.connections": [
+    {
+      "profileName": "KrisnnAI canonical model (local, schema only)",
+      "server": "127.0.0.1,14330",
+      "database": "krisnnai_canonical",
+      "authenticationType": "SqlLogin",
+      "user": "sa",
+      "password": "",
+      "savePassword": false,
+      "emptyPasswordInput": false,
+      "encrypt": "Optional",
+      "trustServerCertificate": true
+    }
+  ],
+  "python-envs.defaultEnvManager": "ms-python.python:system"
+}
