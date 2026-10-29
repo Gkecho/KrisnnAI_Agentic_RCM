@@ -49,3 +49,7 @@
 - autopay_enrolled -> planned payment_plan TBD table
 ## ALL REMAINING (agent_decision, agent_finding, agent_task): applied in one go with defaults (user: "fix all together once")
 - 23 optional columns added in total + status_code description change; see gap_block.py. gen_final.py, model.json, Excel, HTML and remap workbook rebuilt.
+## planned-table review (APPROVED, all locked)
+- 16 new tables designed by 4 agents (A value/forecast, B document/clinical, C rules/enrollment/eligibility/staff/calendar, D appeal/patient billing); estimate and encounter_diagnosis not needed
+- 3 locked-table changes applied: referral_id on appointment + encounter; payer_rule_id on agent_decision_details; approver/assignee columns relinked to staff_id (transactions.approved_by, bill_details.change_approved_by, practice_settings.approved_by, agent_approval.approved_by, agent_task.assigned_to)
+- 57 tables, 1,595 columns, all Locked
