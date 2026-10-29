@@ -4,7 +4,7 @@ Revision ID: 0011
 Revises: 0010
 
 Prior-authorization records and the payer + CPT pairs that need one, for the authorization agent (M16).
-Generated from krisnai.model.authorization.
+Generated from krisnnai.model.authorization.
 """
 
 import sqlalchemy as sa

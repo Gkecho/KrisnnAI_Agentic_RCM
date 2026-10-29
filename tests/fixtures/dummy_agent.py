@@ -8,10 +8,10 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-import krisnai.model as m
-from krisnai.engine import Agent, Context, Proposal, RuleResult, Verification, known_event_ids
-from krisnai.engine.adapters import AdapterResult
-from krisnai.engine.models import ModelResult
+import krisnnai.model as m
+from krisnnai.engine import Agent, Context, Proposal, RuleResult, Verification, known_event_ids
+from krisnnai.engine.adapters import AdapterResult
+from krisnnai.engine.models import ModelResult
 
 TRIGGER = "test.trigger"
 

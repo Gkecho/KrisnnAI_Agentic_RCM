@@ -4,7 +4,7 @@ Revision ID: 0014
 Revises: 0013
 
 Patient payments and statement / account status, for the patient engagement agent (M19).
-Generated from krisnai.model.patient_balance.
+Generated from krisnnai.model.patient_balance.
 """
 
 import sqlalchemy as sa

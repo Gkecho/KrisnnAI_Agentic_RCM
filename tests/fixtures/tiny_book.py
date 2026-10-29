@@ -24,8 +24,8 @@ from decimal import Decimal
 
 from sqlalchemy.engine import Engine
 
-import krisnai.model as m
-from krisnai.model import tenant_session
+import krisnnai.model as m
+from krisnnai.model import tenant_session
 
 D = Decimal
 

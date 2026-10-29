@@ -10,16 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.knowledge import Book
-from krisnai.knowledge.book import Rule
-from krisnai.knowledge.demo import DEMO, PAYER, demo_book
-from krisnai.live import score
-from krisnai.live.emr import FakeEmr
-from krisnai.live.payer import Decision
-from krisnai.live.payer_replies import ReplySim
-from krisnai.live.responder import APPROVAL_RE, RemitView, Responder, break_837, read_remit
-from krisnai.live.stream import SimulatedCrash, Stream, StreamConfig, run_stream
-from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
+from krisnnai.knowledge import Book
+from krisnnai.knowledge.book import Rule
+from krisnnai.knowledge.demo import DEMO, PAYER, demo_book
+from krisnnai.live import score
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.payer import Decision
+from krisnnai.live.payer_replies import ReplySim
+from krisnnai.live.responder import APPROVAL_RE, RemitView, Responder, break_837, read_remit
+from krisnnai.live.stream import SimulatedCrash, Stream, StreamConfig, run_stream
+from krisnnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 
 CFG = dict(count=40, engine=False, bots=False, serve=False, replies=True, deny_rate=0.4, deviation_rate=0.5, pend_rate=0.3, reject_rate=0.3)
 quiet = lambda *_: None  # noqa: E731
@@ -67,7 +67,7 @@ def test_a_claim_stopped_at_the_coder_is_untouched(run):
 
 
 def test_the_truth_file_for_first_decisions_keeps_its_columns(run):
-    from krisnai.live.payer import TRUTH_COLUMNS
+    from krisnnai.live.payer import TRUTH_COLUMNS
 
     out, _ = run
     assert (out / "truth.csv").read_text("utf-8").splitlines()[0].split(",") == TRUTH_COLUMNS
@@ -274,8 +274,8 @@ def test_without_the_replies_switch_a_rejected_claim_stays_rejected(tmp_path):
 
 
 def test_break_837_makes_the_clearinghouse_reject_it(tmp_path):
-    from krisnai.live.payer import PayerSim
-    from krisnai.live.world import LiveWorld
+    from krisnnai.live.payer import PayerSim
+    from krisnnai.live.world import LiveWorld
 
     out = tmp_path / "r"
     run_stream(out, cfg(count=4, replies=False, reject_rate=0.0), FakeEmr(), log=quiet)

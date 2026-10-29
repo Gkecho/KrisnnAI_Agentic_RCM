@@ -7,9 +7,9 @@ from datetime import date
 
 import pytest
 
-from krisnai import cli
-from krisnai.demo import make_demo, write_report
-from krisnai.ops import watermark
+from krisnnai import cli
+from krisnnai.demo import make_demo, write_report
+from krisnnai.ops import watermark
 from tests.fixtures import synthea_mini
 
 AS_OF = date(2026, 6, 30)
@@ -86,7 +86,7 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
     assert prio == sorted(prio, reverse=True)
     from collections import Counter
 
-    from krisnai.demo.export import QUEUE_PER_KEY
+    from krisnnai.demo.export import QUEUE_PER_KEY
 
     shown = Counter(f"{q['owner']}|{q['agent']}" for q in data["queue"])
     tot = data["queue_totals"]
@@ -102,7 +102,7 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
     ref = {"carc_routes", "rejection_routes", "ncci_pairs", "mue_limits", "fee_schedule", "auth_requirements",
            "filing_windows", "appeal_windows", "policy"}  # fmt: skip
     assert ref <= set(data["reference"]) and data["reference"]["carc_routes"] and data["reference"]["fee_schedule"]
-    assert (out / "ui_data.js").read_text(encoding="utf-8").startswith("window.KRISNAI_LIVE = {")
+    assert (out / "ui_data.js").read_text(encoding="utf-8").startswith("window.KRISNNAI_LIVE = {")
     rp = data["replay"]
     assert rp["reconciliation"] and all(c["passed"] for c in rp["reconciliation"]), "the run's gate passed"
     assert {"claims", "clean_claim_rate", "days_in_ar", "ar_over_90_share"} <= set(rp["health"])
@@ -115,7 +115,7 @@ def test_ui_data_has_the_documented_shape_and_matches_the_report(demo):
 def test_replay_section_is_empty_without_a15_and_has_no_scores_without_an_answer_key(tmp_path):
     import json
 
-    from krisnai.demo.export import _replay
+    from krisnnai.demo.export import _replay
 
     assert _replay(None, 1, tmp_path, AS_OF) == {}  # no a15 folder: nothing to show, nothing touched
     (tmp_path / "a15").mkdir()

@@ -9,8 +9,8 @@ from datetime import date
 import httpx
 import pytest
 
-from krisnai.integrations.clearinghouse.client import ALLOW_ENV, EndpointRefused
-from krisnai.integrations.clearinghouse.stedi import (
+from krisnnai.integrations.clearinghouse.client import ALLOW_ENV, EndpointRefused
+from krisnnai.integrations.clearinghouse.stedi import (
     BASE,
     CLAIM_STATUS,
     CLAIMS,
@@ -21,7 +21,7 @@ from krisnai.integrations.clearinghouse.stedi import (
     StediClient,
     StediError,
 )
-from krisnai.integrations.clearinghouse.x12_out import write_270
+from krisnnai.integrations.clearinghouse.x12_out import write_270
 
 KEY = "test_key_not_a_real_secret"
 
@@ -130,11 +130,11 @@ def test_no_key_or_a_remote_url_without_the_flag_is_refused(monkeypatch):
 
 
 @pytest.mark.skipif(not (os.environ.get("STEDI_API_KEY") and os.environ.get(ALLOW_ENV) == "1"),
-                    reason="live smoke test: needs STEDI_API_KEY (a TEST key) and KRISNAI_ALLOW_REAL_ENDPOINTS=1")  # fmt: skip
+                    reason="live smoke test: needs STEDI_API_KEY (a TEST key) and KRISNNAI_ALLOW_REAL_ENDPOINTS=1")  # fmt: skip
 def test_live_eligibility_returns_an_x12_envelope():
     c = StediClient()
     # Stedi's documented mock subscriber (Aetna, medical, service type 30); other values return an error in test mode
-    x12 = write_270("60054", "AETNA", "AETNA9wcSu", "Doe", "John", "19800101", date.today(), "KRISNAILIVE", 1,
+    x12 = write_270("60054", "AETNA", "AETNA9wcSu", "Doe", "John", "19800101", date.today(), "KRISNNAILIVE", 1,
                     date.today())  # fmt: skip
     text = c.check_eligibility(x12)
     assert text.startswith("ISA") and c.last_mode in (None, "test")

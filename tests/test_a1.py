@@ -12,9 +12,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a1_clearance import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a1_clearance import (
     ACTION_TYPES,
     CHECK_TASK,
     COB_REVIEW,
@@ -30,17 +30,17 @@ from krisnai.agents.a1_clearance import (
     summarize,
     sweep,
 )
-from krisnai.agents.a1_clearance import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.eligibility import parse_271
-from krisnai.ingest.loader import ingest_path, parse_appointments, parse_x12
-from krisnai.ingest.x12 import X12Error, read_transactions
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
-from krisnai.synthea.eligibility import write_271
-from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
+from krisnnai.agents.a1_clearance import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.eligibility import parse_271
+from krisnnai.ingest.loader import ingest_path, parse_appointments, parse_x12
+from krisnnai.ingest.x12 import X12Error, read_transactions
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
+from krisnnai.synthea.eligibility import write_271
+from krisnnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -372,7 +372,7 @@ def test_patient_estimate_equals_what_the_patient_owed_on_clean_paid_claims(syn)
 
 
 def test_the_tower_shows_a1_cards_until_the_visit_date_passes(syn):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     with tenant_session(syn["engine"], 1) as s:  # a day on which at least one gap was raised
         day = s.scalars(

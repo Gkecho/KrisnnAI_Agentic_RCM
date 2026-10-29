@@ -12,9 +12,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a3_documentation import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a3_documentation import (
     ACTION_TYPES,
     CHARGE_REVIEW,
     EVENT_TYPE,
@@ -30,14 +30,14 @@ from krisnai.agents.a3_documentation import (
     summarize,
     sweep,
 )
-from krisnai.agents.a3_documentation import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path, parse_charges, parse_notes
-from krisnai.ingest.x12 import X12Error
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.agents.a3_documentation import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path, parse_charges, parse_notes
+from krisnnai.ingest.x12 import X12Error
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -300,8 +300,8 @@ def test_a15_still_finds_exactly_the_planted_unbilled_visits_when_all_visits_are
     with tenant_session(syn["engine"], 1) as s:
         n_visits = s.scalar(select(func.count()).select_from(m.Visit))
     assert n_visits > len(planted) * 5
-    from krisnai.agents.a15_lite.detect import detect
-    from krisnai.agents.a15_lite.snapshot import load_snapshot
+    from krisnnai.agents.a15_lite.detect import detect
+    from krisnnai.agents.a15_lite.snapshot import load_snapshot
 
     snap = load_snapshot(syn["engine"], 1, date(2026, 6, 30))
     found = {f.visit for f in detect(snap) if f.type == "unbilled_visit"}
@@ -309,7 +309,7 @@ def test_a15_still_finds_exactly_the_planted_unbilled_visits_when_all_visits_are
 
 
 def test_the_tower_shows_a3_cards_keyed_by_visit(syn):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     mine = [c for c in open_cards(syn["engine"], 1, date(2026, 6, 30)) if c["agent"] == "a3_documentation"]
     assert mine and {c["owner"] for c in mine} <= {"provider", "biller"}

@@ -11,14 +11,14 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a1_clearance import A1ClearanceAgent
-from krisnai.agents.a1_clearance import sweep as a1_sweep
-from krisnai.agents.a3_documentation import A3DocumentationAgent
-from krisnai.agents.a3_documentation import sweep as a3_sweep
-from krisnai.agents.a5_prevention import A5PreventionAgent
-from krisnai.agents.a9_learning import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a1_clearance import A1ClearanceAgent
+from krisnnai.agents.a1_clearance import sweep as a1_sweep
+from krisnnai.agents.a3_documentation import A3DocumentationAgent
+from krisnnai.agents.a3_documentation import sweep as a3_sweep
+from krisnnai.agents.a5_prevention import A5PreventionAgent
+from krisnnai.agents.a9_learning import (
     ACTION_TYPES,
     APPROVED,
     EVENT_TYPE,
@@ -34,12 +34,12 @@ from krisnai.agents.a9_learning import (
     proposals,
     sweep,
 )
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book

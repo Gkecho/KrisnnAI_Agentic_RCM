@@ -9,10 +9,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a14_tower.cards import open_cards
-from krisnai.agents.a15_investigator import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a14_tower.cards import open_cards
+from krisnnai.agents.a15_investigator import (
     ACTION_TYPES,
     INVESTIGATION_REVIEW,
     A15InvestigatorAgent,
@@ -21,11 +21,11 @@ from krisnai.agents.a15_investigator import (
     summarize,
     sweep,
 )
-from krisnai.agents.a15_lite import load_snapshot
-from krisnai.agents.upstream import upstream_flags
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.model import tenant_session
+from krisnnai.agents.a15_lite import load_snapshot
+from krisnnai.agents.upstream import upstream_flags
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.model import tenant_session
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
 from tests.test_ingest import make_engine
@@ -111,8 +111,8 @@ def test_denial_cause_carries_category_carc_and_one_line_per_claim(book):
     recent(book, carc="197")
     book.commit()
     snap = load_snapshot(book.engine, 1, E)
-    from krisnai.agents.a15_investigator.causes import explain
-    from krisnai.agents.a15_lite import detect
+    from krisnnai.agents.a15_investigator.causes import explain
+    from krisnnai.agents.a15_lite import detect
 
     why = explain(slices(snap, E)[0], detect(snap), {})
     (top,) = why["causes"]
@@ -126,8 +126,8 @@ def test_underpayment_is_its_own_cause_and_unexplained_is_reported_not_guessed(b
         pay(book, f"U{i}", date(2026, 8, 1) + timedelta(days=i), "80.00", cas=[("CO", "45", "70.00")])
     recent(book, paid=7, denied=0, prefix="G", start=date(2026, 8, 10))
     book.commit()
-    from krisnai.agents.a15_investigator.causes import explain
-    from krisnai.agents.a15_lite import detect
+    from krisnnai.agents.a15_investigator.causes import explain
+    from krisnnai.agents.a15_lite import detect
 
     snap = load_snapshot(book.engine, 1, E)
     got = {x.key: x for x in slices(snap, E)}["P1"]

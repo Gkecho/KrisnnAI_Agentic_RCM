@@ -9,11 +9,11 @@ from datetime import datetime
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.ingest.loader import ingest_path
-from krisnai.match import run_matching
-from krisnai.model import tenant_session
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match import run_matching
+from krisnnai.model import tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.test_ingest import SALT, make_engine
 

@@ -7,14 +7,14 @@ from collections import Counter
 from datetime import date
 from decimal import Decimal
 
-from krisnai.knowledge.demo import network_book
-from krisnai.live.catalog import CONDITIONS, SERVICES
-from krisnai.live.emr import FakeEmr
-from krisnai.live.network import PAYER_IDS, Network
-from krisnai.live.stream import StreamConfig, run_stream
-from krisnai.live.transcripts import generate_wide
-from krisnai.synthea import x12out
-from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
+from krisnnai.knowledge.demo import network_book
+from krisnnai.live.catalog import CONDITIONS, SERVICES
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.network import PAYER_IDS, Network
+from krisnnai.live.stream import StreamConfig, run_stream
+from krisnnai.live.transcripts import generate_wide
+from krisnnai.synthea import x12out
+from krisnnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 
 
 def claim(i, cpts=("99213",), dos=date(2026, 3, 2), dx=("J029",), member=None, sub=date(2026, 3, 3)):

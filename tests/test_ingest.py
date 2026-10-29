@@ -11,12 +11,12 @@ import pytest
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.ingest import hashing, r835
-from krisnai.ingest.loader import ingest_file, ingest_path
-from krisnai.ingest.x12 import X12Error, read_transactions
-from krisnai.model import Base, tenant_session
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.ingest import hashing, r835
+from krisnnai.ingest.loader import ingest_file, ingest_path
+from krisnnai.ingest.x12 import X12Error, read_transactions
+from krisnnai.model import Base, tenant_session
 from tests.fixtures import make_synthetic as ms
 
 SALT = "unit-test-salt"
@@ -403,11 +403,11 @@ def test_bad_fee_schedule_fails(tmp_path):
 
 
 def test_cli_end_to_end(world, tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("KRISNAI_SALT_TEST", "cli-salt")
+    monkeypatch.setenv("KRISNNAI_SALT_TEST", "cli-salt")
     url = f"sqlite:///{tmp_path / 'cli.db'}"
     base = ["--db-url", url]
     assert cli.main([*base, "init-db"]) == 0
-    assert cli.main([*base, "tenant-create", "CLI Clinic", "--salt-key", "KRISNAI_SALT_TEST"]) == 0
+    assert cli.main([*base, "tenant-create", "CLI Clinic", "--salt-key", "KRISNNAI_SALT_TEST"]) == 0
     assert cli.main([*base, "ingest", str(world["data"]), "--tenant", "1"]) == 0
     out = capsys.readouterr().out
     assert f"{len(world['results'])} loaded, 0 skipped, 0 failed" in out
@@ -417,12 +417,12 @@ def test_cli_end_to_end(world, tmp_path, monkeypatch, capsys):
 
 def test_cli_requires_salt_env_and_existing_tenant(world, tmp_path, monkeypatch):
     url = f"sqlite:///{tmp_path / 'cli2.db'}"
-    monkeypatch.delenv("KRISNAI_SALT_NOPE", raising=False)
+    monkeypatch.delenv("KRISNNAI_SALT_NOPE", raising=False)
     cli.main(["--db-url", url, "init-db"])
     with pytest.raises(SystemExit, match="tenant 1 does not exist"):
         cli.main(["--db-url", url, "ingest", str(world["data"]), "--tenant", "1"])
-    cli.main(["--db-url", url, "tenant-create", "T", "--salt-key", "KRISNAI_SALT_NOPE"])
-    with pytest.raises(SystemExit, match="KRISNAI_SALT_NOPE"):
+    cli.main(["--db-url", url, "tenant-create", "T", "--salt-key", "KRISNNAI_SALT_NOPE"])
+    with pytest.raises(SystemExit, match="KRISNNAI_SALT_NOPE"):
         cli.main(["--db-url", url, "ingest", str(world["data"]), "--tenant", "1"])
 
 

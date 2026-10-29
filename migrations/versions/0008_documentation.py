@@ -4,7 +4,7 @@ Revision ID: 0008
 Revises: 0007
 
 Note status and charge entries per visit, for the documentation completeness agent (M13). Generated from
-krisnai.model.visits.
+krisnnai.model.visits.
 """
 
 import sqlalchemy as sa

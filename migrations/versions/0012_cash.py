@@ -3,7 +3,7 @@
 Revision ID: 0012
 Revises: 0011
 
-Bank deposits and PM postings, for the cash reconciliation agent (M17). Generated from krisnai.model.cash.
+Bank deposits and PM postings, for the cash reconciliation agent (M17). Generated from krisnnai.model.cash.
 """
 
 import sqlalchemy as sa

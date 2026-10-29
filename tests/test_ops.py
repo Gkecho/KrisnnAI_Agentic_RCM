@@ -9,16 +9,16 @@ from datetime import date, datetime, time, timedelta
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a8_denial import A8DenialAgent
-from krisnai.engine import replay
-from krisnai.engine.decision_record import fingerprint
-from krisnai.ingest.loader import ingest_file, ingest_path
-from krisnai.model import tenant_session
-from krisnai.ops import check_gate, last_run, run_period, scan, watermark
-from krisnai.ops.registry import grid_start, steps
-from krisnai.synthea import build
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a8_denial import A8DenialAgent
+from krisnnai.engine import replay
+from krisnnai.engine.decision_record import fingerprint
+from krisnnai.ingest.loader import ingest_file, ingest_path
+from krisnnai.model import tenant_session
+from krisnnai.ops import check_gate, last_run, run_period, scan, watermark
+from krisnnai.ops.registry import grid_start, steps
+from krisnnai.synthea import build
 from tests.fixtures import make_synthetic as ms, synthea_mini
 from tests.fixtures.tiny_book import Book
 from tests.test_ingest import SALT, make_engine

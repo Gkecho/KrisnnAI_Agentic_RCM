@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.live.emr import FakeEmr
-from krisnai.live.stream import SimulatedCrash, StreamConfig, run_stream
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.stream import SimulatedCrash, StreamConfig, run_stream
 
 CFG = dict(count=14, per_day=5, engine=False, bots=False, serve=False)
 
@@ -124,9 +124,9 @@ def test_with_the_real_engine_and_bots_the_payers_answers_become_agent_work(tmp_
 @pytest.mark.slow
 @pytest.mark.skipif(not _openemr_up(), reason="the local OpenEMR is not running")
 def test_against_the_real_openemr_a_killed_run_resumes_with_no_duplicate_patients(tmp_path):
-    from krisnai.integrations.openemr import seed as oeseed
-    from krisnai.integrations.openemr.auth import OpenEmrAuth
-    from krisnai.live.emr import OpenEmrPort
+    from krisnnai.integrations.openemr import seed as oeseed
+    from krisnnai.integrations.openemr.auth import OpenEmrAuth
+    from krisnnai.live.emr import OpenEmrPort
 
     def port():
         return OpenEmrPort(oeseed._Server(OpenEmrAuth(Path("out/openemr"))))

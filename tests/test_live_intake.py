@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from krisnai.live.intake import DropFolder, parse_csv, parse_hl7
-from krisnai.live.trigger import Trigger
+from krisnnai.live.intake import DropFolder, parse_csv, parse_hl7
+from krisnnai.live.trigger import Trigger
 
 TODAY = date(2026, 10, 22)
 
@@ -21,7 +21,7 @@ def hl7(trigger: str = "S12", appt: str = "9001", day: str = "20261105", with_in
     sch = [""] * 12
     sch[0], sch[1], sch[2], sch[11] = "SCH", appt, appt, f"^^^{day}103000"
     segs = [
-        "MSH|^~" + chr(92) + f"&|PMSYS|CLINIC|KRISNAI|KRISNAI|20261022090000||SIU^{trigger}|MSG{appt}|P|2.5",
+        "MSH|^~" + chr(92) + f"&|PMSYS|CLINIC|KRISNNAI|KRISNNAI|20261022090000||SIU^{trigger}|MSG{appt}|P|2.5",
         "|".join(sch),
         "PID|1||SYNHL7001^^^CLINIC||Hlseven^Pat||19850304|F",
     ]
@@ -110,17 +110,17 @@ def test_a_database_view_is_read_with_a_select_only_and_fires_like_any_other_sou
     import pytest
     from sqlalchemy import create_engine, text
 
-    from krisnai.live.intake import COLUMNS, DatabaseView
+    from krisnnai.live.intake import COLUMNS, DatabaseView
 
     url = f"sqlite:///{tmp_path / 'pm.sqlite'}"
     eng = create_engine(url)
     cols = ", ".join(f"{c} TEXT" for c in COLUMNS)
     with eng.begin() as c:
         c.execute(text(f"CREATE TABLE appt ({cols})"))
-        c.execute(text("CREATE VIEW v_krisnai_appointments AS SELECT * FROM appt"))
+        c.execute(text("CREATE VIEW v_krisnnai_appointments AS SELECT * FROM appt"))
     with pytest.raises(ValueError):
         DatabaseView(url, "v; DROP TABLE appt")  # only a plain view name is accepted
-    with _trigger_for(DatabaseView(url, "v_krisnai_appointments"), tmp_path) as t:
+    with _trigger_for(DatabaseView(url, "v_krisnnai_appointments"), tmp_path) as t:
         assert t.tick() == []
         with eng.begin() as c:
             c.execute(text("INSERT INTO appt (appointment_id, patient_id, first_name, last_name, dob, visit_date, visit_time, status, policy_order, payer_code, payer_name, member_id, relationship) VALUES ('D-1','SYNDB01','Dee','Bee','1990-05-05','2026-11-09','08:00','booked','1','SYNAETNA','SYNAETNA Demo Payer','DB-1','self')"))
@@ -135,7 +135,7 @@ def _trigger_for(source, tmp_path) -> Trigger:  # noqa: ANN001
 
 
 def test_manual_upload_checks_the_file_and_only_a_clean_one_reaches_the_folder(tmp_path):
-    from krisnai.live.intake import upload
+    from krisnnai.live.intake import upload
 
     head = "appointment_id,patient_id,first_name,last_name,dob,visit_date\n"
     bad = tmp_path / "bad.csv"

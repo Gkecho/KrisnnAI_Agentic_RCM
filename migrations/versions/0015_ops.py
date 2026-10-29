@@ -4,7 +4,7 @@ Revision ID: 0015
 Revises: 0014
 
 Run log / watermark for the daily and backfill runner, and the member id -> master patient id crosswalk (M22).
-Generated from krisnai.model.ops.
+Generated from krisnnai.model.ops.
 """
 
 import sqlalchemy as sa

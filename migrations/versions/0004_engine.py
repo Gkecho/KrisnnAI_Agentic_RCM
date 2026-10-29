@@ -3,7 +3,7 @@
 Revision ID: 0004
 Revises: 0003
 
-The decision engine's tables (M6). Generated from krisnai.model.engine.
+The decision engine's tables (M6). Generated from krisnnai.model.engine.
 """
 
 import sqlalchemy as sa

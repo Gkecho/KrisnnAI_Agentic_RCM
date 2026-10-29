@@ -1,4 +1,4 @@
-# KrisnAI RCM
+# KrisnnAI RCM
 Read `CLAUDE.md` (rules) and `docs/BUILD_PLAN.md` (milestones).
 
     python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"

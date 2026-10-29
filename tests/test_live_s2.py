@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.live.coder import Coder, Policy
-from krisnai.live.transcripts import generate
+from krisnnai.live.coder import Coder, Policy
+from krisnnai.live.transcripts import generate
 
 DAY = date(2026, 10, 24)
 ON = Policy(enabled=True)
@@ -89,7 +89,7 @@ def test_records_are_plain_json_with_the_checks_shown():
 
 
 def test_the_coder_never_sees_the_answer_key():
-    src = (Path(__file__).resolve().parents[1] / "krisnai" / "live" / "coder.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "krisnnai" / "live" / "coder.py").read_text(encoding="utf-8")
     imports = [ln for ln in src.splitlines() if ln.startswith(("import ", "from "))]
     assert not [ln for ln in imports if "transcripts" in ln] and "Expected" not in src
 
@@ -106,7 +106,7 @@ def _openemr_up() -> bool:
 @pytest.mark.slow
 @pytest.mark.skipif(not _openemr_up(), reason="the local OpenEMR is not running")
 def test_live_an_auto_accepted_transcript_is_charged_by_policy_and_an_unsigned_one_stops_at_the_coder(tmp_path):
-    from krisnai.live.s1 import run_s1
+    from krisnnai.live.s1 import run_s1
 
     v = generate(7, 50)
     ok = run_s1(Path("out/openemr"), tmp_path / "a", date(2026, 10, 21), visit=v[0], coder=Coder(ON), log=lambda *_: None)

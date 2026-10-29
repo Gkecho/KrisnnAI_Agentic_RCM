@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 from alembic import command
 
-from krisnai import cli
-from krisnai.ingest.loader import ingest_path
-from krisnai.match import run_matching
-from krisnai.metrics import compute, compute_all, function_ddl, kpi_names, render
+from krisnnai import cli
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match import run_matching
+from krisnnai.metrics import compute, compute_all, function_ddl, kpi_names, render
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.tiny_book import Book, build_tiny_book
 from tests.test_ingest import SALT, make_engine
@@ -165,7 +165,7 @@ def test_dictionary_documents_every_kpi_and_every_kpi_has_a_function():
     doc = (Path(__file__).parent.parent / "docs" / "metrics.md").read_text(encoding="utf8")
     for kpi in kpi_names():
         assert f"`{kpi}`" in doc, f"{kpi} is missing from docs/metrics.md"
-        assert f"`krisnai/metrics/sql/{kpi}.sql`" in doc
+        assert f"`krisnnai/metrics/sql/{kpi}.sql`" in doc
     assert len(kpi_names()) == 9
 
 
@@ -181,7 +181,7 @@ def test_sql_server_text_uses_datediff_and_parameters_not_sqlite_functions():
 def test_migration_0002_emits_one_function_per_kpi():
     import os
 
-    os.environ.pop("KRISNAI_ALEMBIC_URL", None)
+    os.environ.pop("KRISNNAI_ALEMBIC_URL", None)
     buf = io.StringIO()
     command.upgrade(_alembic_cfg(buf), "head", sql=True)
     sql = buf.getvalue()

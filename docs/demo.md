@@ -3,7 +3,7 @@
 One command builds a mock practice, runs all fifteen agents in shadow mode, and writes a single HTML page you can open.
 
 ```
-.venv\Scripts\python.exe -m krisnai.cli demo --out out/demo --synthea out/synthea --as-of 2026-10-14
+.venv\Scripts\python.exe -m krisnnai.cli demo --out out/demo --synthea out/synthea --as-of 2026-10-14
 start out\demo\report.html
 ```
 
@@ -27,16 +27,16 @@ The folder is wiped and rebuilt on every run. The answer keys are kept in `out/d
   says nothing about staff time saved.
 
 ## Show incremental loading
-The demo database is a normal KrisnAI database. Drop a new file in a folder and run a daily load against it:
+The demo database is a normal KrisnnAI database. Drop a new file in a folder and run a daily load against it:
 
 ```
 set DEMO_SALT=demo-salt
-.venv\Scripts\python.exe -m krisnai.cli --db-url sqlite:///out/demo/demo.sqlite ops daily --inbox C:\path\new_files --as-of 2026-10-15 --tenant 1
+.venv\Scripts\python.exe -m krisnnai.cli --db-url sqlite:///out/demo/demo.sqlite ops daily --inbox C:\path\new_files --as-of 2026-10-15 --tenant 1
 ```
 
 Files are loaded in dependency order, moved to `archive/<date>/` (or `rejected/<date>/` with a reason file), the gate checks the totals, and only the new
 events are decided.
 
 ## If something is missing
-- No `out/synthea`: `krisnai synthea run --yes` (needs Docker; downloads the Synthea jar and runs it) or point `--synthea` at any Synthea output folder.
+- No `out/synthea`: `krisnnai synthea run --yes` (needs Docker; downloads the Synthea jar and runs it) or point `--synthea` at any Synthea output folder.
 - The run stops with "gated": the load did not reconcile; the report is not written. `ops status` and the `ops_run` row say why.

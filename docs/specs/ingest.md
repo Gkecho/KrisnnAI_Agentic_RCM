@@ -1,6 +1,6 @@
 # Ingestion spec (M2)
 
-`krisnai ingest PATH --tenant ID` loads a file, or every X12 / fee-schedule CSV under a folder.
+`krisnnai ingest PATH --tenant ID` loads a file, or every X12 / fee-schedule CSV under a folder.
 
 ## Flow per file
 1. SHA-256 of the bytes. If the tenant already has that hash: **skipped** (idempotent).
@@ -41,13 +41,13 @@ claim.
 ## Not done here
 Matching claim to remit (M3, `match_method` stays NULL), KPIs (M4), 837I/837D, 270/271.
 
-## Valley Wellness loader (`krisnai load-valley`)
+## Valley Wellness loader (`krisnnai load-valley`)
 Source: the fabricated PostgreSQL database `valleywellnessedi` (read-only session; Valley is never written).
 `--files N` loads the first N 837P files (about 860 claims each, ordered by file name) plus the 835 files that
 remit those claims (`--max-remit-files`, default 500). Each Valley source file becomes one `source_file`
 (fingerprint `valley:<type>:<source_file>`), so reloading is a no-op.
 
-| KrisnAI | Valley table(s) | Join |
+| KrisnnAI | Valley table(s) | Join |
 |---|---|---|
 | claim | edi_837p_claims + _header (control numbers) | per source_file |
 | provider / payer / patient | _billing_provider, _payer, _subscriber | billing_hl_id / subscriber_hl_id |

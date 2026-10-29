@@ -3,9 +3,9 @@
 Shadow mode throughout: nothing here executes, sends or submits anything.
 
 ## The inbox
-One folder the PM, EHR and clearinghouse files land in. `krisnai ops daily --inbox DIR --as-of DATE --tenant ID` loads what is there, in dependency order:
+One folder the PM, EHR and clearinghouse files land in. `krisnnai ops daily --inbox DIR --as-of DATE --tenant ID` loads what is there, in dependency order:
 reference data (fee schedule, crosswalk, enrollments, screenings), then 837, then 999 / 277CA, then 835, then the PM feeds (visits, notes, charges,
-appointments, 271, authorizations), then deposits, postings and patient feeds. Each file goes through the same idempotent loader as `krisnai ingest`
+appointments, 271, authorizations), then deposits, postings and patient feeds. Each file goes through the same idempotent loader as `krisnnai ingest`
 (file hash, control numbers), then moves to `archive/<run date>/`. A file that does not parse goes to `rejected/<run date>/` with a `.reason.txt` beside it.
 Nothing is deleted. A second run on an empty inbox does nothing.
 
@@ -47,7 +47,7 @@ the development PC, Python only:
 The first run took 65 minutes. Per-event cost was dominated by every agent rebuilding the full pricing snapshot for each distinct event day (40 events: 48 s
 for A4, now 3 s) and by A12 reading whole tables for one claim (now 10 ms an event). The pricer is now built once per tenant and filtered by day.
 Not yet done: a bulk insert path in the loader (load is 173 s for 7,000 files), and one Snapshot per A15 sweep date. SQL Server timings are not measured.
-`krisnai ops bench --claims N` repeats the measurement on the plain synthetic set.
+`krisnnai ops bench --claims N` repeats the measurement on the plain synthetic set.
 
 ## Not here
 Real SFTP or clearinghouse pickup (folder inbox only), a scheduler (call the CLI from Task Scheduler or cron), SQL Server tuning (SQLite was measured), relinking

@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.live import score
-from krisnai.live.emr import FakeEmr
-from krisnai.live.payer import TRUTH_COLUMNS, PayerConfig, PayerSim
-from krisnai.live.stream import StreamConfig, run_stream
-from krisnai.synthea import x12out
-from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
+from krisnnai.live import score
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.payer import TRUTH_COLUMNS, PayerConfig, PayerSim
+from krisnnai.live.stream import StreamConfig, run_stream
+from krisnnai.synthea import x12out
+from krisnnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 
 INFO = PayerInfo("SYNAETNA", "SYNAETNA Demo Payer", Decimal("1"), 14)
 
@@ -117,7 +117,7 @@ def test_a_real_streamed_run_scores_reconciles_and_writes_its_reports(tmp_path):
     assert sc["coding"]["auto_wrong"] == [] and sc["coding"]["problem_missed"] == []
     assert sc["found"] <= sc["problems"] and (out / "scorecard.html").exists() and (out / "ledger.csv").exists()
     assert "Cash collected: 0.00" in (out / "scorecard.html").read_text("utf-8")
-    from krisnai.live.export import build
+    from krisnnai.live.export import build
 
     data = build(out)
     assert len(data["claims"]) == 14 and len(data["book"]) == 10 and data["ledger"]["cash_collected"] == "0.00"

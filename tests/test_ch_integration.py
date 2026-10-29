@@ -9,29 +9,29 @@ from datetime import date, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from krisnai.ingest.eligibility import parse_271
-from krisnai.ingest.loader import parse_x12
-from krisnai.ingest.x12 import read_transactions
-from krisnai.integrations.clearinghouse.bots import (
+from krisnnai.ingest.eligibility import parse_271
+from krisnnai.ingest.loader import parse_x12
+from krisnnai.ingest.x12 import read_transactions
+from krisnnai.integrations.clearinghouse.bots import (
     eligibility_bot,
     latest_decisions,
     mask,
     resubmission_bot,
     status_bot,
 )
-from krisnai.integrations.clearinghouse.claim_store import load_extract
-from krisnai.integrations.clearinghouse.client import ALLOW_ENV, ClearinghouseClient, EndpointRefused
-from krisnai.integrations.clearinghouse.mock_server import create_app
-from krisnai.integrations.clearinghouse.mock_world import MockWorld, parse_inbound_270, parse_inbound_276
-from krisnai.integrations.clearinghouse.scenario import pick_bot_day
-from krisnai.integrations.clearinghouse.x12_out import (
+from krisnnai.integrations.clearinghouse.claim_store import load_extract
+from krisnnai.integrations.clearinghouse.client import ALLOW_ENV, ClearinghouseClient, EndpointRefused
+from krisnnai.integrations.clearinghouse.mock_server import create_app
+from krisnnai.integrations.clearinghouse.mock_world import MockWorld, parse_inbound_270, parse_inbound_276
+from krisnnai.integrations.clearinghouse.scenario import pick_bot_day
+from krisnnai.integrations.clearinghouse.x12_out import (
     parse_277_status,
     write_270,
     write_276,
     write_corrected_837,
 )
-from krisnai.ops import run_period
-from krisnai.synthea import build
+from krisnnai.ops import run_period
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.test_ingest import SALT, make_engine
 
@@ -142,7 +142,7 @@ def test_the_client_refuses_a_real_endpoint_unless_it_is_enabled(monkeypatch):
 
 
 def test_the_service_refuses_to_start_without_a_token(extract, book, monkeypatch):
-    monkeypatch.delenv("KRISNAI_MOCK_CH_TOKEN", raising=False)
+    monkeypatch.delenv("KRISNNAI_MOCK_CH_TOKEN", raising=False)
     with pytest.raises(ValueError):
         create_app(MockWorld(extract, truth_dir=book))
 

@@ -3,7 +3,7 @@
 Revision ID: 0006
 Revises: 0005
 
-Rule tables for the claim prevention agent (M8). Generated from krisnai.model.engine.
+Rule tables for the claim prevention agent (M8). Generated from krisnnai.model.engine.
 """
 
 import sqlalchemy as sa

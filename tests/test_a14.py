@@ -9,18 +9,18 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.agents.a14_tower.forecast as fc
-import krisnai.agents.a14_tower.signals as sg
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a5_prevention import A5PreventionAgent
-from krisnai.agents.a6_submission import A6SubmissionAgent
-from krisnai.agents.a6_submission import seed_defaults as seed_a6
-from krisnai.agents.a7_ar import A7ArAgent
-from krisnai.agents.a7_ar import sweep as a7_sweep
-from krisnai.agents.a8_denial import A8DenialAgent
-from krisnai.agents.a8_denial import seed_defaults as seed_a8
-from krisnai.agents.a14_tower import (
+import krisnnai.agents.a14_tower.forecast as fc
+import krisnnai.agents.a14_tower.signals as sg
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a5_prevention import A5PreventionAgent
+from krisnnai.agents.a6_submission import A6SubmissionAgent
+from krisnnai.agents.a6_submission import seed_defaults as seed_a6
+from krisnnai.agents.a7_ar import A7ArAgent
+from krisnnai.agents.a7_ar import sweep as a7_sweep
+from krisnnai.agents.a8_denial import A8DenialAgent
+from krisnnai.agents.a8_denial import seed_defaults as seed_a8
+from krisnnai.agents.a14_tower import (
     ACTION_TYPES,
     EVENT_TYPE,
     A14TowerAgent,
@@ -32,10 +32,10 @@ from krisnai.agents.a14_tower import (
     summarize,
     sweep,
 )
-from krisnai.engine import NO_ACTION, fingerprint, replay, run
-from krisnai.ingest.loader import ingest_path
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
+from krisnnai.engine import NO_ACTION, fingerprint, replay, run
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -315,7 +315,7 @@ def syn(tmp_path_factory):
     run_matching(engine, 1)
     seed_all(engine)
     with tenant_session(engine, 1) as s:
-        from krisnai.agents.a5_prevention import seed_defaults as seed_a5
+        from krisnnai.agents.a5_prevention import seed_defaults as seed_a5
 
         seed_a5(s)
         s.commit()

@@ -3,14 +3,14 @@
 Revision ID: 0001
 Revises:
 
-Tables are generated from krisnai.model (SQL Server). `event` is append-only: a trigger rejects
+Tables are generated from krisnnai.model (SQL Server). `event` is append-only: a trigger rejects
 UPDATE and DELETE so normalized tables can always be rebuilt from it.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-import krisnai.model  # noqa: F401  (registers the SQL Server type overrides)
+import krisnnai.model  # noqa: F401  (registers the SQL Server type overrides)
 
 revision = "0001"
 down_revision = None

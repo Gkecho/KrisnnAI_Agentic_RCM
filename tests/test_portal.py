@@ -9,12 +9,12 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from krisnai.integrations.clearinghouse.claim_store import Adjudication, PmExtract, StoredClaim, StoredLine
-from krisnai.integrations.clearinghouse.client import EndpointRefused
-from krisnai.integrations.clearinghouse.mock_world import MockWorld
-from krisnai.integrations.portal.bots import claim_status_bot, credentials_from_env
-from krisnai.integrations.portal.driver import HttpDriver
-from krisnai.integrations.portal.mock_portal import create_app
+from krisnnai.integrations.clearinghouse.claim_store import Adjudication, PmExtract, StoredClaim, StoredLine
+from krisnnai.integrations.clearinghouse.client import EndpointRefused
+from krisnnai.integrations.clearinghouse.mock_world import MockWorld
+from krisnnai.integrations.portal.bots import claim_status_bot, credentials_from_env
+from krisnnai.integrations.portal.driver import HttpDriver
+from krisnnai.integrations.portal.mock_portal import create_app
 
 USER, PASSWORD = "bot-user", "s3cret-pass-xyz"
 

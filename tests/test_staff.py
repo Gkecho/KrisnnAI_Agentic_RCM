@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from krisnai.demo import staff
+from krisnnai.demo import staff
 
 AS_OF = date(2026, 10, 14)
 

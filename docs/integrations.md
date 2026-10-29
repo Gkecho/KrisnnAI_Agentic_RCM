@@ -1,14 +1,14 @@
 # Stage 1 integrations: clearinghouse, FHIR, portal bots
 
 All of this runs against **local mock or sandbox services**. Nothing here talks to a real payer, clearinghouse or EMR, and the clients refuse any non-local
-URL unless `KRISNAI_ALLOW_REAL_ENDPOINTS=1` is set. Credentials come from environment variables only.
+URL unless `KRISNNAI_ALLOW_REAL_ENDPOINTS=1` is set. Credentials come from environment variables only.
 
 ```
-.venv\Scripts\python.exe -m krisnai.cli stage1 --out out/stage1 --synthea out/synthea --as-of 2026-06-30 [--with-fhir]
+.venv\Scripts\python.exe -m krisnnai.cli stage1 --out out/stage1 --synthea out/synthea --as-of 2026-06-30 [--with-fhir]
 start out\stage1\stage1_report.html
 ```
 
-## 1. Clearinghouse (`krisnai/integrations/clearinghouse/`)
+## 1. Clearinghouse (`krisnnai/integrations/clearinghouse/`)
 | piece | what it does |
 |---|---|
 | `x12_out.py` | builds **270** (eligibility), **276** (claim status) and the **replacement 837** (CLM05-3 = 7 with REF*F8); reads the **277** status answer |
@@ -26,21 +26,21 @@ replacement of a claim it returned, so it shows the transport and the loop, not 
 `professionalclaims/v3/raw-x12-submission`, base `https://healthcare.us.stedi.com/2024-04-01`), so the repo's own 270/276/837 builders and 271/277/277CA
 parsers are used unchanged. Request and response shapes come from Stedi's published reference (checked 2026-10-16) and are tested with recorded-shape
 responses. **Verified live (test key): eligibility** (270 out, 271 parsed). Claim status and claim submission have not been run against Stedi's sandbox, which does not answer them in test mode. Safety: the key comes from `STEDI_API_KEY` only; non-local URLs need
-`KRISNAI_ALLOW_REAL_ENDPOINTS=1`; claim submission needs `KRISNAI_ALLOW_STEDI_SUBMIT=1` and an explicit test-key confirmation (a production key would send a
-real claim); a response in production mode stops the client unless `KRISNAI_ALLOW_STEDI_PRODUCTION=1`.
+`KRISNNAI_ALLOW_REAL_ENDPOINTS=1`; claim submission needs `KRISNNAI_ALLOW_STEDI_SUBMIT=1` and an explicit test-key confirmation (a production key would send a
+real claim); a response in production mode stops the client unless `KRISNNAI_ALLOW_STEDI_PRODUCTION=1`.
 
 To run the live check yourself (set the key in your own shell, never in chat):
 ```
 set STEDI_API_KEY=<your TEST-mode key>
-set KRISNAI_ALLOW_REAL_ENDPOINTS=1
-.venv\Scripts\python.exe -m krisnai.cli stedi
+set KRISNNAI_ALLOW_REAL_ENDPOINTS=1
+.venv\Scripts\python.exe -m krisnnai.cli stedi
 .venv\Scripts\python.exe -m pytest tests/test_stedi.py -k live
 ```
-Known gaps (the first live eligibility call has since worked, with the mock subscriber defaults in `krisnai stedi`): Stedi's test mode only answers its documented mock subscribers exactly (the Aetna mock is a dependent case; our 270 sends the subscriber
+Known gaps (the first live eligibility call has since worked, with the mock subscriber defaults in `krisnnai stedi`): Stedi's test mode only answers its documented mock subscribers exactly (the Aetna mock is a dependent case; our 270 sends the subscriber
 loop only, so the first live call may return an AAA error to adjust), the auth header style (bare key vs `Key <key>`) should be confirmed on the first call
-(`KRISNAI_STEDI_AUTH_STYLE=key` switches it), and a new-style JSON eligibility API exists that this does not use.
+(`KRISNNAI_STEDI_AUTH_STYLE=key` switches it), and a new-style JSON eligibility API exists that this does not use.
 
-## 2. FHIR (`krisnai/integrations/fhir/`)
+## 2. FHIR (`krisnnai/integrations/fhir/`)
 | piece | what it does |
 |---|---|
 | `docker-compose.fhir.yml` | **microsoft/fhir-server** (R4) on SQL Server 2022, security off, `127.0.0.1:8080` only. The SQL password is generated per run under `out/fhir/` |
@@ -49,10 +49,10 @@ loop only, so the first live call may return an AAA error to adjust), the auth h
 | `sync.py` | `seed` (feeds to server) and `pull` (server to feeds) |
 
 ```
-krisnai fhir up                                   # first start pulls about 2 GB of images
-krisnai fhir seed --feeds out/demo/archive/2026-10-14
-krisnai fhir pull --out out/fhir_pull [--since 2026-06-01]
-krisnai fhir down
+krisnnai fhir up                                   # first start pulls about 2 GB of images
+krisnnai fhir seed --feeds out/demo/archive/2026-10-14
+krisnnai fhir pull --out out/fhir_pull [--since 2026-06-01]
+krisnnai fhir down
 ```
 
 **Measured:** 1,777 appointments, 2,243 encounters and 2,134 notes went into the Microsoft FHIR server and came back with zero differing rows.
@@ -60,14 +60,14 @@ Notes (from this build): the server needs placeholder `FhirServer__Security__Aut
 DocumentReference needs `content`, and `/metadata` only answers once those are set. A real EMR's FHIR API will differ in profiles, scopes (SMART on FHIR
 authorization) and which resources it exposes; the mapper reads only the resources and fields above.
 
-## 2b. OpenEMR (`krisnai/integrations/openemr/`), the EMR behind the FHIR API
+## 2b. OpenEMR (`krisnnai/integrations/openemr/`), the EMR behind the FHIR API
 OpenEMR 7.0.3 on MariaDB, local only (`127.0.0.1`: https 9300 with a self-signed certificate, http 8300). It is a real open-source EMR, unlike the Microsoft
 server above, which is a bare FHIR API with no clinical application. Synthetic data only.
 
 ```
-krisnai openemr up        # first start pulls 1-2 GB and OpenEMR installs itself (about 5-10 minutes)
-krisnai openemr status
-krisnai openemr down      # removes the containers and their data
+krisnnai openemr up        # first start pulls 1-2 GB and OpenEMR installs itself (about 5-10 minutes)
+krisnnai openemr status
+krisnnai openemr down      # removes the containers and their data
 ```
 Passwords for the database and the admin user are generated per work folder (`out/openemr/`, git-ignored); nothing secret is in the repo.
 
@@ -93,13 +93,13 @@ Verified live: unauthenticated search returns 401, authenticated returns 200, th
 
 ### Seeding and reading (`seed.py`)
 ```
-krisnai openemr seed --feeds out/demo/archive/2026-10-14 --limit 50    # REST writes; idempotent
-krisnai openemr pull --out out/openemr_pull                            # FHIR reads -> appointments.csv, visits.csv, notes.csv
+krisnnai openemr seed --feeds out/demo/archive/2026-10-14 --limit 50    # REST writes; idempotent
+krisnnai openemr pull --out out/openemr_pull                            # FHIR reads -> appointments.csv, visits.csv, notes.csv
 ```
 Writes go through OpenEMR's REST API (`/apis/default/api`) because FHIR cannot create Appointments or Encounters; reads go through FHIR.
-Practitioners are the one resource of ours created over FHIR. (`krisnai openemr pull`, not `krisnai fhir pull --profile`: the OpenEMR read needs one REST call for appointment titles, so it lives with the OpenEMR code.)
+Practitioners are the one resource of ours created over FHIR. (`krisnnai openemr pull`, not `krisnnai fhir pull --profile`: the OpenEMR read needs one REST call for appointment titles, so it lives with the OpenEMR code.)
 
-**What OpenEMR's FHIR cannot carry, and where it goes.** Our feeds hold fields OpenEMR's FHIR resources have no place for, so they ride in free-text fields as `krisnai:key=value;key=value`:
+**What OpenEMR's FHIR cannot carry, and where it goes.** Our feeds hold fields OpenEMR's FHIR resources have no place for, so they ride in free-text fields as `krisnnai:key=value;key=value`:
 | record | stored in | read back from |
 |---|---|---|
 | patient | `pubpid` = our member id (synthetic name `Synthetic <member>`, deterministic made-up birth date and sex) | FHIR Patient.identifier |
@@ -124,7 +124,7 @@ patients, names and birth dates here are made up; our own fields are stored in f
 would replace with the EMR's native fields (payer from Coverage, CPT from charges). Nothing here writes back anything from our agents.
 
 
-## 3. Portal bots (`krisnai/integrations/portal/`)
+## 3. Portal bots (`krisnnai/integrations/portal/`)
 | piece | what it does |
 |---|---|
 | `mock_portal.py` | login, claim search, claim detail (status, pend reason, amount), records-request page; `layout=2` renames elements to model a redesign |

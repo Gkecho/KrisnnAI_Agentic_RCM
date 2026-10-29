@@ -11,16 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.ingest import p837, r835
-from krisnai.ingest.x12 import read_transactions
-from krisnai.integrations.openemr import billing
-from krisnai.live.payer import PayerSim
-from krisnai.live.world import LiveWorld
-from krisnai.synthea import x12out
+from krisnnai.ingest import p837, r835
+from krisnnai.ingest.x12 import read_transactions
+from krisnnai.integrations.openemr import billing
+from krisnnai.live.payer import PayerSim
+from krisnnai.live.world import LiveWorld
+from krisnnai.synthea import x12out
 
 FIXTURE = Path(__file__).parent / "fixtures" / "openemr_837p_synthetic.x12"
 TODAY = date(2026, 10, 21)
-ROOT = Path(__file__).resolve().parents[1] / "krisnai"
+ROOT = Path(__file__).resolve().parents[1] / "krisnnai"
 
 
 def _text() -> str:
@@ -97,7 +97,7 @@ def test_the_billing_writer_only_targets_our_container_and_fails_cleanly_when_it
     ch = billing.Charge(1, 2, "M", "SYNAETNA", "P", [("J02.9", "x")], [("99213", "v", 1, "110.00")])
     with pytest.raises(billing.BillingError, match="not reachable"):
         billing.charge_and_837(ch, "policy:p", runner=runner)
-    assert billing.CONTAINER in " ".join(calls[0]) and billing.CONTAINER == "krisnai-openemr-openemr-1"
+    assert billing.CONTAINER in " ".join(calls[0]) and billing.CONTAINER == "krisnnai-openemr-openemr-1"
 
 
 def test_the_billing_writer_returns_the_837_that_openemr_wrote():
@@ -115,7 +115,7 @@ def test_no_agent_or_bot_can_see_the_payer_simulator():
     for folder in ("agents", "engine", "integrations/clearinghouse/bots.py", "integrations/portal"):
         base = ROOT / folder
         for f in ([base] if base.is_file() else base.rglob("*.py")):
-            if "krisnai.live" in f.read_text(encoding="utf-8"):
+            if "krisnnai.live" in f.read_text(encoding="utf-8"):
                 offenders.append(str(f.relative_to(ROOT)))
     assert offenders == []
 
@@ -132,7 +132,7 @@ def _openemr_up() -> bool:
 @pytest.mark.slow
 @pytest.mark.skipif(not _openemr_up(), reason="the local OpenEMR is not running")
 def test_s1_one_denied_encounter_end_to_end(tmp_path):
-    from krisnai.live.s1 import run_s1
+    from krisnnai.live.s1 import run_s1
 
     res = run_s1(Path("out/openemr"), tmp_path / "s1", date(2026, 10, 21), log=lambda *_: None)
     sm = res.summary

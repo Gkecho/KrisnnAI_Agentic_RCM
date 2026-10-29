@@ -1,5 +1,5 @@
 """Valley loader tests. A small SQLite database with Valley's table and column names stands in for the
-PostgreSQL original; one live smoke test runs only with KRISNAI_VALLEY_CONFIG set."""
+PostgreSQL original; one live smoke test runs only with KRISNNAI_VALLEY_CONFIG set."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ import pytest
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
 
-import krisnai.model as m
-from krisnai.ingest.valley import load_valley
-from krisnai.model import Base, tenant_session
+import krisnnai.model as m
+from krisnnai.ingest.valley import load_valley
+from krisnnai.model import Base, tenant_session
 
 SALT = "valley-salt"
 
@@ -251,17 +251,17 @@ def test_remit_files_are_only_those_touching_loaded_claims(env):
 
 
 @pytest.mark.skipif(
-    not os.environ.get("KRISNAI_VALLEY_CONFIG"), reason="live RDS smoke test: set KRISNAI_VALLEY_CONFIG"
+    not os.environ.get("KRISNNAI_VALLEY_CONFIG"), reason="live RDS smoke test: set KRISNNAI_VALLEY_CONFIG"
 )
 def test_live_valley_smoke(tmp_path):
-    from krisnai.ingest.valley import connect_readonly
+    from krisnnai.ingest.valley import connect_readonly
 
     eng = create_engine(f"sqlite:///{tmp_path / 'live.db'}")
     Base.metadata.create_all(eng)
     with Session(eng) as s:
         s.add(m.Tenant(name="V", patient_salt_key="X"))
         s.commit()
-    conn = connect_readonly(Path(os.environ["KRISNAI_VALLEY_CONFIG"]))
+    conn = connect_readonly(Path(os.environ["KRISNNAI_VALLEY_CONFIG"]))
     try:
         report = load_valley(eng, 1, SALT, conn, n_837_files=1, max_835_files=20)
     finally:

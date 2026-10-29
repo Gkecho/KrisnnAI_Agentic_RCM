@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.knowledge import Book, BookError, Rule, Source, deadline
-from krisnai.knowledge.demo import DEMO, KNOWN_SINCE, PAYER, demo_book
+from krisnnai.knowledge import Book, BookError, Rule, Source, deadline
+from krisnnai.knowledge.demo import DEMO, KNOWN_SINCE, PAYER, demo_book
 
 NOW = date(2026, 10, 21)  # the simulation clock, passed in: the book never reads the computer's date
 
@@ -151,7 +151,7 @@ def test_the_book_round_trips_through_json_and_every_demo_rule_is_labelled_demo(
 
 
 def test_the_book_never_reads_the_computer_clock():
-    for f in (Path(__file__).resolve().parents[1] / "krisnai" / "knowledge").glob("*.py"):
+    for f in (Path(__file__).resolve().parents[1] / "krisnnai" / "knowledge").glob("*.py"):
         assert "today()" not in f.read_text(encoding="utf-8") and "now()" not in f.read_text(encoding="utf-8"), f.name
 
 

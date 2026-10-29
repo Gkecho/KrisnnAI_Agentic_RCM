@@ -9,10 +9,10 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from krisnai.integrations.clearinghouse.client import EndpointRefused
-from krisnai.integrations.fhir.client import FhirClient
-from krisnai.integrations.openemr import docker as oedocker
-from krisnai.integrations.openemr.auth import AuthError, OpenEmrAuth
+from krisnnai.integrations.clearinghouse.client import EndpointRefused
+from krisnnai.integrations.fhir.client import FhirClient
+from krisnnai.integrations.openemr import docker as oedocker
+from krisnnai.integrations.openemr.auth import AuthError, OpenEmrAuth
 
 SECRET = "client-secret-xyz"
 ADMIN = "AdminPw-123!A1"
@@ -127,5 +127,5 @@ def test_generated_passwords_are_created_once_and_never_in_the_compose_file(tmp_
     first = oedocker.passwords(tmp_path / "w")
     assert first == oedocker.passwords(tmp_path / "w") and first["db"] != first["admin"] and len(first["admin"]) >= 20
     compose = oedocker.COMPOSE.read_text(encoding="utf-8")
-    assert first["db"] not in compose and "${KRISNAI_OPENEMR_ADMIN_PASSWORD" in compose
+    assert first["db"] not in compose and "${KRISNNAI_OPENEMR_ADMIN_PASSWORD" in compose
     assert "127.0.0.1:8300" in compose and "127.0.0.1:9300" in compose  # local only

@@ -1,7 +1,7 @@
 [project]
-name = "krisnai"
+name = "krisnnai"
 version = "0.0.1"
-description = "KrisnAI RCM - intelligence layer above PM/EHR and clearinghouse"
+description = "KrisnnAI RCM - intelligence layer above PM/EHR and clearinghouse"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110",
@@ -18,18 +18,18 @@ dev = ["pytest>=8", "ruff>=0.5"]
 valley = ["psycopg2-binary>=2.9"]
 
 [project.scripts]
-krisnai = "krisnai.cli:main"
+krisnnai = "krisnnai.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["krisnai*"]
+include = ["krisnnai*"]
 
 [tool.setuptools.package-data]
-"krisnai.metrics" = ["sql/*.sql"]
-"krisnai.integrations.fhir" = ["*.yml"]
+"krisnnai.metrics" = ["sql/*.sql"]
+"krisnnai.integrations.fhir" = ["*.yml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -45,6 +45,6 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]
-"krisnai/model/**" = ["E501"]
+"krisnnai/model/**" = ["E501"]
 "migrations/**" = ["E501"]
-"krisnai/ingest/valley.py" = ["E501"]
+"krisnnai/ingest/valley.py" = ["E501"]

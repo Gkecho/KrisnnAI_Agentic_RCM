@@ -10,9 +10,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from krisnai.integrations.fhir import mapper
-from krisnai.integrations.fhir.client import FhirClient
-from krisnai.integrations.openemr import seed as oeseed
+from krisnnai.integrations.fhir import mapper
+from krisnnai.integrations.fhir.client import FhirClient
+from krisnnai.integrations.openemr import seed as oeseed
 
 BASE = "https://localhost:9300/apis/default"
 
@@ -84,7 +84,7 @@ class FakeOpenEmr:
             p, kind = self._patient_of(m.group(1)), m.group(2)
             if kind == "appointment":
                 b = json.loads(request.content)
-                assert "krisnai:appt=" in b["pc_title"] and b["pc_aid"]
+                assert "krisnnai:appt=" in b["pc_title"] and b["pc_aid"]
                 if "pc_hometext" not in b:  # OpenEMR requires it
                     return httpx.Response(400, json={"pc_hometext": {"Required::NON_EXISTENT_KEY": "must be provided"}})
                 self.appts.append({"uuid": str(uuid.uuid4()), "title": b["pc_title"], "date": b["pc_eventDate"], "patient": p,

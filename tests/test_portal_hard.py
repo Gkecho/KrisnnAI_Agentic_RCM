@@ -11,7 +11,7 @@ from dataclasses import asdict
 
 import pytest
 
-from krisnai.integrations.portal.bots import claim_status_bot
+from krisnnai.integrations.portal.bots import claim_status_bot
 from tests.test_portal import PASSWORD, USER, driver_for, world  # noqa: F401  (world is a fixture)
 
 CLAIMS = ["REJ1", "PAID1", "DEN1"]

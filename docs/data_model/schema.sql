@@ -1,4 +1,4 @@
--- KrisnAI RCM schema (SQL Server), claim journey in four phases:
+-- KrisnnAI RCM schema (SQL Server), claim journey in four phases:
 -- 1 Appointment -> 2 Encounter -> 3 Bill -> 4 Transactions, denials, AR. Joined by appointment_ref, encounter_ref, claim_ref.
 -- Rules: tenant_id on every table; patients only as salted hashes; money DECIMAL(12,2); known_at on event tables; unique key per event table for idempotent loads.
 -- Key 0 = 'Unknown' row in each reference table, added by the load job. DRAFT FOR REVIEW: not applied to any database.

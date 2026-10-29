@@ -14,15 +14,15 @@ It proves the loop runs end to end on its own and that agents react only to what
 ## 2. Spike result (2026-10-21, on the local OpenEMR 7.0.3)
 | Question | Answer |
 |---|---|
-| Can OpenEMR produce the 837 itself, without its screens? | **Yes.** `X125010837P::genX12837P()` run from PHP inside the container produced a valid 005010X222A1 professional claim for a seeded encounter, no validation warnings. Sample: `out/openemr/spike_837.x12` (git-ignored). Script: `krisnai/integrations/openemr/spike/spike837.php` |
-| Does our own parser read it? | **Yes.** `krisnai/ingest/p837.py` parsed claim id, charge, service date, CPT, diagnosis and payer name. Gaps: payer id and tax id came back empty or None (the payer id was missing until `encounter_claim` was set to false and the payer's `cms_id` filled in) |
+| Can OpenEMR produce the 837 itself, without its screens? | **Yes.** `X125010837P::genX12837P()` run from PHP inside the container produced a valid 005010X222A1 professional claim for a seeded encounter, no validation warnings. Sample: `out/openemr/spike_837.x12` (git-ignored). Script: `krisnnai/integrations/openemr/spike/spike837.php` |
+| Does our own parser read it? | **Yes.** `krisnnai/ingest/p837.py` parsed claim id, charge, service date, CPT, diagnosis and payer name. Gaps: payer id and tax id came back empty or None (the payer id was missing until `encounter_claim` was set to false and the payer's `cms_id` filled in) |
 | Can the REST API create what a claim needs? | Partly. REST can create insurance companies, patient insurance policies, encounters, SOAP notes and documents. There is **no REST endpoint for charges** (the billing table) |
 | How did the charge get in? | OpenEMR's own `BillingUtilities::addBilling()` called from PHP. Setup that has no API (facility NPI and EIN, provider NPI, an X12 partner row, encounter facility and provider) was set with SQL inside our container, the same pattern as enabling the OAuth client |
 | Does the mock clearinghouse accept it? | **Not yet tested, and the code says no.** `MockWorld.accept_claims` answers for claims in the synthetic book; a new claim needs a path of its own |
 | Do agents read transcripts? | **No.** A4 compares the billed E/M level with the signed note's *named elements*; it states that no model reads notes. Turning a transcript into codes is a new component |
 | Posting a remit back into OpenEMR | `ParseERA` and the payment screens exist; **not tried** |
 
-Things the spike changed in the demo OpenEMR (synthetic, throwaway): facility 3 renamed and given an NPI and address; the `admin` user's name set to "Demo Provider" with an NPI; one X12 partner; one insurance company; patient 1's insurance, two billing rows and a claims row. `krisnai openemr down` removes all of it.
+Things the spike changed in the demo OpenEMR (synthetic, throwaway): facility 3 renamed and given an NPI and address; the `admin` user's name set to "Demo Provider" with an NPI; one X12 partner; one insurance company; patient 1's insurance, two billing rows and a claims row. `krisnnai openemr down` removes all of it.
 
 Quirks seen: the ISA date (ISA09/10) is a fixed value in OpenEMR's output, so nothing downstream may rely on it. CLM01 is `pid-encounter` (for example `1-2`).
 
@@ -34,13 +34,13 @@ Quirks seen: the ISA date (ISA09/10) is a fixed value in OpenEMR's output, so no
 | Encounter + note in OpenEMR (REST) | yes (seed) | reuse |
 | **Transcript generator** (50, deterministic, templated by visit type) | no | new |
 | **Transcript coder**: extracts named note elements and suggests CPT/ICD, then waits for a person | no | new; rules first, no model in v1 |
-| Charge entry + 837P in OpenEMR | spike only | productionize as `krisnai/integrations/openemr/billing.py` plus a small PHP helper |
+| Charge entry + 837P in OpenEMR | spike only | productionize as `krisnnai/integrations/openemr/billing.py` plus a small PHP helper |
 | Mock clearinghouse 837 -> 999 + 277CA | yes, book-only | accept any well-formed claim; technical reject modes |
 | **Payer simulator**: independent decisions (pay, underpay, deny with a CARC, pend, technical reject), seeded | no | new; writes `truth.csv` the agents never see |
 | Mock payer portal showing live payer state | yes, static book | read the payer simulator's state |
 | 835 / 277 back to our inbox | yes (X12 writers) | generate from payer decisions |
 | Agents A1, A3-A8, A10, A11, A14 | yes (shadow) | run per simulated day; no change to rules |
-| **Orchestrator + simulated clock** | no | new; `krisnai live run --encounters N --seed S` |
+| **Orchestrator + simulated clock** | no | new; `krisnnai live run --encounters N --seed S` |
 | **Scorecard**: agent findings vs `truth.csv` | partly (answer-key pattern exists) | extend |
 
 **Independence is enforced, not promised:** the payer simulator lives in its own package; a test fails if any agent or bot imports it, and the agents get its output only as X12 files and portal pages.
@@ -88,7 +88,7 @@ One central place where agents look up insurance rules. It supplies rules; it do
 No dates are committed. S1 is the first thing worth showing the boss.
 
 ## 5b. S1 result (2026-10-21)
-`krisnai live s1` runs one encounter through the whole chain against the local OpenEMR (about 2 minutes). Verified twice (denied and paid):
+`krisnnai live s1` runs one encounter through the whole chain against the local OpenEMR (about 2 minutes). Verified twice (denied and paid):
 
 | Step | Tool | What happened |
 |---|---|---|
@@ -97,20 +97,20 @@ No dates are committed. S1 is the first thing worth showing the boss.
 | 3 visit | OpenEMR REST | encounter and a signed note |
 | 4 claim | OpenEMR billing (PHP, ADR-0002) | charge entered with an approval record; **OpenEMR wrote the 837P** |
 | 5 clearinghouse | Mock clearinghouse (`LiveWorld`) | technical checks; 999 and 277CA. A technical problem is a rejection and never reaches the payer |
-| 6 payer | Payer sim (`krisnai/live/payer.py`) | decides on its own; writes the 835; the decision goes to `truth.jsonl`, outside the inbox |
+| 6 payer | Payer sim (`krisnnai/live/payer.py`) | decides on its own; writes the 835; the decision goes to `truth.jsonl`, outside the inbox |
 | 7 feeds | OpenEMR FHIR | appointment, visit, note read back for this patient |
 | 8 agents | the engine's daily run | denied: A8 raised `a8_appeal_task` (claim 51-1635 = OpenEMR patient 51, encounter 1635). Paid: no card |
 
 **Gate:** the card traces back to the OpenEMR encounter by id; re-running the same files loads nothing again (8 skipped, 6 decision records and 3 cards unchanged).
 
-**Tests:** `tests/test_live_s1.py`, 10 fast tests (parser reads OpenEMR's 837; pay, deny and 835; clearinghouse rejection vs denial; eligibility; billing needs an approval and only targets our container; **no agent, engine or bot module imports `krisnai.live`**) and one slow end-to-end test that skips when OpenEMR is down.
+**Tests:** `tests/test_live_s1.py`, 10 fast tests (parser reads OpenEMR's 837; pay, deny and 835; clearinghouse rejection vs denial; eligibility; billing needs an approval and only targets our container; **no agent, engine or bot module imports `krisnnai.live`**) and one slow end-to-end test that skips when OpenEMR is down.
 
 **What S1 is not:** the payer denies one configured CPT (no randomness), the code is fixed at 99213 (no transcript coder yet), the portal does not read the payer's state yet, and the agents react through the engine's daily batch, not instantly.
 
 **Left over for later milestones:** the payer id and tax id fields in our 837 parser come back empty or None for OpenEMR's claim (`REF*EIN` is not read); OpenEMR's ISA date is a fixed value; remit posting back into OpenEMR is untried.
 
 ## 5c. S2 result (2026-10-21)
-`krisnai/live/transcripts.py` makes 50 synthetic visit transcripts for a seed (40 clean, 10 problematic: 3 missing plan, 2 two unrelated problems, 2 new-or-established never stated, 2 unsigned, 1 thin documentation for a chronic follow-up) with an answer key. `krisnai/live/coder.py` reads only the text and the signed flag, extracts the named note elements, suggests an E/M code (using A4's level table) and one diagnosis, runs seven checks, and applies the ADR-0002 policy. `krisnai live s2` scores it; `krisnai live s1 --visit N` runs transcript N through the whole chain.
+`krisnnai/live/transcripts.py` makes 50 synthetic visit transcripts for a seed (40 clean, 10 problematic: 3 missing plan, 2 two unrelated problems, 2 new-or-established never stated, 2 unsigned, 1 thin documentation for a chronic follow-up) with an answer key. `krisnnai/live/coder.py` reads only the text and the signed flag, extracts the named note elements, suggests an E/M code (using A4's level table) and one diagnosis, runs seven checks, and applies the ADR-0002 policy. `krisnnai live s2` scores it; `krisnnai live s1 --visit N` runs transcript N through the whole chain.
 
 | Result (seed 7, policy on) | Count |
 |---|---|
@@ -124,7 +124,7 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 **Honest limits.** The transcripts and the reader were written by the same author, so the near-perfect score mostly shows the routing and policy logic works, not that rule-based coding can read real speech. Real transcripts would be longer, messier and need a language model or a certified coder's rules; the E/M level table is A4's placeholder, not the AMA or CMS guidelines. A routed visit stays pending: nothing resolves it yet (the person's decision and resume are S4/S5 work). The 5 "clean held back" in some runs are the 10% sample, by design.
 
 ## 5d. S2b result (2026-10-21): Payer Knowledge Book v1
-`krisnai/knowledge/` (agents may import it, unlike the payer simulator): `book.py` (rule records, versions, point-in-time lookup, JSON save and load), `deadlines.py` (appeal and corrected-claim routes), `demo.py` (the demo ruleset for fictional payer SYNAETNA, every rule labelled "client-confirmed demo ruleset, not official payer policy"). `krisnai knowledge lookup|deadline --as-of <date>` queries it.
+`krisnnai/knowledge/` (agents may import it, unlike the payer simulator): `book.py` (rule records, versions, point-in-time lookup, JSON save and load), `deadlines.py` (appeal and corrected-claim routes), `demo.py` (the demo ruleset for fictional payer SYNAETNA, every rule labelled "client-confirmed demo ruleset, not official payer policy"). `krisnnai knowledge lookup|deadline --as-of <date>` queries it.
 
 - **Date handling:** each rule names the date it is judged on. Coverage and prior authorization use the service date; the appeal window uses the denial-notification date; corrected claims run from the service date on their own clock. The evaluation date is always passed in; a test fails if the module reads the computer's clock.
 - **Gate checks, all passing:** a December 2025 service gets the 2025 coverage rule (20 visits) and a January 2026 service the 2026 rule (12), including when evaluated in October 2026 and on the 31 December / 1 January boundary; the appeal deadline moves from 180 to 120 days when the notification date crosses into 2026 (2026-01-02 gives 2026-05-02); an old service with a recent denial is judged on the denial date, not rejected for age; an old denial comes back as expired, not as an appeal to file; a missing rule, a missing event date, a fact marked unknown, two rules that overlap with equal scope, and a plan-specific rule when the plan is unknown each return a problem that names an owner and what to ask, never a guess.
@@ -134,12 +134,12 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 **Not done in v1:** the rules live in a JSON file, not a database table; no change-detection pipeline; no public payer documents (the UHC, Aetna, Humana, Cigna and BCBS comparison report is not in this repo); **agents do not read the book yet** (A5 and A8 still use their own filing-window table and the engine's 365-day default). Wiring the payer simulator to the book is S3; moving A5, A7 and A8 onto it is a separate, later change.
 
 ## 5e. S3 result (2026-10-21): the independent payer
-`krisnai/live/payer.py` is now a seeded payer. For each claim it draws from a random stream seeded by (seed, claim id), so the same seed, config and claims give a **byte-identical truth log regardless of arrival order** (tested, including a reversed order).
+`krisnnai/live/payer.py` is now a seeded payer. For each claim it draws from a random stream seeded by (seed, claim id), so the same seed, config and claims give a **byte-identical truth log regardless of arrival order** (tested, including a reversed order).
 
 - **It follows what it published.** It reads the Knowledge Book: a service the book says is not covered, or that needs a prior authorization the claim lacks, is denied (CARC 96 or 197). Demo book: a 2026 therapy visit without an authorization is denied; the same visit with a 2025 service date is paid; granting an authorization changes the answer.
 - **It behaves like a payer.** At configured rates a claim pends for records (remit 35 days out instead of 14) or is denied for an ordinary reason (CARC 50, 16, 18, 97, 4).
 - **It deviates from what it published, on purpose.** At a configured rate it makes one of four mistakes: `wrong_denial` (CARC 31 although coverage was confirmed), `stale_version` (a prior-authorization rule that was not in force on the service date, only for a service whose rule actually changed between years), `unpublished_rule` (an edit that is not in the book) or `underpay_off_schedule` (10 to 25% under the fee schedule). Each shows in the truth log with what the book said it should have been; with the rate at zero there are no deviations.
-- **Truth log:** `PayerSim.truth_csv()` (one row per decision: outcome, CARC, published outcome and reason, deviation kind, pended, billed, allowed, paid). `krisnai live s1` now writes `truth.csv` next to `truth.jsonl`, outside the engine's inbox.
+- **Truth log:** `PayerSim.truth_csv()` (one row per decision: outcome, CARC, published outcome and reason, deviation kind, pended, billed, allowed, paid). `krisnnai live s1` now writes `truth.csv` next to `truth.jsonl`, outside the engine's inbox.
 - **The outside world sees the payer's state over time.** `LiveWorld` answers claim-status requests and the mock portal from the payer's own state on the simulation clock: a pended claim shows "Pending: in review" with a records request until its remit date, then "Finalized: paid or denied". The portal bot read exactly this in a test. `remits_due(day)` hands out each 835 once, in claim order, when its date comes.
 - **Rejection and denial stay distinct:** a clearinghouse technical rejection is held in the world, never reaches the payer, and never appears in the truth log.
 - **Tests:** `tests/test_live_s3.py` (11); the earlier live and portal tests still pass, and both slow end-to-end tests pass against OpenEMR. One additive change to the mock portal: a world may supply its own reason line and records-request flag; the old behaviour is unchanged for worlds that do not.
@@ -147,7 +147,7 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 **Not done:** the rates and the deviation mix are demo settings, not payer statistics; an ordinary denial is random, so the book cannot predict it (it is not counted as a deviation). Nothing scores the agents against the truth log yet (S5), and the single-encounter runner still uses a scripted denial; the S4 orchestrator will use the rates.
 
 ## 5f. S4 result (2026-10-21): the orchestrator and clock
-`krisnai live run --count 50` (`krisnai/live/stream.py`, `emr.py`) pushes synthetic encounters through the whole chain on a simulated clock, with nobody typing anything in. Each simulated day it: books patients and appointments in the EMR and checks eligibility (booking day); creates the encounter, signed note and transcript and runs the transcript coder (visit day, three days later); has the EMR charge and write the 837P, sends it to the clearinghouse and lets the payer decide (billing); issues each 835 on its remit date; runs the status bot and, weekly, the portal bot against the payer's live state; and runs the engine's daily run (all agents, shadow mode) over whatever files arrived. The EMR sits behind a small interface (`OpenEmrPort`, and an in-memory `FakeEmr` for tests), so the orchestrator is tested without Docker.
+`krisnnai live run --count 50` (`krisnnai/live/stream.py`, `emr.py`) pushes synthetic encounters through the whole chain on a simulated clock, with nobody typing anything in. Each simulated day it: books patients and appointments in the EMR and checks eligibility (booking day); creates the encounter, signed note and transcript and runs the transcript coder (visit day, three days later); has the EMR charge and write the 837P, sends it to the clearinghouse and lets the payer decide (billing); issues each 835 on its remit date; runs the status bot and, weekly, the portal bot against the payer's live state; and runs the engine's daily run (all agents, shadow mode) over whatever files arrived. The EMR sits behind a small interface (`OpenEmrPort`, and an in-memory `FakeEmr` for tests), so the orchestrator is tested without Docker.
 
 **Crash safety (the gate).** State is saved after every step (retrying through Windows file locks, which OneDrive caused for real during this build); every EMR write looks for the record first; every payer decision comes from a (seed, claim id) stream. Verified two ways: with the in-memory EMR, killing the run at five different points (including after a side effect and before the save) and resuming gave the same truth log byte for byte, the same stages and files, and no repeated event; and against the **real OpenEMR**, a 50-encounter run killed at step 150 and resumed ended with exactly 50 patients, 50 appointments, 50 encounters and 100 documents, none duplicated.
 
@@ -158,7 +158,7 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 **Limits:** 'real time' is the simulated clock, run day by day; the simulated coder is a stand-in for a person; no clearinghouse rejections or corrected claims are injected yet (so A6 and the resubmission bot are not exercised); the payer's rates are demo settings. Streamed patients use fixed member ids, so running the stream again on the same OpenEMR reuses them instead of creating new ones. Tests: `tests/test_live_s4.py` (12 fast, 2 slow).
 
 ## 5g. S5 result (2026-10-21): the scorecard, the reconciliation and the live view
-`krisnai live score --run <folder>` (`krisnai/live/score.py`) lays the agents' work beside the payer's hidden truth log and reads every 835 file back to reconcile it; `krisnai live export` turns a run into the data the preview shows (`tools_stream.js`). Reports: `scorecard.html`, `scorecard.json`, `ledger.csv`.
+`krisnnai live score --run <folder>` (`krisnnai/live/score.py`) lays the agents' work beside the payer's hidden truth log and reads every 835 file back to reconcile it; `krisnnai live export` turns a run into the data the preview shows (`tools_stream.js`). Reports: `scorecard.html`, `scorecard.json`, `ledger.csv`.
 
 **The 50-encounter run against OpenEMR (with the fee schedule loaded):**
 
@@ -187,7 +187,7 @@ Also verified: the same holds for seeds 11, 23 and 99; with the policy off every
 **Follow-ups, in the order I would take them:** (1) move A8, A5 and A7 onto the Knowledge Book so deviations are recognized; (2) inject clearinghouse rejections so A6 and the resubmission bot are exercised; (3) simulate bank deposits so A11's reconciliation and a real cash line exist; (4) post remits into OpenEMR through its ERA importer; (5) replace the simulated coder with a queue a person can work in the preview.
 
 ## 5h. "Give it a transcript and it runs the whole workflow" (added after S5)
-`krisnai live serve` starts a small local service (`krisnai/live/service.py`, port 8780) and the preview's **Run a visit** screen talks to it: paste or pick a visit transcript, choose whether the note is signed, whether coverage has lapsed and how the payer behaves (pays, denies, breaks its own rules, asks for records first), and press Run. The same chain as the 50-encounter stream runs for that one visit on a simulated clock (about 7 seconds of real time with the real engine): the visit is recorded, the transcript coder decides, the EMR writes the claim, the clearinghouse and the payer respond, the engine's agents react, and the screen shows each step as it happens and then the whole trace (the coder's checks, what the payer did against the policy, the agents' work, the money with cash collected at 0.00).
+`krisnnai live serve` starts a small local service (`krisnnai/live/service.py`, port 8780) and the preview's **Run a visit** screen talks to it: paste or pick a visit transcript, choose whether the note is signed, whether coverage has lapsed and how the payer behaves (pays, denies, breaks its own rules, asks for records first), and press Run. The same chain as the 50-encounter stream runs for that one visit on a simulated clock (about 7 seconds of real time with the real engine): the visit is recorded, the transcript coder decides, the EMR writes the claim, the clearinghouse and the payer respond, the engine's agents react, and the screen shows each step as it happens and then the whole trace (the coder's checks, what the payer did against the policy, the agents' work, the money with cash collected at 0.00).
 
 - **Safety:** it answers only on the machine it runs on (other callers get 403) and only to the preview's origin; one visit at a time (a second gets 409); a transcript is capped at 20,000 characters; it uses an in-memory EMR unless started with `--emr openemr`; synthetic data only (ADR-0002).
 - **What the first run showed:** a complete signed visit is auto-accepted, billed and paid; an unsigned or incomplete one stops at the coder with nothing billed; a denied visit gets an A8 task; a paid visit raises no agent work within eight simulated days of the remit (the 50-encounter run's patient statements came later).
@@ -222,7 +222,7 @@ Three pieces were built at the same time by three agents, each in its own copy o
 **Honest limits.** The payers, their rates and their rules are invented; nothing is real payer behavior. The reader has been measured on a small number of hand-written transcripts and on generated ones; real speech will be harder, and the AI layer is off until a model is chosen. The coder is deliberately cautious (preventive, emergency, therapy with a visit and any procedure with a visit go to a person), so fewer visits are auto-accepted. A records reply only acknowledges (it does not move the payment date), and only prior-authorization and active-coverage contradictions are recognized as the payer breaking its own rules (not bundling). Decision records for replies are written to a file, not the engine's table. One slow test failed once under full-suite load and passed on both reruns.
 
 ## 5l. The claim as a CMS-1500 form next to its EDI (added after 5k)
-Each visit that becomes a claim now shows **"The claim: the CMS-1500 form, and the EDI it becomes"** in its trace (Run a visit, the many-visits results and Follow one claim). The form (insurer, patient, diagnoses A to L, prior authorization, one row per service with date, place, code, modifier, diagnosis pointer, charge, units and rendering NPI, tax ID, total, facility, billing provider) is **read back from the 837P claim file itself** by `krisnai/live/claim_form.py`, so it shows exactly what the file says and cannot drift from it; touching a box highlights the EDI line it came from, and each EDI line has a plain-words note. Works on both the in-memory EMR's claim and OpenEMR's own claim (tested on both). Tests: `tests/test_claim_form.py`.
+Each visit that becomes a claim now shows **"The claim: the CMS-1500 form, and the EDI it becomes"** in its trace (Run a visit, the many-visits results and Follow one claim). The form (insurer, patient, diagnoses A to L, prior authorization, one row per service with date, place, code, modifier, diagnosis pointer, charge, units and rendering NPI, tax ID, total, facility, billing provider) is **read back from the 837P claim file itself** by `krisnnai/live/claim_form.py`, so it shows exactly what the file says and cannot drift from it; touching a box highlights the EDI line it came from, and each EDI line has a plain-words note. Works on both the in-memory EMR's claim and OpenEMR's own claim (tested on both). Tests: `tests/test_claim_form.py`.
 
 Found while checking that results follow the typed text: the claim used to carry only the visit line and the first diagnosis; it now carries every service and every diagnosis the coder found, with sides as modifiers and units from minutes, and each claim line is tested against the payer's published rules. A side named elsewhere in a note now counts when it is the only side named (two sides, or hand dominance, never count). A note that fails as unsigned now says which of three causes made it so.
 

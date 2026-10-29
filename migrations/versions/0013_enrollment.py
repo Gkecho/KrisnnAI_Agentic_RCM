@@ -4,7 +4,7 @@ Revision ID: 0013
 Revises: 0012
 
 Provider enrollment with each payer and sanctions screening results, for the credentialing agent (M18).
-Generated from krisnai.model.credentialing.
+Generated from krisnnai.model.credentialing.
 """
 
 import sqlalchemy as sa

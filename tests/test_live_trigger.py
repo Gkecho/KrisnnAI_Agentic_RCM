@@ -7,9 +7,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from krisnai.live.payer import PayerSim
-from krisnai.live.trigger import AppointmentWatcher, Trigger, explain, show
-from krisnai.live.writeback import WriteBack, WriteBackError
+from krisnnai.live.payer import PayerSim
+from krisnnai.live.trigger import AppointmentWatcher, Trigger, explain, show
+from krisnnai.live.writeback import WriteBack, WriteBackError
 
 TODAY = date(2026, 10, 22)
 
@@ -120,7 +120,7 @@ def test_a_member_the_payer_marks_inactive_or_unknown_is_reported(tmp_path):
     srv = FakeServer()
     with _trigger(srv, tmp_path) as t:
         t.tick()
-        srv.book(8, "SYNLAPSE8", title="krisnai:appt=A8;payer=SYNAETNA")
+        srv.book(8, "SYNLAPSE8", title="krisnnai:appt=A8;payer=SYNAETNA")
         t.payers["SYNAETNA"].enrol("SYNLAPSE8", active=False)
         res = t.tick()[0]
         assert res["decoded"]["found"] and res["decoded"]["active"] is False
@@ -129,7 +129,7 @@ def test_a_member_the_payer_marks_inactive_or_unknown_is_reported(tmp_path):
             res["clearance"]["top_gap"] == "coverage_inactive"
             and res["clearance"]["action"] == "a1_coverage_exception_review"
         )
-        srv.book(9, "SYNGHOST9", title="krisnai:appt=A9;payer=OTHERPAYER")
+        srv.book(9, "SYNGHOST9", title="krisnnai:appt=A9;payer=OTHERPAYER")
         res2 = t.tick()[
             0
         ]  # a payer the demo has not met yet is created, and the unknown member is enrolled and reported
@@ -340,7 +340,7 @@ def test_a_note_is_sent_once_only_with_the_adapter_on_and_a_named_approver(tmp_p
     assert srv.posts == []
     wb.approve(key, "Manager A")
     ((method, path, body),) = srv.posts
-    assert method == "POST" and path == "/patient/31/message" and body["from"] == "krisnai" and body["to"] == "admin"
+    assert method == "POST" and path == "/patient/31/message" and body["from"] == "krisnnai" and body["to"] == "admin"
     with pytest.raises(WriteBackError, match="already sent"):
         wb.approve(key, "Manager A")
     assert len(srv.posts) == 1
@@ -373,7 +373,7 @@ def test_a_no_insurance_note_says_so_and_a_second_proposal_is_not_duplicated(tmp
 
 
 def _agent_trigger(server: FakeServer, tmp_path) -> Trigger:  # noqa: ANN001
-    from krisnai.live.shadow_book import ShadowBook
+    from krisnnai.live.shadow_book import ShadowBook
 
     return Trigger(server, tmp_path / "t", as_of=TODAY, log=lambda *_: None, book=ShadowBook(tmp_path / "t"))
 
@@ -594,7 +594,7 @@ def test_the_same_request_gives_the_same_authorization_number(tmp_path):
 
 
 def test_a_service_the_rules_say_needs_no_authorization_sends_no_278_and_a_listed_service_without_a_rule_is_unknown(tmp_path):
-    from krisnai.live import prior_auth
+    from krisnnai.live import prior_auth
 
     # SYNAETNA's rule for 70450 only starts in 2026: for a 2025 visit the rule says "not required"
     assert prior_auth.need("SYNAETNA", "70450", date(2025, 6, 2), TODAY)["status"] == "not_required"
@@ -628,7 +628,7 @@ def test_an_authorization_number_already_on_file_means_no_request(tmp_path):
 
 
 def test_the_278_answer_decoder_hands_an_unknown_action_to_a_person_and_the_note_carries_the_result(tmp_path):
-    from krisnai.live import prior_auth
+    from krisnnai.live import prior_auth
 
     resp = prior_auth.write_278_response(
         {"payer": "SYNAETNA", "member": "M1", "ref": "R1", "cpt": "72148", "dos": date(2026, 10, 25)}, "P", "A9", 1, 5, TODAY, 90
@@ -636,6 +636,6 @@ def test_the_278_answer_decoder_hands_an_unknown_action_to_a_person_and_the_note
     dec = prior_auth.decode_278(resp)
     assert dec["outcome"] == "unknown_action" and "a person must read" in dec["message"]
     res, _ = _auth(tmp_path, {"cpt": "72148"})
-    from krisnai.live.writeback import build_note
+    from krisnnai.live.writeback import build_note
 
     assert "Prior authorization (72148, SYNAETNA): certified" in build_note(res)["body"]

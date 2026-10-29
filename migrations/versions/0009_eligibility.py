@@ -4,7 +4,7 @@ Revision ID: 0009
 Revises: 0008
 
 Appointments and 271 eligibility responses, for the pre-visit clearance agent (M14). Generated from
-krisnai.model.eligibility.
+krisnnai.model.eligibility.
 """
 
 import sqlalchemy as sa

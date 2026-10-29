@@ -17,10 +17,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable
 
-import krisnai.model as m
-from krisnai.model import docgen
-from krisnai.model.base import Base
-from krisnai.model.scoping import TenantMismatchError, tenant_session
+import krisnnai.model as m
+from krisnnai.model import docgen
+from krisnnai.model.base import Base
+from krisnnai.model.scoping import TenantMismatchError, tenant_session
 
 TABLES = Base.metadata.tables
 ENGINE_TABLES = (
@@ -218,7 +218,7 @@ def _alembic_cfg(buffer=None):
 
 
 def test_migration_generates_tsql_for_every_table_and_the_append_only_trigger(monkeypatch):
-    monkeypatch.delenv("KRISNAI_ALEMBIC_URL", raising=False)
+    monkeypatch.delenv("KRISNNAI_ALEMBIC_URL", raising=False)
     buf = io.StringIO()
     command.upgrade(_alembic_cfg(buf), "head", sql=True)
     sql = buf.getvalue()
@@ -238,7 +238,7 @@ def test_migration_matches_models_on_a_real_database(tmp_path, monkeypatch):
     from alembic.migration import MigrationContext
 
     url = f"sqlite:///{tmp_path / 'drift.db'}"
-    monkeypatch.setenv("KRISNAI_ALEMBIC_URL", url)
+    monkeypatch.setenv("KRISNNAI_ALEMBIC_URL", url)
     command.upgrade(_alembic_cfg(), "head")
     eng = create_engine(url)
     with eng.connect() as conn:
@@ -247,12 +247,12 @@ def test_migration_matches_models_on_a_real_database(tmp_path, monkeypatch):
     command.downgrade(_alembic_cfg(), "base")
 
 
-@pytest.mark.skipif(not os.environ.get("KRISNAI_TEST_ALEMBIC_URL"), reason="needs a SQL Server test DB")
+@pytest.mark.skipif(not os.environ.get("KRISNNAI_TEST_ALEMBIC_URL"), reason="needs a SQL Server test DB")
 def test_real_sql_server_upgrade_downgrade_and_append_only_trigger(monkeypatch):
-    monkeypatch.setenv("KRISNAI_ALEMBIC_URL", os.environ["KRISNAI_TEST_ALEMBIC_URL"])
+    monkeypatch.setenv("KRISNNAI_ALEMBIC_URL", os.environ["KRISNNAI_TEST_ALEMBIC_URL"])
     cfg = _alembic_cfg()
     command.upgrade(cfg, "head")
-    eng = create_engine(os.environ["KRISNAI_TEST_ALEMBIC_URL"])
+    eng = create_engine(os.environ["KRISNNAI_TEST_ALEMBIC_URL"])
     try:
         with Session(eng) as s:
             s.add(m.Tenant(name="T", patient_salt_key="K"))

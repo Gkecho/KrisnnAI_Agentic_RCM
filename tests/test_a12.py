@@ -11,9 +11,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a12_patient import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a12_patient import (
     ACTION_TYPES,
     CREDIT_REVIEW,
     DISPUTE_REVIEW,
@@ -32,14 +32,14 @@ from krisnai.agents.a12_patient import (
     summarize,
     sweep,
 )
-from krisnai.agents.a12_patient import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path, parse_patient_payments, parse_statements
-from krisnai.ingest.x12 import X12Error
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.agents.a12_patient import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path, parse_patient_payments, parse_statements
+from krisnnai.ingest.x12 import X12Error
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -276,7 +276,7 @@ def test_collections_rate_and_open_balance_are_consistent_with_the_answer_key(sy
 
 
 def test_the_tower_shows_a12_cards_and_cli_replays_in_shadow(syn, tmp_path, capsys):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     cards = [c for c in open_cards(syn["engine"], 1, syn["as_of"]) if c["agent"] == "a12_patient"]
     assert cards and {c["owner"] for c in cards} == {"patient_billing"}

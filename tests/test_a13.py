@@ -11,9 +11,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a13_credentialing import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a13_credentialing import (
     ACTION_TYPES,
     ENROLLMENT_EVENT,
     ENROLLMENT_TASK,
@@ -31,14 +31,14 @@ from krisnai.agents.a13_credentialing import (
     summarize,
     sweep,
 )
-from krisnai.agents.a13_credentialing import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path, parse_enrollments, parse_screenings
-from krisnai.ingest.x12 import X12Error
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.agents.a13_credentialing import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path, parse_enrollments, parse_screenings
+from krisnnai.ingest.x12 import X12Error
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -309,7 +309,7 @@ def test_lapses_produced_real_carc_185_denials_and_the_dollars_at_risk_add_up(sy
 
 
 def test_the_tower_shows_a13_cards_and_cli_replays_in_shadow(syn, tmp_path, capsys):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     cards = [c for c in open_cards(syn["engine"], 1, syn["as_of"]) if c["agent"] == "a13_credentialing"]
     assert cards and {c["owner"] for c in cards} <= {"credentialing", "compliance_owner"}

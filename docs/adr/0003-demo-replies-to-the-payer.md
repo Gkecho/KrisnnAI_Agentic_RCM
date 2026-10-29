@@ -22,7 +22,7 @@ refunds and write-offs are never automatic. Rules 2 and 3 are written for client
    details, an added note). It **never changes a CPT code, an ICD-10 code or a modifier**, and nothing creates a write-off or a refund. A denial that would need a code
    change, a duplicate, a timely-filing denial, an unknown reason code, an expired deadline, a missing deadline rule, or a claim still denied after the rounds allowed
    goes to **review for a person**. A write-off is only ever proposed as a review item, never done.
-5. **Deadlines.** An appeal or a corrected claim is sent only if the Knowledge Book's deadline for that route (`krisnai.knowledge.deadlines.deadline`, evaluated on the
+5. **Deadlines.** An appeal or a corrected claim is sent only if the Knowledge Book's deadline for that route (`krisnnai.knowledge.deadlines.deadline`, evaluated on the
    simulation clock) is still open when it is sent. An expired route, or a rule the book cannot compute, escalates to a person and nothing is sent.
 6. **Published rules.** Each denial is checked against the payer's published rules (coverage, prior authorization for that payer, service and date). When the payer
    contradicted its own published rule (or its own 271 answer), the reply says so and appeals on that ground.

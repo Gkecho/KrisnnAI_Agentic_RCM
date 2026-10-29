@@ -9,8 +9,8 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai.engine import (
+import krisnnai.model as m
+from krisnnai.engine import (
     NO_ACTION,
     ApprovalError,
     approve,
@@ -21,9 +21,9 @@ from krisnai.engine import (
     run,
     set_policy,
 )
-from krisnai.engine.adapters import ClearinghouseStub, TaskNoteAdapter
-from krisnai.engine.models import BaaNotApproved, StubProvider, prompt_hash
-from krisnai.model import tenant_session
+from krisnnai.engine.adapters import ClearinghouseStub, TaskNoteAdapter
+from krisnnai.engine.models import BaaNotApproved, StubProvider, prompt_hash
+from krisnnai.model import tenant_session
 from tests.fixtures.dummy_agent import TRIGGER, DummyAgent, SpyAdapter
 from tests.test_ingest import make_engine
 

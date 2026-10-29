@@ -10,13 +10,13 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai.ingest.loader import ingest_file
-from krisnai.integrations.clearinghouse.client import EndpointRefused
-from krisnai.integrations.fhir import mapper
-from krisnai.integrations.fhir.client import FhirClient
-from krisnai.integrations.fhir.sync import pull, seed
-from krisnai.model import tenant_session
+import krisnnai.model as m
+from krisnnai.ingest.loader import ingest_file
+from krisnnai.integrations.clearinghouse.client import EndpointRefused
+from krisnnai.integrations.fhir import mapper
+from krisnnai.integrations.fhir.client import FhirClient
+from krisnnai.integrations.fhir.sync import pull, seed
+from krisnnai.model import tenant_session
 from tests.test_ingest import SALT, make_engine
 
 APPTS = [
@@ -149,7 +149,7 @@ def test_the_pulled_feeds_load_through_the_normal_loader(server, tmp_path):
 
 
 def test_the_client_refuses_a_remote_server_unless_enabled(monkeypatch):
-    monkeypatch.delenv("KRISNAI_ALLOW_REAL_ENDPOINTS", raising=False)
+    monkeypatch.delenv("KRISNNAI_ALLOW_REAL_ENDPOINTS", raising=False)
     with pytest.raises(EndpointRefused):
         FhirClient("https://fhir.example-emr.com/r4")
 

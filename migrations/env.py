@@ -1,25 +1,25 @@
-"""Alembic environment. Targets SQL Server; KRISNAI_ALEMBIC_URL overrides (used by tests)."""
+"""Alembic environment. Targets SQL Server; KRISNNAI_ALEMBIC_URL overrides (used by tests)."""
 
 import os
 
 from alembic import context
 from sqlalchemy import create_engine
 
-import krisnai.model  # noqa: F401  (registers all tables)
-from krisnai.config import DbSettings
-from krisnai.model.base import Base
+import krisnnai.model  # noqa: F401  (registers all tables)
+from krisnnai.config import DbSettings
+from krisnnai.model.base import Base
 
 config = context.config
 target_metadata = Base.metadata
 
 
 def _url() -> str:
-    return os.environ.get("KRISNAI_ALEMBIC_URL") or DbSettings.from_env().sqlalchemy_url()
+    return os.environ.get("KRISNNAI_ALEMBIC_URL") or DbSettings.from_env().sqlalchemy_url()
 
 
 def run_migrations_offline() -> None:
     # Offline (--sql) needs no server: emit T-SQL for the mssql dialect.
-    url = os.environ.get("KRISNAI_ALEMBIC_URL") or "mssql+pyodbc://"
+    url = os.environ.get("KRISNNAI_ALEMBIC_URL") or "mssql+pyodbc://"
     context.configure(
         url=url,
         target_metadata=target_metadata,

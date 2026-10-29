@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from krisnai.engine.models import BaaNotApproved
-from krisnai.live import catalog
-from krisnai.live.ai_reader import AiReader, FakeAi
-from krisnai.live.coder import Coder, Policy
-from krisnai.live.reader import read
+from krisnnai.engine.models import BaaNotApproved
+from krisnnai.live import catalog
+from krisnnai.live.ai_reader import AiReader, FakeAi
+from krisnnai.live.coder import Coder, Policy
+from krisnnai.live.reader import read
 
 FIX = Path(__file__).parent / "fixtures" / "transcripts"
 DAY = date(2026, 10, 24)

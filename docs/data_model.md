@@ -1,6 +1,6 @@
-# KrisnAI core data model (M1)
+# KrisnnAI core data model (M1)
 
-> Generated from `krisnai/model` by `python -m krisnai.model.docgen`. Do not edit by hand;
+> Generated from `krisnnai/model` by `python -m krisnnai.model.docgen`. Do not edit by hand;
 > a test fails when this file is out of date.
 
 ## Principles

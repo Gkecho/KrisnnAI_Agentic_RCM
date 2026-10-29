@@ -1,4 +1,4 @@
-# KrisnAI RCM roadmap: all 15 agents
+# KrisnnAI RCM roadmap: all 15 agents
 
 Source: `KrisnnAI_RCM_Strategy_v5_Redline.docx` (Section 3 portfolio and release waves, Section 10 MVP, Section 11 180-day roadmap,
 Appendix A spec template). `docs/BUILD_PLAN.md` was written earlier and only detailed M0-M10; this file covers every agent.

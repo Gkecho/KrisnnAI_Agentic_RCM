@@ -1,4 +1,4 @@
-# KrisnAI RCM — build plan for Claude Code
+# KrisnnAI RCM — build plan for Claude Code
 
 > **All 15 agents are planned in [docs/ROADMAP.md](ROADMAP.md)** (from the strategy v5 portfolio and release waves). This file details M0-M10 only.
 
@@ -38,7 +38,7 @@ Tables (all with `tenant_id`, `source_file_id`, `loaded_at`):
 Parsers: 837P (loops 2000A/B, 2300 CLM/HI, 2400 SV1/DTP), 835 (CLP, SVC, CAS, RARC/LQ, PLB, BPR/TRN), 999 (AK2/IK3/IK4/IK5), 277CA (STC).
 **Done when:** synthetic files load end to end; loading the same file twice changes nothing (idempotent on file hash + ISA13/GS06/ST02); malformed segment → file marked failed with reason, not a crash.
 
-> **Prompt:** Do M2. Write tolerant X12 parsers for 837P, 835, 999 and 277CA in krisnai/ingest (read delimiters from ISA). Load into events then normalized tables. Add a CLI: `krisnai ingest <path> --tenant <id>`. Tests: round-trip on synthetic files, idempotency, malformed file handling. Plan mode first.
+> **Prompt:** Do M2. Write tolerant X12 parsers for 837P, 835, 999 and 277CA in krisnnai/ingest (read delimiters from ISA). Load into events then normalized tables. Add a CLI: `krisnnai ingest <path> --tenant <id>`. Tests: round-trip on synthetic files, idempotency, malformed file handling. Plan mode first.
 
 ---
 
@@ -46,7 +46,7 @@ Parsers: 837P (loops 2000A/B, 2300 CLM/HI, 2400 SV1/DTP), 835 (CLP, SVC, CAS, RA
 Claim ↔ remit: `CLP01 = CLM01`, fallback on payer claim number `CLP07`, then patient_ref + DOS + billed amount. Line ↔ line: SVC01 procedure + modifiers + DOS + units vs SV1. Remit ↔ payment: `TRN02` trace number.
 **Done when:** match report shows match rate and unmatched reasons; ≥ 99% on synthetic; every match stores which rule matched it.
 
-> **Prompt:** Do M3. Build krisnai/match with the matching rules in BUILD_PLAN.md, storing match_method on each link. Produce a match quality report (counts, rate, unmatched reasons). Tests use the synthetic ground truth. Plan mode first.
+> **Prompt:** Do M3. Build krisnnai/match with the matching rules in BUILD_PLAN.md, storing match_method on each link. Produce a match quality report (counts, rate, unmatched reasons). Tests use the synthetic ground truth. Plan mode first.
 
 ---
 
@@ -54,7 +54,7 @@ Claim ↔ remit: `CLP01 = CLM01`, fallback on payer claim number `CLP07`, then p
 KPIs as SQL views with a written definition each: clean claim rate, first-pass paid rate, denial rate (count and $) by CARC/payer/CPT, days in AR, AR > 90, net collection rate, underpayment $, charge lag, rejection rate (999/277CA).
 **Done when:** each KPI has a definition in `docs/metrics.md`, a view, and a test against hand-computed values on a tiny fixture; every KPI can be computed `as_of` a date.
 
-> **Prompt:** Do M4. Create the metric dictionary in docs/metrics.md and SQL Server views in krisnai/metrics. Each KPI must support an as_of date. Test each one against a small hand-built fixture where I can verify the numbers by eye. Plan mode first.
+> **Prompt:** Do M4. Create the metric dictionary in docs/metrics.md and SQL Server views in krisnnai/metrics. Each KPI must support an as_of date. Test each one against a small hand-built fixture where I can verify the numbers by eye. Plan mode first.
 
 ---
 
@@ -85,7 +85,7 @@ Output: JSON + Excel report (by payer, CPT, location, provider; recoverable vs s
 
 **Done when:** a dummy agent runs through all 8 steps in shadow mode, writes decision records, respects policy (a denied action never executes), and replay produces identical results on re-run.
 
-> **Prompt:** Do M6. Build the decision engine in krisnai/engine as described in BUILD_PLAN.md. Include tests proving: denied actions never execute, shadow mode never calls adapters, every run writes a decision record, replay is deterministic and has no future leakage. Plan mode first.
+> **Prompt:** Do M6. Build the decision engine in krisnnai/engine as described in BUILD_PLAN.md. Include tests proving: denied actions never execute, shadow mode never calls adapters, every run writes a decision record, replay is deterministic and has no future leakage. Plan mode first.
 
 ---
 

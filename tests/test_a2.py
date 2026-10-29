@@ -12,9 +12,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a2_authorization import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a2_authorization import (
     ACTION_TYPES,
     EVENT_TYPE,
     EXCEPTION_REVIEW,
@@ -29,14 +29,14 @@ from krisnai.agents.a2_authorization import (
     summarize,
     sweep,
 )
-from krisnai.agents.a2_authorization import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path, parse_authorizations
-from krisnai.ingest.x12 import X12Error
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.agents.a2_authorization import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path, parse_authorizations
+from krisnnai.ingest.x12 import X12Error
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -287,7 +287,7 @@ def test_turnaround_and_covered_rate(syn):
 
 
 def test_the_tower_shows_a2_cards_until_the_visit_date_passes(syn):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     with tenant_session(syn["engine"], 1) as s:
         day = s.scalars(

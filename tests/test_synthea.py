@@ -13,15 +13,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.ingest.loader import ingest_path
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build, runner
-from krisnai.synthea.bundles import build_bundles
-from krisnai.synthea.reader import find_csv_dir, read_dir
-from krisnai.synthea.simulate import simulate
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build, runner
+from krisnnai.synthea.bundles import build_bundles
+from krisnnai.synthea.reader import find_csv_dir, read_dir
+from krisnnai.synthea.simulate import simulate
 from tests.fixtures import synthea_mini
 from tests.test_ingest import SALT, make_engine
 

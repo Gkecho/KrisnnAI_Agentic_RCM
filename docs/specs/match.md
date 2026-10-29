@@ -1,6 +1,6 @@
 # Matching spec (M3)
 
-`krisnai match --tenant ID [--as-of ISO-TIMESTAMP] [--json]` links remits to claims, remit lines to claim lines and
+`krisnnai match --tenant ID [--as-of ISO-TIMESTAMP] [--json]` links remits to claims, remit lines to claim lines and
 277CAs to claims, then prints a match quality report. It only touches rows whose link is still NULL, so a second run
 changes nothing. With `--as-of`, only rows whose event was known by then are used.
 

@@ -3,10 +3,10 @@
 
 from pathlib import Path
 
-from krisnai.live.claim_form import claim_form
-from krisnai.live.emr import FakeEmr
-from krisnai.live.stream import StreamConfig, run_stream
-from krisnai.live.transcripts import Visit
+from krisnnai.live.claim_form import claim_form
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.stream import StreamConfig, run_stream
+from krisnnai.live.transcripts import Visit
 
 FIXTURE = Path(__file__).parent / "fixtures" / "openemr_837p_synthetic.x12"
 

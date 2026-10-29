@@ -4,12 +4,12 @@ Revision ID: 0002
 Revises: 0001
 
 SQL Server views cannot take a date, so each KPI is `metrics.fn_<kpi>(@as_of, @tenant_id)`. The text comes from
-krisnai/metrics/sql/*.sql, the same files the Python tests run on SQLite. Other dialects skip this migration.
+krisnnai/metrics/sql/*.sql, the same files the Python tests run on SQLite. Other dialects skip this migration.
 """
 
 from alembic import op
 
-from krisnai.metrics.loader import function_ddl, kpi_names
+from krisnnai.metrics.loader import function_ddl, kpi_names
 
 revision = "0002"
 down_revision = "0001"

@@ -1,7 +1,7 @@
 # A15-lite: revenue leakage diagnostic (M5)
 
-`krisnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth ground_truth.csv] [--g0-tolerance 0.01]`
-Run `krisnai ingest` and `krisnai match` first. Writes `a15_lite.json` and `a15_lite.xlsx`. **Read-only**: it changes no
+`krisnnai a15 --tenant ID --as-of DATE --out DIR [--ground-truth ground_truth.csv] [--g0-tolerance 0.01]`
+Run `krisnnai ingest` and `krisnnai match` first. Writes `a15_lite.json` and `a15_lite.xlsx`. **Read-only**: it changes no
 claim, remit or setting and recovers no money. Findings are *detected* opportunities. It proposes no action, so it writes no
 decision record (that starts with the decision engine, M6).
 

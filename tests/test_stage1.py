@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from krisnai.integrations.stage1 import run_stage1
+from krisnnai.integrations.stage1 import run_stage1
 from tests.fixtures import synthea_mini
 
 AS_OF = date(2026, 6, 30)

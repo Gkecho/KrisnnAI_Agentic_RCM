@@ -11,9 +11,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a10_underpay import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a10_underpay import (
     ACTION_TYPES,
     CONTRACT_CHECK_TASK,
     DISPUTE_REVIEW,
@@ -24,12 +24,12 @@ from krisnai.agents.a10_underpay import (
     patterns,
     summarize,
 )
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -256,7 +256,7 @@ def test_the_summary_and_the_a15_diagnostic_agree_on_the_dollars(syn, tmp_path, 
 
 
 def test_a14_tower_lists_a10_cards_in_the_decision_inbox(syn):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     cards = open_cards(syn["engine"], 1, date(2026, 6, 30))
     mine = [c for c in cards if c["agent"] == "a10_underpay"]

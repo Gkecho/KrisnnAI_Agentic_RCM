@@ -1,17 +1,17 @@
 # Synthea data foundation (M12a)
 
 Synthea (github.com/synthetichealth/synthea) makes synthetic patients, visits and diagnoses. It does not make claims
-that get rejected, denied or underpaid. `krisnai/synthea/` bills Synthea's visits, runs a seeded payer simulator that
-plants known problems, and writes the same files `krisnai ingest` already reads, so agents see this data exactly as
+that get rejected, denied or underpaid. `krisnnai/synthea/` bills Synthea's visits, runs a seeded payer simulator that
+plants known problems, and writes the same files `krisnnai ingest` already reads, so agents see this data exactly as
 they would see a client's.
 
 ## Flow
 
 ```
-krisnai synthea run   --population 300 --seed 7 --yes     Synthea in Docker (jar download + image pull)
-krisnai synthea build --in out/synthea --out out/book --as-of 2026-06-30
-krisnai ingest out/book --tenant 1 ; krisnai match --tenant 1
-krisnai a8|a5|a6 seed ; krisnai a8|a5|a6 replay ... ; krisnai tower --tenant 1 --as-of 2026-06-30
+krisnnai synthea run   --population 300 --seed 7 --yes     Synthea in Docker (jar download + image pull)
+krisnnai synthea build --in out/synthea --out out/book --as-of 2026-06-30
+krisnnai ingest out/book --tenant 1 ; krisnnai match --tenant 1
+krisnnai a8|a5|a6 seed ; krisnnai a8|a5|a6 replay ... ; krisnnai tower --tenant 1 --as-of 2026-06-30
 ```
 
 `run` without `--yes` only prints the steps. Java is not installed on this PC, so Synthea runs in a container
@@ -83,7 +83,7 @@ those fields are simulated.
 
 ## Payer rate cuts
 
-`krisnai synthea build ... --rate-cut PAYER:CPT:YYYY-MM-DD:PCT` (repeatable) makes a payer pay PCT% under the contract on one CPT from a date. Each affected
+`krisnnai synthea build ... --rate-cut PAYER:CPT:YYYY-MM-DD:PCT` (repeatable) makes a payer pay PCT% under the contract on one CPT from a date. Each affected
 line is an underpayment in `ground_truth.csv`. It is how A10's payer-wide pattern detection is tested; without the flag the output is unchanged.
 
 ## Limits (read before trusting a number)

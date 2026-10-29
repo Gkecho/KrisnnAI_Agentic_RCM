@@ -4,7 +4,7 @@ Revision ID: 0010
 Revises: 0009
 
 Rules the denial prevention learning agent (M15) proposed from recurring denials. Only rows with status approved
-change A5, and only a named person approves. Generated from krisnai.model.engine.
+change A5, and only a named person approves. Generated from krisnnai.model.engine.
 """
 
 import sqlalchemy as sa

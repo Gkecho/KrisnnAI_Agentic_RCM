@@ -1,6 +1,6 @@
 # Decision engine (M6)
 
-Every agent runs through `krisnai.engine.run(engine, tenant, agent, event_id, adapters=...)`. The agent cannot skip policy,
+Every agent runs through `krisnnai.engine.run(engine, tenant, agent, event_id, adapters=...)`. The agent cannot skip policy,
 cannot call an adapter itself, and every run ends in exactly one **decision record** (CLAUDE.md fields, table `decision_record`).
 
 ## The 8 steps

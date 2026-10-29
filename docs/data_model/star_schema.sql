@@ -1,4 +1,4 @@
--- KrisnAI RCM dimensional model v2 (SQL Server): the claim journey in four phases. Generated from model_spec_v2.py: edit the spec, not this file.
+-- KrisnnAI RCM dimensional model v2 (SQL Server): the claim journey in four phases. Generated from model_spec_v2.py: edit the spec, not this file.
 -- PHASE 1 Appointment -> PHASE 2 Encounter -> PHASE 3 Bill -> PHASE 4 Transactions, denials and AR. Linked by appointment_ref, encounter_ref, claim_ref.
 -- Rules honoured: tenant_id on every table (8); patients only as salted hashes (1); money DECIMAL(12,2) and dates DATE (10);
 -- known_at on every fact for point-in-time replay (9); a unique natural key per fact makes loads idempotent (7); event_key = lineage to the append-only event.

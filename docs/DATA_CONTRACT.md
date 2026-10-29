@@ -1,4 +1,4 @@
-# KrisnAI RCM: data contract and KPI map (for review)
+# KrisnnAI RCM: data contract and KPI map (for review)
 
 Status: draft for review, 2026-10-15. Decisions recorded 2026-10-15: the client database keeps audit / history (Q1 yes) and has a master patient id (Q2 yes). Built from the code as of M15 (A1, A3, A5, A6, A7, A8, A9, A10, A14 built in shadow; A2, A4, A11, A12, A13 not built).
 Two jobs: (1) say exactly what the agents read, so the full-database model can be designed to provide it; (2) show, agent by agent, which metric ranks or

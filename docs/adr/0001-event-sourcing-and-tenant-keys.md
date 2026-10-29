@@ -3,7 +3,7 @@
 Status: accepted (M1). Date: 2026-10-08.
 
 ## Context
-KrisnAI must replay history point in time (rule 9), stay idempotent on re-ingest (rule 7) and
+KrisnnAI must replay history point in time (rule 9), stay idempotent on re-ingest (rule 7) and
 never mix tenants (rule 8), on SQL Server, without trusting every query to remember a WHERE clause.
 
 ## Decisions

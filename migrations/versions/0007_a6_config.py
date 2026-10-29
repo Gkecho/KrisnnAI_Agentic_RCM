@@ -3,7 +3,7 @@
 Revision ID: 0007
 Revises: 0006
 
-Routing table for the claim submission and response agent (M10). Generated from krisnai.model.engine.
+Routing table for the claim submission and response agent (M10). Generated from krisnnai.model.engine.
 """
 
 import sqlalchemy as sa

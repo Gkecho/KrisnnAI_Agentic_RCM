@@ -10,9 +10,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a8_denial import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a8_denial import (
     ACTION_TYPES,
     DEFAULT_ROUTES,
     A8DenialAgent,
@@ -21,10 +21,10 @@ from krisnai.agents.a8_denial import (
     seed_defaults,
     summarize,
 )
-from krisnai.engine import approve, list_requests, replay, run, set_policy
-from krisnai.ingest.loader import ingest_path
-from krisnai.match import run_matching
-from krisnai.model import tenant_session
+from krisnnai.engine import approve, list_requests, replay, run, set_policy
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match import run_matching
+from krisnnai.model import tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -95,7 +95,7 @@ def test_replay_twice_is_identical(syn):
 
 def test_each_decision_prices_the_denial_like_the_leakage_report(syn):
     """A15 and A8 must agree on the dollars of a full denial."""
-    from krisnai.agents.a15_lite import run_a15
+    from krisnnai.agents.a15_lite import run_a15
 
     res = run_a15(syn["engine"], 1, ms.AS_OF, syn["root"] / "a15")
     a15 = {f.claim: f.expected_amount for f in res.findings if f.type in ("denial", "timely_filing")}

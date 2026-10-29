@@ -1,8 +1,8 @@
 # UI mapping: the product preview and what this repo can feed it
 
-The preview is the "Product preview" section of the KrisnnAI site (`krisnai-site/product.html`; no PHI). This page says, per screen, what feeds it from
-`krisnai-rcm`, and what does not exist yet. Read-only today: the data reaches the page through `ui_data.js` (see `docs/ui.md`, produced by
-`krisnai/demo/export.py`). Checked against the preview on 2026-10-19 (as of 2026-10-14 in the data). The live `/app` is behind a sign-in; the preview was
+The preview is the "Product preview" section of the KrisnnAI site (`krisnnai-site/product.html`; no PHI). This page says, per screen, what feeds it from
+`krisnnai-rcm`, and what does not exist yet. Read-only today: the data reaches the page through `ui_data.js` (see `docs/ui.md`, produced by
+`krisnnai/demo/export.py`). Checked against the preview on 2026-10-19 (as of 2026-10-14 in the data). The live `/app` is behind a sign-in; the preview was
 checked locally with a stand-in login.
 
 ## Logins: who sees what (preview, 2026-10-19)
@@ -38,7 +38,7 @@ A7, A8, A10, A13 and the rest of the queue's action types). Choosing an override
 "nothing was sent". Decisions live only in the browser session: no write-back, no approval API.
 
 ## Manager logins: staff analytics (synthetic)
-`krisnai/demo/staff.py` builds a **synthetic** workforce (8 billing staff, 6 coders; fictional names, labelled synthetic on screen) with a planted answer key
+`krisnnai/demo/staff.py` builds a **synthetic** workforce (8 billing staff, 6 coders; fictional names, labelled synthetic on screen) with a planted answer key
 of strengths and weaknesses, then analyses it the way a real task log would be. It feeds `ui_data.staff` and these screens:
 
 | Screen | What it shows |
@@ -76,8 +76,8 @@ A11 Bookkeeper · A12 Concierge · A14 Captain · A15 Detective (full) / Scout (
 | **Connections** (ports, swap-to) | adapters: disabled / stub, mock + Stedi clearinghouse, FHIR, portal | Mock and sandbox adapters exist; swapping is configuration. Eligibility verified live on Stedi only |
 | **My scorecard** (per role) | `ui_data.queue_stats`: per owner and agent, open count, dollars, by cause, by payer, age, due | Ready (real counts from the run) |
 | **Rules I rely on** (per role) | `ui_data.reference`: CARC and rejection routes, NCCI pairs, MUE limits, fee schedule, authorization requirements, filing and appeal windows | Ready, read-only. Windows tables are empty in the demo run |
-| **One item, end to end** (per role) | one real queue item plus the Workflows-page text | Item is real; the "without KrisnAI" comparison is a design example, labelled so |
-| **Workflow analytics, Team workload, Employee analysis, Work allocation, Training plan, Improvements** (managers) | `ui_data.staff` from `krisnai/demo/staff.py` | **Synthetic staff.** Needs task-completion logging and client policy sign-off to be real |
+| **One item, end to end** (per role) | one real queue item plus the Workflows-page text | Item is real; the "without KrisnnAI" comparison is a design example, labelled so |
+| **Workflow analytics, Team workload, Employee analysis, Work allocation, Training plan, Improvements** (managers) | `ui_data.staff` from `krisnnai/demo/staff.py` | **Synthetic staff.** Needs task-completion logging and client policy sign-off to be real |
 | Showcase: Claim journey, Day in fast-forward, What if, Agent report cards, Before / after | demo content; What if and report cards could use replay; Before / after needs the holdout | Not fed |
 
 ## Worklist pills (Billing screen)
@@ -89,7 +89,7 @@ A11 Bookkeeper · A12 Concierge · A14 Captain · A15 Detective (full) / Scout (
 | Underpaid | A10 (`a10_dispute_review`, `a10_contract_check_task`) |
 | Filing risk | A7 when `filing_days_left` is 60 or less. A5 filing-window cards are not yet tagged |
 
-## KPI tiles on the standalone `krisnai-ui` Billing page
+## KPI tiles on the standalone `krisnnai-ui` Billing page
 | Tile | Feed |
 |---|---|
 | Claims needing action | count of open cards with a `queue_type` |

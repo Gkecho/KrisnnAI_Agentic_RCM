@@ -14,13 +14,13 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from krisnai.integrations.clearinghouse import bots
-from krisnai.integrations.clearinghouse.bots import eligibility_bot, resubmission_bot, status_bot
-from krisnai.integrations.clearinghouse.claim_store import Adjudication, PmExtract, StoredClaim, StoredLine
-from krisnai.integrations.clearinghouse.client import ClearinghouseClient
-from krisnai.integrations.clearinghouse.faults import FaultyClient
-from krisnai.integrations.clearinghouse.mock_server import create_app
-from krisnai.integrations.clearinghouse.mock_world import MockWorld
+from krisnnai.integrations.clearinghouse import bots
+from krisnnai.integrations.clearinghouse.bots import eligibility_bot, resubmission_bot, status_bot
+from krisnnai.integrations.clearinghouse.claim_store import Adjudication, PmExtract, StoredClaim, StoredLine
+from krisnnai.integrations.clearinghouse.client import ClearinghouseClient
+from krisnnai.integrations.clearinghouse.faults import FaultyClient
+from krisnnai.integrations.clearinghouse.mock_server import create_app
+from krisnnai.integrations.clearinghouse.mock_world import MockWorld
 
 WHEN = date(2026, 6, 30)
 TOKEN = "test-token-not-secret"

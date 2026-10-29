@@ -1,10 +1,10 @@
 # UI: how the site and the agents connect
 
-The planned UI follows the existing site (`krisnnaiagents.vercel.app`, folder `krisnai-site`): static HTML pages, a `data.js` per view, and a small Vercel
+The planned UI follows the existing site (`krisnnaiagents.vercel.app`, folder `krisnnai-site`): static HTML pages, a `data.js` per view, and a small Vercel
 login middleware. The agents already produce everything such a UI needs; the missing piece is the hand-off.
 
 ## Now: a data file the pages load
-`krisnai demo` (and later any run) writes `out/demo/ui_data.json` and `out/demo/ui_data.js` (`window.KRISNAI_LIVE = {...}`), the same pattern as the site's
+`krisnnai demo` (and later any run) writes `out/demo/ui_data.json` and `out/demo/ui_data.js` (`window.KRISNNAI_LIVE = {...}`), the same pattern as the site's
 `data.js` files. A page needs one `<script src="ui_data.js">` and plain DOM code; no server, no build step.
 
 | key | holds |

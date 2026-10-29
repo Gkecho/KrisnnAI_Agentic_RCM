@@ -3,7 +3,7 @@
 Revision ID: 0005
 Revises: 0004
 
-Routing tables for the denial agent (M7). Generated from krisnai.model.engine.
+Routing tables for the denial agent (M7). Generated from krisnnai.model.engine.
 """
 
 import sqlalchemy as sa

@@ -9,10 +9,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a5_prevention import seed_defaults as seed_a5
-from krisnai.agents.a6_submission import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a5_prevention import seed_defaults as seed_a5
+from krisnnai.agents.a6_submission import (
     ACTION_TYPES,
     DEFAULT_ROUTES,
     A6SubmissionAgent,
@@ -20,11 +20,11 @@ from krisnai.agents.a6_submission import (
     summarize,
     trigger_source,
 )
-from krisnai.agents.a6_submission import seed_defaults as seed_a6
-from krisnai.engine import NO_ACTION, approve, fingerprint, list_requests, replay, run, set_policy
-from krisnai.engine.adapters import ClearinghouseStub
-from krisnai.ingest.loader import ingest_path
-from krisnai.model import tenant_session
+from krisnnai.agents.a6_submission import seed_defaults as seed_a6
+from krisnnai.engine import NO_ACTION, approve, fingerprint, list_requests, replay, run, set_policy
+from krisnnai.engine.adapters import ClearinghouseStub
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.model import tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book

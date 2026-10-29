@@ -12,9 +12,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a11_cash import (
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a11_cash import (
     ACTION_TYPES,
     DEPOSIT_EVENT,
     DEPOSIT_TASK,
@@ -33,14 +33,14 @@ from krisnai.agents.a11_cash import (
     summarize,
     sweep,
 )
-from krisnai.agents.a11_cash import rules as r
-from krisnai.engine import NO_ACTION, replay, run
-from krisnai.engine.card import CARD_KEYS
-from krisnai.ingest.loader import ingest_path, parse_deposits, parse_postings
-from krisnai.ingest.x12 import X12Error
-from krisnai.match.engine import run_matching
-from krisnai.model import tenant_session
-from krisnai.synthea import build
+from krisnnai.agents.a11_cash import rules as r
+from krisnnai.engine import NO_ACTION, replay, run
+from krisnnai.engine.card import CARD_KEYS
+from krisnnai.ingest.loader import ingest_path, parse_deposits, parse_postings
+from krisnnai.ingest.x12 import X12Error
+from krisnnai.match.engine import run_matching
+from krisnnai.model import tenant_session
+from krisnnai.synthea import build
 from tests.fixtures import synthea_mini
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book
@@ -324,7 +324,7 @@ def test_the_days_to_deposit_and_post_kpis_find_the_planted_lags(syn):
 
 
 def test_the_tower_shows_a11_cards_and_cli_replays_in_shadow(syn, tmp_path, capsys):
-    from krisnai.agents.a14_tower.cards import open_cards
+    from krisnnai.agents.a14_tower.cards import open_cards
 
     with tenant_session(syn["engine"], 1) as s:
         day = s.scalars(

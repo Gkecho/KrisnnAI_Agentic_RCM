@@ -1,6 +1,6 @@
-# KrisnAI RCM — rules for Claude Code
+# KrisnnAI RCM — rules for Claude Code
 
-KrisnAI RCM is an intelligence layer that sits above a medical practice's PM/EHR and clearinghouse. It reads claim data (837, 835, 999, 277CA, PM tables), finds revenue problems, and runs agents that rank, prepare and (only after proven gates) execute RCM work.
+KrisnnAI RCM is an intelligence layer that sits above a medical practice's PM/EHR and clearinghouse. It reads claim data (837, 835, 999, 277CA, PM tables), finds revenue problems, and runs agents that rank, prepare and (only after proven gates) execute RCM work.
 
 Strategy source: `docs/strategy_v5.docx` (internal). Build order: `docs/BUILD_PLAN.md`. Follow the plan one milestone at a time.
 
@@ -12,7 +12,7 @@ Strategy source: `docs/strategy_v5.docx` (internal). Build order: `docs/BUILD_PL
 
 ## Repo layout
 ```
-krisnai/
+krisnnai/
   ingest/        X12 parsers (837P, 835, 999, 277CA) and PM loaders
   model/         SQLAlchemy models for the minimal core data model
   match/         claim/remit/payment matching

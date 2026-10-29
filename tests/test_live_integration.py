@@ -9,10 +9,10 @@ from datetime import date
 
 import pytest
 
-from krisnai.live.coder import Coder, Policy
-from krisnai.live.emr import FakeEmr
-from krisnai.live.stream import StreamConfig, run_stream
-from krisnai.live.transcripts import generate_wide
+from krisnnai.live.coder import Coder, Policy
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.stream import StreamConfig, run_stream
+from krisnnai.live.transcripts import generate_wide
 
 DAY = date(2026, 10, 24)
 CODER = lambda: Coder(Policy(enabled=True, sample_rate=0.0))  # noqa: E731
@@ -66,7 +66,7 @@ def test_a_visit_note_with_therapy_is_a_modifier_question_for_a_coder():
 
 
 def test_a_bigger_catalog_is_read_from_the_same_catalog_the_generator_used():
-    from krisnai.live import catalog
+    from krisnnai.live import catalog
 
     assert len(catalog.CONDITIONS) >= 45 and len(catalog.SERVICES) >= 35
     named = sum(1 for v, r in coded(7, 150) if r.dx and v.expected.dx and r.dx[0][0] == v.expected.dx)
@@ -129,7 +129,7 @@ def test_being_right_handed_is_not_the_side_of_the_problem():
 
 
 def test_the_claim_carries_every_service_and_diagnosis_found_in_the_text_with_its_side(tmp_path):
-    from krisnai.live.transcripts import Visit
+    from krisnnai.live.transcripts import Visit
 
     v = Visit("VX", "MX", "typed_in", NOTE.format(side="left", side2="Left"), True, None, DAY)
     cfg = StreamConfig(count=1, seed=5, engine=False, bots=False, serve=False, sample_rate=0.0, tag="Z")
@@ -141,7 +141,7 @@ def test_the_claim_carries_every_service_and_diagnosis_found_in_the_text_with_it
 
 
 def test_a_visit_with_two_diagnoses_and_two_services_reaches_the_payer_with_all_of_them(tmp_path):
-    from krisnai.live.transcripts import Visit
+    from krisnnai.live.transcripts import Visit
 
     note = ("S: Established patient. Cough for two weeks, worse at night, with some fever.\nO: Lungs clear. Throat red.\nA: Cough.\n"
             "P: Chest x-ray to rule out pneumonia because of the persistent cough. Urinalysis because of the burning when I urinate. Return in a week.\n"

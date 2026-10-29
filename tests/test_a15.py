@@ -11,13 +11,13 @@ from openpyxl import load_workbook
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a15_lite import A15Config, G0Error, detect, format_scores, load_snapshot, run_a15
-from krisnai.agents.a15_lite.config import UNBILLED_VISIT
-from krisnai.ingest.loader import ingest_path
-from krisnai.match import run_matching
-from krisnai.model import Base, tenant_session
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a15_lite import A15Config, G0Error, detect, format_scores, load_snapshot, run_a15
+from krisnnai.agents.a15_lite.config import UNBILLED_VISIT
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.match import run_matching
+from krisnnai.model import Base, tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.tiny_book import Book
 from tests.test_ingest import SALT, make_engine
@@ -123,7 +123,7 @@ def test_g0_stops_the_report_when_totals_do_not_reconcile(tmp_path):
 def test_g0_fails_when_remits_are_not_matched_yet(tmp_path):
     ms.generate(tmp_path / "data", seed=5, n_claims=40)
     engine = make_engine(tmp_path / "u.sqlite")
-    ingest_path(engine, 1, tmp_path / "data", SALT)  # no `krisnai match`
+    ingest_path(engine, 1, tmp_path / "data", SALT)  # no `krisnnai match`
     with pytest.raises(G0Error, match="remit_match_rate"):
         run_a15(engine, 1, AS_OF, tmp_path / "out")
 

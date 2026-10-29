@@ -7,9 +7,9 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from krisnai.live import service
-from krisnai.live.emr import FakeEmr
-from krisnai.live.service import create_app, samples
+from krisnnai.live import service
+from krisnnai.live.emr import FakeEmr
+from krisnnai.live.service import create_app, samples
 
 
 def client(tmp_path, engine=False, **kw) -> TestClient:

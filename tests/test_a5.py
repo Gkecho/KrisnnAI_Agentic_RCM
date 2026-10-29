@@ -9,12 +9,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-import krisnai.model as m
-from krisnai import cli
-from krisnai.agents.a5_prevention import ACTION_TYPES, A5PreventionAgent, format_summary, seed_defaults, summarize
-from krisnai.engine import NO_ACTION, fingerprint, replay, run
-from krisnai.ingest.loader import ingest_path
-from krisnai.model import tenant_session
+import krisnnai.model as m
+from krisnnai import cli
+from krisnnai.agents.a5_prevention import ACTION_TYPES, A5PreventionAgent, format_summary, seed_defaults, summarize
+from krisnnai.engine import NO_ACTION, fingerprint, replay, run
+from krisnnai.ingest.loader import ingest_path
+from krisnnai.model import tenant_session
 from tests.fixtures import make_synthetic as ms
 from tests.fixtures.dummy_agent import SpyAdapter
 from tests.fixtures.tiny_book import Book

@@ -5,11 +5,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from krisnai.integrations.portal.bots import claim_status_bot
-from krisnai.knowledge.demo import PAYER, demo_book
-from krisnai.live.payer import PayerConfig, PayerSim
-from krisnai.live.world import LiveWorld
-from krisnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
+from krisnnai.integrations.portal.bots import claim_status_bot
+from krisnnai.knowledge.demo import PAYER, demo_book
+from krisnnai.live.payer import PayerConfig, PayerSim
+from krisnnai.live.world import LiveWorld
+from krisnnai.synthea.types import PayerInfo, Person, SimClaim, SimLine
 from tests.test_portal import PASSWORD, USER, driver_for
 
 FIXTURE = Path(__file__).parent / "fixtures" / "openemr_837p_synthetic.x12"
