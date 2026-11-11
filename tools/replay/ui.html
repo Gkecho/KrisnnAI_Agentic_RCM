@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KrisnnAI Replay</title>
+<style>
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --sunk:#eceef2; --ink:#14181f; --muted:#5d6675; --line:#dde1e8;
+  --accent:#3b5bdb; --accent-soft:#e7ecff; --ok:#1f9d57; --ok-soft:#e3f5ea; --warn:#c77700; --warn-soft:#fff2da; --bad:#d6336c; --bad-soft:#fde6ee;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1218; --surface:#171b23; --sunk:#1d222c; --ink:#e7eaf0; --muted:#98a2b3; --line:#2a303c;
+  --accent:#8ea2ff; --accent-soft:#222a4a; --ok:#4ad08a; --ok-soft:#14301f; --warn:#f0b24a; --warn-soft:#3a2c10; --bad:#ff7aa8; --bad-soft:#3d1626;}}
+:root[data-theme="dark"]{--bg:#0f1218; --surface:#171b23; --sunk:#1d222c; --ink:#e7eaf0; --muted:#98a2b3; --line:#2a303c;
+  --accent:#8ea2ff; --accent-soft:#222a4a; --ok:#4ad08a; --ok-soft:#14301f; --warn:#f0b24a; --warn-soft:#3a2c10; --bad:#ff7aa8; --bad-soft:#3d1626;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{font-weight:700;letter-spacing:.2px;font-size:17px}
+.brand small{font-weight:500;color:var(--muted);margin-left:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.run i{background:var(--ok);animation:pulse 1.2s infinite} .pill.pause i{background:var(--warn)} .pill.done i{background:var(--accent)}
+@keyframes pulse{50%{opacity:.35}}
+.clock{margin-left:auto;text-align:right}
+.clock b{font:700 26px/1 var(--mono);letter-spacing:-.5px;display:block}
+.clock span{color:var(--muted);font-size:12px}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,select{font:inherit;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{height:6px;background:var(--sunk);border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+main{padding:16px 20px 40px;display:grid;gap:16px;max-width:1500px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+h2{margin:0 0 10px;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:10px}
+.note{color:var(--muted);font-size:12px}
+.pipe{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.stage{background:var(--sunk);border-radius:10px;padding:10px;min-height:150px;position:relative}
+.stage h3{margin:0;font-size:12px;font-weight:600;color:var(--muted)}
+.stage .n{font:700 28px/1.1 var(--mono);margin:2px 0 6px}
+.stage.paid .n{color:var(--ok)} .stage.denied .n{color:var(--bad)} .stage.noresp .n{color:var(--warn)}
+.chips{display:flex;flex-direction:column;gap:3px}
+.chip{font:11px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:in .5s;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+@keyframes in{from{opacity:0;transform:translateY(-8px) scale(.96)}to{opacity:1;transform:none}}
+.stage .arrow{position:absolute;right:-9px;top:50%;color:var(--muted);font-size:14px;z-index:1}
+.grid2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.stage .arrow{display:none}.clock{margin-left:0;text-align:left}}
+.tabs{display:flex;gap:6px;margin-bottom:8px}
+.tab{padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+#feed{height:430px;overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.row{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:start;padding:6px 8px;border-radius:8px;background:var(--sunk);animation:in .4s;font-size:13px}
+.row.hist{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.row.human{background:transparent;border-left:3px solid var(--line);border-radius:0 8px 8px 0;color:var(--muted)}
+.badge{font:600 11px var(--mono);padding:2px 6px;border-radius:6px;color:#fff;text-align:center}
+.row .ms{font:11px var(--mono);color:var(--muted);white-space:nowrap}
+.row .amt{font-weight:600;white-space:nowrap}
+.row.denial{border-left:3px solid var(--bad)} .row.hold{border-left:3px solid var(--warn)} .row.win{border-left:3px solid var(--ok)} .row.learn{border-left:3px solid var(--accent)}
+.row[data-claim],.row[data-trace]{cursor:pointer}
+.row[data-trace]:hover{outline:1px solid var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-weight:600;color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line)} th:first-child,td:first-child{text-align:left}
+td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.last{text-align:left;color:var(--muted);max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.kpi div{background:var(--sunk);border-radius:10px;padding:10px}
+.kpi small{color:var(--muted);display:block;font-size:12px}
+.kpi b{font:700 20px var(--mono)}
+.tbl{display:grid;grid-template-columns:150px 1fr 70px 70px;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}
+.tbl code{font-family:var(--mono)} .tbl .bar{height:8px}
+.tbl .bar>i{background:var(--ok)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:16px 18px;max-width:560px;width:92vw}
+dialog::backdrop{background:#0008}
+dialog li{margin:6px 0}
+#trdlg{max-width:900px}
+.sec{border-top:1px solid var(--line);padding:10px 0}
+.sec h4{margin:0 0 6px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.rd{background:var(--sunk);border-radius:8px;padding:8px 10px;margin:6px 0}
+.rd pre{margin:6px 0;white-space:pre-wrap;word-break:break-word;font:12px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.col{display:inline-block;font:11px var(--mono);background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:1px 6px;margin:1px 2px 1px 0}
+.ok{color:var(--ok)} .no{color:var(--bad)}
+.kv{font:12px var(--mono);color:var(--ink)}
+.dbres{margin-top:6px;font:12px var(--mono)}
+.mini{font-size:12px;padding:3px 10px}
+.empty{color:var(--muted);padding:30px;text-align:center}
+.err{background:var(--bad-soft);color:var(--bad);padding:8px 12px;border-radius:8px;margin-bottom:8px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">KrisnnAI<small>Replay</small></div>
+  <span id="status" class="pill"><i></i><span>loading history…</span></span>
+  <span class="pill" title="Agents record decisions; nothing is sent to any payer or system">shadow mode</span>
+  <span class="pill" id="dbname">database</span>
+  <div class="ctl">
+    <button class="primary" id="run" disabled>Run</button>
+    <button id="pause" disabled>Pause</button>
+    <button id="stop" disabled>Stop</button>
+    <label class="note">Speed
+      <select id="speed">
+        <option value="0.5">0.5 days/sec</option><option value="1" selected>1 day/sec</option><option value="2">2 days/sec</option>
+        <option value="5">5 days/sec</option><option value="10">10 days/sec</option><option value="30">30 days/sec</option><option value="1000">Max</option>
+      </select></label>
+  </div>
+  <div class="clock"><b id="date">—</b><span id="dayno">press Run to replay the year</span></div>
+</header>
+<main>
+  <div class="err" id="err"></div>
+  <div class="bar"><i id="prog"></i></div>
+
+  <section class="card">
+    <h2><span>Claims moving through the practice</span><span class="note">history released day by day · click a claim for its timeline</span></h2>
+    <div class="pipe" id="pipe"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2><span>Live feed</span><span class="note" id="daysum"></span></h2>
+      <div class="tabs" id="tabs"><span class="tab on" data-f="all">Everything</span><span class="tab" data-f="agent">Agents only</span><span class="tab" data-f="hist">History only</span></div>
+      <div id="feed"><div class="empty">Nothing yet. Press Run: each day the history sends in its events and the agents decide.</div></div>
+    </section>
+    <section class="card">
+      <h2><span>The fifteen agents</span><span class="note">avg ms = real processing time per item</span></h2>
+      <table id="agents"><thead><tr><th>Agent</th><th>Decisions</th><th>Findings</th><th>Tasks</th><th>ms/item</th></tr></thead><tbody></tbody></table>
+    </section>
+  </div>
+
+  <div class="grid3">
+    <section class="card"><h2><span>Money the agents found</span></h2>
+      <div class="kpi">
+        <div><small>Detected</small><b id="vdet">$0</b></div><div><small>Confirmed by the payer's money</small><b id="vconf" style="color:var(--ok)">$0</b></div>
+        <div><small>Cash paid, not posted (pending)</small><b id="vpend">$0</b></div><div><small>Mirror: holds that were right</small><b id="mprec">—</b></div>
+        <div><small>Mirror: denials it caught</small><b id="mrec">—</b></div><div><small>Day compute</small><b id="dayms">—</b></div>
+      </div>
+      <p class="note" id="mnote"></p></section>
+    <section class="card"><h2><span>Process times</span></h2>
+      <div class="kpi">
+        <div><small>Visit to charge entered</small><b id="clag">—</b></div><div><small>Submitted to payer answer</small><b id="crem">—</b></div>
+      </div>
+      <p class="note" style="margin:10px 0 4px">Median days for people to finish an agent's task</p>
+      <div id="taskdays" class="note">—</div></section>
+    <section class="card"><h2><span>Agent tables filling in Postgres</span><span class="note" id="dbnote"></span></h2>
+      <div id="tables"></div></section>
+  </div>
+</main>
+<section class="card" style="margin:0 20px 40px"><h2><span>Claim log: export to Excel</span><span class="note">every decision, trigger, query, rule and reason, per claim, from this replay</span></h2>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <label class="note">Pick the period by<br><select id="xbasis"><option value="service">Date of service</option><option value="transaction">Transaction date (ledger or payer event)</option><option value="activity">Date the agent decided</option></select></label>
+    <label class="note">From<br><input type="date" id="xstart" value="2025-11-01"></label><label class="note">To<br><input type="date" id="xend" value="2026-11-02"></label>
+    <label class="note">Payer<br><select id="fpayer"><option value="">All</option></select></label><label class="note">Provider<br><select id="fprovider"><option value="">All</option></select></label>
+    <label class="note">Facility<br><select id="ffacility"><option value="">All</option></select></label><label class="note">Specialty<br><select id="fspecialty"><option value="">All</option></select></label>
+    <label class="note">Practice<br><select id="fpractice"><option value="">All</option></select></label><label class="note"><input type="checkbox" id="xtouched" checked> only claims an agent touched</label>
+    <button class="primary" id="xgo">Download Excel</button></div></section>
+<dialog id="trdlg"><div id="trbody"></div><p style="text-align:right"><button id="trclose">Close</button></p></dialog>
+<dialog id="dlg"><div id="dlgbody"></div><p style="text-align:right"><button id="dlgclose">Close</button></p></dialog>
+
+<script>
+const NAMES={A1:'Gatekeeper',A2:'Permit Clerk',A3:'Note Chaser',A4:'Code Whisperer',A5:'Mirror',A6:'Courier',A7:'Hunter',A8:'Advocate',A9:'Coach',A10:'Auditor',A11:'Bookkeeper',A12:'Concierge',A13:'Credentialing',A14:'Captain',A15:'Detective'};
+const TABLES=['agent_run','agent_decision','agent_decision_details','agent_finding','agent_task','agent_approval','agent_writeback','agent_value','agent_forecast','payer_rule','patient_statement'];
+const STAGES=[['visit','Visit done','waiting to charge'],['charged','Charged','ready to bill'],['submitted','Submitted','to the clearinghouse'],['accepted','Accepted','waiting on the payer'],['paid','Paid',''],['denied','Denied / short-paid','needs work'],['noresp','No response','Hunter flagged']];
+const $=s=>document.querySelector(s);
+const color=a=>`hsl(${(parseInt(a.slice(1))*47)%360} 55% 42%)`;
+const money=v=>'$'+Math.round(v).toLocaleString();
+let filt='all',speed=1,status='loading',queue=[],playing=false,lastTotal=0;
+const chipsByStage={};
+
+// ---- build static parts
+$('#pipe').innerHTML=STAGES.map((s,i)=>`<div class="stage ${s[0]}" id="st-${s[0]}"><h3>${s[1]}</h3><div class="n" id="n-${s[0]}">0</div><div class="note">${s[2]}</div><div class="chips" id="c-${s[0]}"></div>${i<STAGES.length-1&&i<4?'<span class="arrow">›</span>':''}</div>`).join('');
+$('#agents tbody').innerHTML=Object.keys(NAMES).map(a=>`<tr id="ag-${a}"><td><span class="badge" style="background:${color(a)}">${a}</span> ${NAMES[a]}</td><td id="ad-${a}">0</td><td id="af-${a}">0</td><td id="at-${a}">0</td><td id="am-${a}">—</td></tr>`).join('')
+ +'<tr><td colspan="5" class="last" id="lastline"></td></tr>';
+$('#tables').innerHTML=TABLES.map(t=>`<div class="tbl"><code>${t}</code><div class="bar"><i id="tb-${t}"></i></div><span id="tq-${t}">0</span><span id="tw-${t}" class="note">0 in db</span></div>`).join('');
+
+// ---- controls
+function setStatus(s){
+  status=s; const p=$('#status'); p.className='pill '+({running:'run',paused:'pause',finished:'done'}[s]||'');
+  p.lastChild.textContent={loading:'reading the history…',idle:'ready',preparing:'clearing agent tables…',running:'replaying',paused:'paused',finished:'finished',stopped:'stopped'}[s]||s;
+  const live=['running','paused','preparing'].includes(s);
+  $('#run').disabled=live||s==='loading'; $('#pause').disabled=!(s==='running'||s==='paused'); $('#stop').disabled=!live;
+  $('#pause').textContent=s==='paused'?'Resume':'Pause';
+}
+async function post(u,b){return fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})})}
+$('#run').onclick=async()=>{ $('#err').style.display='none'; resetUI(); const r=await post('/api/run',{speed:+$('#speed').value}); if(!r.ok){const j=await r.json();showErr(j.detail||'could not start')} };
+$('#pause').onclick=()=>post(status==='paused'?'/api/resume':'/api/pause');
+$('#stop').onclick=()=>post('/api/stop');
+$('#speed').onchange=()=>{speed=+$('#speed').value;post('/api/speed',{speed})};
+$('#tabs').onclick=e=>{const t=e.target.closest('.tab');if(!t)return;filt=t.dataset.f;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));document.querySelectorAll('#feed .row').forEach(applyFilter)};
+$('#dlgclose').onclick=()=>$('#dlg').close();
+$('#xgo').onclick=()=>{window.location=`/api/export?basis=${$('#xbasis').value}&start=${$('#xstart').value}&end=${$('#xend').value}&touched=${$('#xtouched').checked?1:0}&payer=${$('#fpayer').value}&provider=${$('#fprovider').value}&facility=${$('#ffacility').value}&specialty=${$('#fspecialty').value}&practice=${$('#fpractice').value}`};
+fetch('/api/filters').then(r=>r.json()).then(f=>{[['fpayer','payers'],['fprovider','providers'],['ffacility','facilities'],['fspecialty','specialties'],['fpractice','practices']].forEach(([id,k])=>{$('#'+id).innerHTML+=(f[k]||[]).map(x=>`<option value="${x.id}">${x.name}</option>`).join('')})}).catch(()=>{});
+$('#trclose').onclick=()=>$('#trdlg').close();
+function showErr(m){const e=$('#err');e.textContent=m;e.style.display='block'}
+function resetUI(){$('#feed').innerHTML='';queue=[];Object.keys(NAMES).forEach(a=>{['ad','af','at'].forEach(p=>$('#'+p+'-'+a).textContent='0');$('#am-'+a).textContent='—'});TABLES.forEach(t=>{$('#tq-'+t).textContent='0';$('#tb-'+t).style.width='0'});['vdet','vconf','vpend'].forEach(i=>$('#'+i).textContent='$0');['mprec','mrec','clag','crem','dayms'].forEach(i=>$('#'+i).textContent='—');$('#taskdays').textContent='—';$('#date').textContent='—';$('#dayno').textContent='clearing the agent tables, then replaying…';STAGES.forEach(s=>{$('#c-'+s[0]).innerHTML='';$('#n-'+s[0]).textContent=0});$('#prog').style.width='0'}
+
+// ---- feed
+function applyFilter(r){const k=r.dataset.k;r.style.display=(filt==='all'||(filt==='agent'&&k!=='hist')||(filt==='hist'&&k==='hist'))?'':'none'}
+function addRow(it){
+  const f=$('#feed'); if(f.querySelector('.empty'))f.innerHTML='';
+  const r=document.createElement('div');
+  const isAgent=!!it.a; const k=isAgent?(it.kind==='human'?'human':it.kind):'hist';
+  r.className='row '+(isAgent?(it.kind||''):'hist'); r.dataset.k=isAgent?'agent':'hist';
+  if(it.claim)r.dataset.claim=it.claim;
+  r.innerHTML=isAgent?`<span class="badge" style="background:${color(it.a)}" title="${NAMES[it.a]}">${it.a}</span><span>${esc(it.txt)}</span><span>${it.amt?`<span class="amt">${money(it.amt)}</span> `:''}${it.ms?`<span class="ms">${it.ms} ms</span>`:''}</span>`
+   :`<span class="note">${it.k||''}</span><span>${esc(it.txt)}</span><span></span>`;
+  if(it.trace)r.dataset.trace=it.trace;
+  r.onclick=()=>it.trace?openTrace(it.trace):(it.claim&&openClaim(it.claim));
+  applyFilter(r); f.appendChild(r); while(f.children.length>260)f.removeChild(f.firstChild); f.scrollTop=f.scrollHeight;
+}
+const J=v=>typeof v==='object'?JSON.stringify(v):String(v);
+function same(logged,cols,rows){ if(!rows.length)return false; const row=Object.fromEntries(cols.map((c,i)=>[c,rows[0][i]]));
+  if(logged&&typeof logged==='object'&&!Array.isArray(logged)){ return Object.keys(logged).every(k=>!(k in row)||Math.abs(+logged[k]-+row[k])<0.005||String(logged[k])===String(row[k])||logged[k]===null&&row[k]===null) }
+  return String(logged)===String(rows[0][0]) }
+async function openTrace(id){
+  const t=await (await fetch('/api/trace/'+id)).json();
+  const reads=t.reads.map((r,i)=>`<div class="rd"><div><b style="font-weight:600">${esc(r.table)}</b> ${r.cols.map(c=>`<span class="col">${esc(c)}</span>`).join('')} <span class="note">· ${r.rows} row${r.rows==1?'':'s'}</span></div>
+    <pre>${esc(r.sql)}</pre><div class="note">parameters: ${esc(J(r.params))}</div>
+    <div class="kv">answer it got: ${esc(J(r.result))}</div><div class="note">${esc(r.why)}</div>
+    ${r.runnable?`<button class="mini" data-run="${i}">Run this query on the database</button><div class="dbres" id="dbres-${i}"></div>`:'<div class="note">Computed inside the engine from rows already read above (no single SQL statement).</div>'}</div>`).join('')||'<p class="note">This evaluation read no further tables.</p>';
+  const rules=t.rules.map(x=>`<tr><td>${esc(x.rule)}</td><td class="${x.result==='pass'?'ok':'no'}">${x.result==='pass'?'✓ pass':'✗ fail'}</td><td>${esc(x.observed)}</td><td>${esc(x.expected)}</td><td>${x.payer_rule_id?'rule #'+x.payer_rule_id:'built in'}</td></tr>`).join('');
+  const c=t.creates;
+  $('#trbody').innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${color(t.agent)}">${t.agent}</span><b>${esc(t.agent_name)}</b><span class="note">${esc(t.decision_type)} · ${t.date} · decision #${t.id} · shadow mode</span><span class="pill" style="margin-left:auto">${t.ms} ms</span></div>
+   <div class="sec"><h4>1 · What triggered it</h4>${esc(t.trigger)}</div>
+   <div class="sec"><h4>2 · What it read: ${t.tables_read.length} table${t.tables_read.length==1?'':'s'}, ${t.columns_read.length} columns</h4>${reads}</div>
+   <div class="sec"><h4>3 · Rules it checked</h4><table><thead><tr><th>Rule</th><th>Result</th><th>Observed</th><th>Expected</th><th>Source</th></tr></thead><tbody>${rules}</tbody></table></div>
+   <div class="sec"><h4>4 · Its answer</h4><b style="font-weight:600">${esc(t.outcome)}</b> · ${esc(t.answer)}<div class="note">confidence ${t.confidence} · ${t.amount?money(t.amount)+' at stake':'no dollars at stake'}</div></div>
+   <div class="sec"><h4>5 · What it wrote</h4><span class="kv">agent_decision #${t.id}${c.finding?` · agent_finding #${c.finding}`:''}${c.task?` · agent_task #${c.task}`:''}${c.values?` · agent_value ×${c.values}`:''}${c.approval?' · agent_approval (when a person acts)':''}${c.writeback?' · agent_writeback (suppressed in shadow mode)':''}</span></div>
+   <div class="sec"><h4>6 · Why it moved on</h4>${esc(t.handoff)}</div>
+   <p class="note">Logged to <code>${esc(t.log_file||'(not logged)')}</code>. The SQL is the equivalent statement on the canonical tables; the engine read these rows from its in-memory copy of them, and the button re-runs the same statement on Postgres for comparison.</p>`;
+  $('#trbody').querySelectorAll('[data-run]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.run; const out=$('#dbres-'+i); out.textContent='running…';
+    const r=await fetch(`/api/trace/${id}/run/${i}`,{method:'POST'}); if(!r.ok){out.textContent=(await r.json()).detail;return}
+    const j=await r.json(); const ok=same(t.reads[i].result,j.columns,j.rows);
+    out.innerHTML=`<span class="${ok?'ok':'no'}">${ok?'✓ the database returns the same answer':'✗ differs from what the agent saw'}</span> · ${j.rows.length} row(s) from ${j.db}<br>${j.rows.slice(0,6).map(r=>esc(JSON.stringify(Object.fromEntries(j.columns.map((c,k)=>[c,r[k]]))))).join('<br>')}`});
+  $('#trdlg').showModal();
+}
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+async function openClaim(id){
+  const j=await (await fetch('/api/claim/'+id)).json();
+  $('#dlgbody').innerHTML=`<h3 style="margin:0 0 4px">${j.claim}</h3><p class="note" style="margin:0 0 8px">${j.payer}</p><ul style="padding-left:18px;margin:0">`+
+   j.events.map(e=>`<li><span class="note">${e.date}</span> · <b style="font-weight:600">${esc(e.who)}</b>: ${esc(e.text)}</li>`).join('')+'</ul>';
+  $('#dlg').showModal();
+}
+
+// ---- playback of one day's packet
+function pushChip(stage,txt,claim){
+  const c=$('#c-'+stage); if(!c)return; const d=document.createElement('div'); d.className='chip'; d.textContent=txt; if(claim)d.onclick=()=>openClaim(claim);
+  c.prepend(d); while(c.children.length>4)c.removeChild(c.lastChild);
+}
+const KSTAGE={visit:'visit',charged:'charged',submitted:'submitted',accepted:'accepted',paid:'paid',denied:'denied',rejected:'submitted'};
+function applyPacket(p){
+  $('#date').textContent=p.date; $('#dayno').textContent=`day ${p.day_no} of ${p.total_days}`; $('#prog').style.width=(p.day_no/p.total_days*100)+'%';
+  STAGES.forEach(s=>$('#n-'+s[0]).textContent=(p.board[s[0]]||0).toLocaleString());
+  for(const a in p.stats){const s=p.stats[a];$('#ad-'+a).textContent=s.dec.toLocaleString();$('#af-'+a).textContent=s.find.toLocaleString();$('#at-'+a).textContent=s.tasks.toLocaleString();$('#am-'+a).textContent=s.avg_ms?s.avg_ms.toFixed(2):'—'}
+  const last=Object.entries(p.stats).filter(([a,s])=>s.last).slice(-1);
+  $('#vdet').textContent=money(p.value.detected);$('#vconf').textContent=money(p.value.confirmed);$('#vpend').textContent=money(p.value.pending);
+  const m=p.mirror,pr=m.tp+m.fp,rc=m.tp+m.fn;
+  $('#mprec').textContent=pr?Math.round(m.tp/pr*100)+'%':'—';$('#mrec').textContent=rc?Math.round(m.tp/rc*100)+'%':'—';
+  $('#mnote').textContent=`Mirror held ${pr} claims (${m.tp} later denied) and missed ${m.fn} denials. Rules it learns apply only from their approval date.`;
+  $('#dayms').textContent=p.day_ms+' ms';
+  $('#clag').textContent=p.cycle.charge_lag==null?'—':p.cycle.charge_lag+' days';$('#crem').textContent=p.cycle.remit_days==null?'—':p.cycle.remit_days+' days';
+  $('#taskdays').innerHTML=Object.entries(p.cycle.task_days).sort((a,b)=>parseInt(a[0].slice(1))-parseInt(b[0].slice(1))).map(([a,v])=>`<span class="badge" style="background:${color(a)}">${a}</span> ${v}d`).join(' &nbsp; ')||'—';
+  const mx=Math.max(1,...TABLES.map(t=>p.tables[t]||0));
+  TABLES.forEach(t=>{$('#tq-'+t).textContent=(p.tables[t]||0).toLocaleString();$('#tb-'+t).style.width=((p.tables[t]||0)/mx*100)+'%'});
+  $('#daysum').textContent=`today: ${p.wc.visits||0} visits · ${p.wc.submitted||0} claims out · ${(p.wc.paid||0)+(p.wc.denied||0)} answers back · ${p.agents_total} agent actions`;
+  // feed items: interleave history and agent reactions
+  const items=[]; const w=p.world.slice(),a=p.agents.slice();
+  while(w.length||a.length){ if(w.length)items.push(w.shift()); if(a.length)items.push(a.shift()); if(a.length)items.push(a.shift()); }
+  items.forEach(it=>{ if(!it.a&&it.claim&&KSTAGE[it.k])pushChip(KSTAGE[it.k],(it.txt.match(/CLM-\d+/)||[it.txt.slice(0,18)])[0],it.claim); if(it.a&&it.claim&&it.kind==='denial')pushChip('denied',(it.txt.match(/CLM-\d+/)||[''])[0],it.claim) });
+  return items;
+}
+function play(){
+  if(playing)return; playing=true;
+  (function step(){
+    const p=queue.shift(); if(!p){playing=false;return}
+    const items=applyPacket(p);
+    const fast=speed>=10, tick=Math.max(60,1000/speed*.85);
+    const shown=fast?items.slice(-12):items;
+    const gap=Math.min(160,tick/Math.max(1,shown.length));
+    shown.forEach((it,i)=>setTimeout(()=>addRow(it),i*gap));
+    const wait=fast?Math.max(30,1000/speed):1000/speed;
+    setTimeout(step,Math.max(30,Math.min(wait,queue.length>6?30:wait)));
+  })();
+}
+
+// ---- live connection
+function connect(){
+  const es=new EventSource('/api/stream');
+  es.onmessage=e=>{const p=JSON.parse(e.data);
+    if(p.type==='status'){setStatus(p.status); if(p.db)$('#dbname').textContent='db: '+p.db; if(p.written)updDb(p.written)}
+    else if(p.type==='day'){queue.push(p);play();}
+    else if(p.type==='error'){showErr(p.msg)}};
+  es.onerror=()=>setStatus('loading');
+}
+async function updDb(){ try{const j=await (await fetch('/api/dbcounts')).json(); $('#dbname').textContent='db: '+j.db; TABLES.forEach(t=>$('#tw-'+t).textContent=(j.counts[t]||0).toLocaleString()+' in db'); $('#dbnote').textContent='checked '+new Date().toLocaleTimeString()}catch(e){} }
+setInterval(()=>{if(['running','paused','finished','stopped'].includes(status))updDb()},4000);
+fetch('/api/state').then(r=>r.json()).then(s=>{setStatus(s.status); if(s.db)$('#dbname').textContent='db: '+s.db;});
+connect();
+{const tp=new URLSearchParams(location.search).get('trace'); if(tp)setTimeout(()=>openTrace(+tp),700);}   // /?trace=749 opens one decision's trace directly
+</script>
+</body>
+</html>

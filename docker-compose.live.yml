@@ -1,0 +1,21 @@
+# Local PostgreSQL for the live simulation (synthetic data only, never real PHI).
+# Start it with:  python tools/live/setup_db.py        (creates .env.live with a generated password on first run)
+# Connect with pgAdmin or psql: host 127.0.0.1 · port 15432 · user postgres · database krisnnai_live · password in .env.live
+name: krisnnai-live
+services:
+  db:
+    image: postgres:16
+    container_name: krisnnai-live-pg
+    environment:
+      POSTGRES_PASSWORD: ${LIVE_PG_PASSWORD:?run tools/live/setup_db.py to create .env.live}
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - krisnnai_live_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  krisnnai_live_data:

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KrisnnAI Live</title>
+<style>
+:root{
+  --bg:#f4f5f7; --surface:#fff; --sunk:#eceef2; --ink:#14181f; --muted:#5d6675; --line:#dde1e8;
+  --accent:#3b5bdb; --accent-soft:#e7ecff; --ok:#1f9d57; --ok-soft:#e3f5ea; --warn:#c77700; --warn-soft:#fff2da; --bad:#d6336c; --bad-soft:#fde6ee;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1218; --surface:#171b23; --sunk:#1d222c; --ink:#e7eaf0; --muted:#98a2b3; --line:#2a303c;
+  --accent:#8ea2ff; --accent-soft:#222a4a; --ok:#4ad08a; --ok-soft:#14301f; --warn:#f0b24a; --warn-soft:#3a2c10; --bad:#ff7aa8; --bad-soft:#3d1626;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+header{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{font-weight:700;font-size:17px}.brand small{font-weight:500;color:var(--muted);margin-left:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)} .pill.run i{background:var(--ok);animation:pulse 1.2s infinite} .pill.pause i{background:var(--warn)}
+@keyframes pulse{50%{opacity:.35}}
+.clock{margin-left:auto;text-align:right}.clock b{font:700 24px/1 var(--mono);display:block}.clock span{color:var(--muted);font-size:12px}
+button,select{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.act{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+button.quiet{color:var(--muted)} button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding:14px 20px 40px;display:grid;gap:14px;max-width:1600px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+h2{margin:0 0 8px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.note{color:var(--muted);font-size:12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--sunk);border-radius:10px;padding:9px 12px}.tile small{color:var(--muted);display:block;font-size:12px}.tile b{font:700 21px var(--mono)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.05fr);gap:14px;align-items:start}
+@media (max-width:1150px){.cols{grid-template-columns:1fr}}
+.scroll{height:520px;overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:5px 8px;border-radius:8px;background:var(--sunk);font-size:13px;animation:in .35s}
+@keyframes in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.row.w{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.row.hold{border-left:3px solid var(--warn)}.row.denial{border-left:3px solid var(--bad)}.row.win{border-left:3px solid var(--ok)}.row.learn{border-left:3px solid var(--accent)}
+.row.human{background:var(--ok-soft)} .row.err{background:var(--bad-soft);color:var(--bad)}
+.row[data-dec],.row[data-claim]{cursor:pointer}.row[data-dec]:hover,.row[data-claim]:hover{outline:1px solid var(--accent)}
+.t{font:11px var(--mono);color:var(--muted);white-space:nowrap}
+.badge{font:600 11px var(--mono);padding:2px 6px;border-radius:6px;color:#fff;text-align:center}
+.amt{font-weight:600;white-space:nowrap}.ms{font:11px var(--mono);color:var(--muted)}
+.agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:10px}
+.ag{background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:12px}
+.ag b{font-size:13px}.ag .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:5px}.ag.poll .dot{background:var(--ok);animation:pulse .6s infinite}
+.ag .last{color:var(--muted);height:30px;overflow:hidden;margin-top:3px}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}.tab{padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);cursor:pointer;color:var(--muted);background:var(--surface)}
+.tab.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}.tab .n{font:600 11px var(--mono);margin-left:4px}
+.task{background:var(--sunk);border-radius:10px;padding:9px 11px;border-left:3px solid var(--line)}.task.hi{border-left-color:var(--bad)}.task.md{border-left-color:var(--warn)}
+.task h4{margin:0 0 2px;font-size:13px;font-weight:600}.task .why{color:var(--muted);font-size:12px;margin:2px 0 6px}.task .btns{display:flex;gap:6px;flex-wrap:wrap}
+.chaos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.chaos button{text-align:left;padding:8px 10px}.chaos small{display:block;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:16px 18px;max-width:900px;width:94vw}dialog::backdrop{background:#0008}
+.sec{border-top:1px solid var(--line);padding:9px 0}.sec h4{margin:0 0 6px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.rd{background:var(--sunk);border-radius:8px;padding:8px 10px;margin:6px 0}.rd pre{margin:6px 0;white-space:pre-wrap;word-break:break-word;font:12px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.col{display:inline-block;font:11px var(--mono);background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:1px 6px;margin:1px 2px 1px 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th{font-weight:600;color:var(--muted);text-align:left;padding:3px 6px;border-bottom:1px solid var(--line)}td{padding:3px 6px;border-bottom:1px solid var(--line)}
+.ok{color:var(--ok)}.no{color:var(--bad)}.kv{font:12px var(--mono)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;display:none;z-index:9;max-width:80vw}
+.empty{color:var(--muted);padding:24px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">KrisnnAI<small>Live</small></div>
+  <span id="status" class="pill"><i></i><span>starting…</span></span>
+  <span class="pill" title="Agents record and advise; nothing is sent to any payer or system">shadow mode</span>
+  <span class="pill" id="mirrorpill" title="When on, Mirror's holds stop a claim until a person acts (level L2)">Mirror: advises only</span>
+  <button class="primary" id="start" disabled>Start</button>
+  <button id="pause" disabled>Pause</button>
+  <label class="note">Speed <select id="rate">
+    <option value="1440" selected>1 day = 60 s</option><option value="3600">1 day = 24 s</option><option value="7200">1 day = 12 s</option><option value="14400">1 day = 6 s</option><option value="28800">1 day = 3 s</option>
+  </select></label>
+  <button class="quiet" id="reset" title="Throws away everything that happened and starts again from the same morning">Reset world</button>
+  <div class="clock"><b id="simtime">—</b><span id="simsub">press Start</span></div>
+</header>
+<main>
+  <section class="card"><h2><span>The agent and bot workflow, as designed</span><span class="note">an agent glows when it acts · connectors flash when work moves · numbers are live from Postgres</span></h2>
+    <iframe id="flow" src="/flow" title="Agent and bot workflow" style="width:100%;height:830px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
+    <p class="note">Blue flashes show work moving inside the practice's data. An amber flash on a connector to the outside world means an agent found the database could not answer and an outside call was justified (never sent in shadow mode). Dimmed agents (Gatekeeper, Permit Clerk, Code Whisperer, Bookkeeper) are not running in this live slice. Coach (A9) learns payer rules and is shown in the agent cards below, because the original diagram does not draw it.</p></section>
+  <section class="card"><div class="tiles" id="tiles"></div></section>
+
+  <div class="cols">
+    <section class="card"><h2><span>The practice</span><span class="note">what is really happening</span></h2><div class="scroll" id="world"><div class="empty">Press Start. Visits, notes, charges, claims and payer answers will appear here as the clock runs.</div></div></section>
+
+    <section class="card"><h2><span>The agents (live workers)</span><span class="note">click a line for its trace</span></h2>
+      <div class="agents" id="agents"></div>
+      <div class="scroll" id="agentfeed" style="height:370px"><div class="empty">Each agent polls the database on its own. Their decisions appear here.</div></div></section>
+
+    <section class="card"><h2><span>Your inbox</span><span class="note">you are the people</span></h2>
+      <div class="tabs" id="roles"></div><div class="scroll" id="inbox"></div>
+      <p class="note">Routine tasks left more than 7 simulated days are picked up by a staff bot (rule approvals never are), so the practice never stalls.</p></section>
+  </div>
+
+  <section class="card"><h2><span>Claim log: export to Excel, or follow one claim live</span><span class="note">every decision, trigger, query, rule and reason, per claim</span></h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label class="note">Pick the period by<br><select id="xbasis"><option value="service">Date of service</option><option value="transaction">Transaction date (ledger or payer event)</option><option value="activity">Date the agent decided</option></select></label>
+      <label class="note">From<br><input type="date" id="xstart"></label><label class="note">To<br><input type="date" id="xend"></label>
+      <label class="note">Payer<br><select id="fpayer"><option value="">All</option></select></label><label class="note">Provider<br><select id="fprovider"><option value="">All</option></select></label>
+      <label class="note">Facility<br><select id="ffacility"><option value="">All</option></select></label><label class="note">Specialty<br><select id="fspecialty"><option value="">All</option></select></label>
+      <label class="note">Practice<br><select id="fpractice"><option value="">All</option></select></label>
+      <label class="note"><input type="checkbox" id="xtouched" checked> only claims an agent touched</label>
+      <button class="act" id="xgo">Download Excel</button><span class="note" id="xinfo"></span>
+      <span style="margin-left:auto"></span>
+      <label class="note">Follow a claim<br><input type="text" id="xclaim" placeholder="e.g. CLM-L11805" size="16"></label><button id="xfollow">Follow it live</button>
+    </div></section>
+
+  <section class="card"><h2><span>How well the agents do, by group</span><span class="note">uses the period and filters above · compare payers, providers, facilities, specialties</span></h2>
+    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><label class="note">Group by<br><select id="pdim"><option value="payer">Payer</option><option value="provider">Provider</option><option value="facility">Facility</option><option value="specialty">Specialty</option><option value="practice">Practice</option><option value="all">All claims</option></select></label>
+      <span class="note" id="pinfo"></span></div>
+    <div style="overflow:auto"><table id="ptable"></table></div>
+    <h2 style="margin-top:12px"><span>The claims behind those groups</span></h2><div style="overflow:auto"><table id="otable"></table></div></section>
+
+  <section class="card"><h2><span>Break something on purpose</span><span class="note">then watch the agents find it</span></h2>
+    <div class="chaos" id="chaos"></div></section>
+</main>
+<dialog id="trdlg"><div id="trbody"></div><p style="text-align:right"><button id="trclose">Close</button></p></dialog>
+<dialog id="cldlg"><div id="clbody"></div><p style="text-align:right"><button id="clclose">Close</button></p></dialog>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const money=v=>'$'+Math.round(v||0).toLocaleString();
+const color=a=>`hsl(${(parseInt(a.slice(1))*47)%360} 55% 42%)`;
+const ROLES=[['biller','Biller'],['ar_specialist','AR specialist'],['denial_specialist','Denial specialist'],['billing_lead','Billing lead'],['manager','Manager'],['front_desk','Front desk'],['coder','Coder']];
+const LABEL={chase_provider:'Chase the provider',release_as_is:'Release as it is',correct_and_resubmit:'Correct and resubmit',resubmit:'Resubmit to the payer',close:'Close it',send_appeal:'Send the appeal',accept_denial:'Accept the denial',
+  send_dispute:'Send the dispute',dismiss:'Dismiss',approve_rule:'Approve the rule',reject_rule:'Reject it'};
+const FIX={attach_poc:'Attach the plan of care, then release',add_xu:'Add modifier XU, then release',extend_auth:'Get more visits approved, then release',none:'Release (nothing to fix)'};
+const CHAOS=[['end_coverage','End a patient’s coverage','A patient with a visit this week loses their insurance'],['bcbs_underpay','BCBS underpays manual therapy','Blue Cross starts paying 80% of the contract on 97140'],
+  ['uhc_poc','UnitedHealthcare tightens','Wants a plan of care from visit 10 instead of 13'],['aetna_xu','Aetna enforces a modifier','Distinct-service modifier required on 97530 with 97140'],
+  ['stall_payer','Cigna stops answering','Claims to Cigna go quiet'],['provider_slow','Dr. Okafor stops signing notes','Notes pile up unsigned'],['mirror_enforce','Let Mirror hold claims','Toggle: a held claim waits for a person (level L2)']];
+let role='biller',started=false,counts={};
+$('#chaos').innerHTML=CHAOS.map(c=>`<button data-k="${c[0]}"><b>${c[1]}</b><small>${c[2]}</small></button>`).join('');
+$('#chaos').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const r=await (await fetch('/api/chaos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:b.dataset.k})})).json();toast(r.msg)};
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});
+$('#start').onclick=async()=>{await post('/api/start');};
+$('#pause').onclick=()=>post('/api/pause');
+$('#rate').onchange=()=>post('/api/rate',{rate:+$('#rate').value});
+$('#reset').onclick=async()=>{if(!confirm('Throw away everything that happened and start again from the same morning?'))return;await post('/api/reset');$('#world').innerHTML='';$('#agentfeed').innerHTML='';toast('Resetting the world (about 10 seconds)…')};
+$('#trclose').onclick=()=>$('#trdlg').close();$('#clclose').onclick=()=>{$('#cldlg').close()};
+$('#cldlg').addEventListener('close',()=>{clearInterval(followTimer);followTimer=null});
+let followTimer=null;
+function xq(){return `basis=${$('#xbasis').value}&start=${$('#xstart').value}&end=${$('#xend').value}&touched=${$('#xtouched').checked?1:0}&payer=${$('#fpayer').value}&provider=${$('#fprovider').value}&facility=${$('#ffacility').value}&specialty=${$('#fspecialty').value}&practice=${$('#fpractice').value}`}
+async function xprev(){try{const j=await (await fetch('/api/export_preview?'+xq())).json();$('#xinfo').textContent=`${j.claims.toLocaleString()} claims between ${j.start} and ${j.end}`;if(!$('#xstart').value){$('#xstart').value=j.start;$('#xend').value=j.end}}catch(e){}}
+['xbasis','xstart','xend','xtouched','fpayer','fprovider','ffacility','fspecialty','fpractice'].forEach(i=>$('#'+i).addEventListener('change',()=>{xprev();perf()}));setTimeout(xprev,1500);setInterval(xprev,15000);
+fetch('/api/filters').then(r=>r.json()).then(f=>{[['fpayer','payers'],['fprovider','providers'],['ffacility','facilities'],['fspecialty','specialties'],['fpractice','practices']].forEach(([id,k])=>{$('#'+id).innerHTML+=(f[k]||[]).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')})}).catch(()=>{});
+$('#xgo').onclick=()=>{toast('Building the workbook… large periods take a few seconds');window.location='/api/export?'+xq()};
+$('#xfollow').onclick=async()=>{const q=$('#xclaim').value.trim();if(!q)return;const r=await (await fetch('/api/claim_lookup?q='+encodeURIComponent(q))).json();if(!r.length)return toast('No claim matches that number');openClaim(r[0].claim_id)};
+
+// ---- feeds
+function row(host,cls,left,mid,right,attrs={}){const r=document.createElement('div');r.className='row '+cls;r.innerHTML=`<span>${left}</span><span>${mid}</span><span>${right}</span>`;Object.entries(attrs).forEach(([k,v])=>r.dataset[k]=v);
+  if(attrs.dec)r.onclick=()=>openTrace(attrs.dec);else if(attrs.claim)r.onclick=()=>openClaim(attrs.claim);
+  const f=$(host);if(f.querySelector('.empty'))f.innerHTML='';const stick=f.scrollTop+f.clientHeight>=f.scrollHeight-40;f.appendChild(r);while(f.children.length>240)f.removeChild(f.firstChild);if(stick)f.scrollTop=f.scrollHeight}
+function addWorld(w){const human=w.kind==='human',err=w.kind==='error';
+  row('#world',human?'human':err?'err':'w',`<span class="t">${(w.t||'').slice(5,16).replace('T',' ')}</span>`,esc(w.text),w.amount?`<span class="amt">${money(w.amount)}</span>`:'',w.claim?{claim:w.claim}:{})}
+function addAgent(a){row('#agentfeed',a.kind||'',`<span class="badge" style="background:${color(a.a)}" title="${esc(a.name)}">${a.a}</span>`,esc(a.txt),`${a.out?'<span class="amt" style="color:var(--warn)" title="the database could not answer; an outside call was justified (not sent: shadow mode)">↗ outside</span> ':''}${a.amt?`<span class="amt">${money(a.amt)}</span> `:''}${a.ms?`<span class="ms">${a.ms} ms</span>`:''}`,a.dec?{dec:a.dec,claim:a.claim||''}:(a.claim?{claim:a.claim}:{}))}
+
+// ---- live connection
+function connect(){const es=new EventSource('/api/stream');
+  es.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type!=='batch')return;
+    const d=new Date(m.sim);$('#simtime').textContent=d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    $('#simsub').textContent=m.paused?'paused':'simulated time · '+(m.rate/3600).toFixed(1)+' h per second';
+    const st=$('#status');st.className='pill '+(m.paused?'pause':'run');st.lastChild.textContent=m.paused?(started?'paused':'ready'):'running';
+    $('#start').disabled=!m.paused;$('#pause').disabled=m.paused;
+    if(m.world_n>m.world.length)addWorld({t:m.sim,kind:'system',text:`… ${m.world_n-m.world.length} more events in this moment`});
+    m.world.forEach(addWorld);m.agent.forEach(addAgent);flowEvents(m);m.errors.forEach(x=>addWorld({t:m.sim,kind:'error',text:x}));
+    if(!m.paused)started=true;};
+  es.onerror=()=>{$('#status').lastChild.textContent='reconnecting…'};}
+async function poll(){
+  try{
+    const s=await (await fetch('/api/state')).json();
+    if(s.status==='starting'||s.status==='resetting'||!s.agents){$('#status').lastChild.textContent=s.status;return}
+    $('#mirrorpill').textContent=s.mirror_enforce?'Mirror: holds claims (L2)':'Mirror: advises only';
+    $('#agents').innerHTML=Object.entries(s.agents).map(([c,a])=>`<div class="ag ${a.state==='polling'?'poll':''}"><span class="badge" style="background:${color(c)}">${c}</span> <b>${esc(a.name)}</b><br><span class="dot"></span>${a.state} · ${a.polls} polls · ${a.last_poll_ms} ms<br>${a.decisions} decisions · ${a.queries} queries<div class="last">${esc(a.last)}</div></div>`).join('');
+    const m=await (await fetch('/api/metrics')).json();const c=m.claims;
+    $('#tiles').innerHTML=[['Visits so far',m.world.visits],['Claims in the system',Object.values(c).reduce((a,b)=>a+b,0).toLocaleString()],['Waiting on payers',(c.accepted||0)+(c.submitted||0)],['Paid',(c.paid||0).toLocaleString()],['Denied / part-paid',(c.denied||0)+(c.partial||0)],
+      ['Found by agents',money(m.value.detected)],['Confirmed with payer money',money(m.value.confirmed)],['Mirror: holds · still denied · not held',`${m.mirror.holds} · ${m.mirror.held_denied} · ${m.mirror.missed}`],['Open tasks',`${m.tasks.open} (${m.tasks.bot} done by bot)`],['Answered from the database',`${m.data_first.answered} of ${m.data_first.answered+m.data_first.outbound}`],['Outside calls justified (not sent)',m.data_first.outbound]]
+      .map(t=>`<div class="tile"><small>${t[0]}</small><b>${t[1]}</b></div>`).join('');
+    counts=await (await fetch('/api/inbox_counts')).json();
+    $('#roles').innerHTML=ROLES.map(r=>`<span class="tab ${r[0]===role?'on':''}" data-r="${r[0]}">${r[1]}<span class="n">${counts[r[0]]||0}</span></span>`).join('');
+    const ib=await (await fetch('/api/inbox?role='+role)).json();
+    $('#inbox').innerHTML=ib.tasks.length?ib.tasks.map(t=>`<div class="task ${t.priority}"><h4>${esc(t.title)}</h4><div class="note">${esc(t.claim_number||'')} ${t.amount_at_stake?'· '+money(t.amount_at_stake)+' at stake':''} · raised by ${t.agent_code}${t.deadline_date?' · deadline '+t.deadline_date:''}</div>
+      <div class="why">${esc(t.summary||'')}</div><div class="btns">${t.actions.map((a,i)=>`<button class="${i===0?'act':''}" data-id="${t.agent_task_id}" data-a="${a}">${esc(a==='fix_and_release'?(FIX[t.suggested_value]||FIX.none):LABEL[a]||a)}</button>`).join('')}
+      ${t.agent_decision_id?`<button class="quiet" data-trace="${t.agent_decision_id}">Why was this raised?</button>`:''}</div></div>`).join(''):`<div class="empty">Nothing waiting for the ${role.replace('_',' ')} right now.</div>`;
+  }catch(e){}
+}
+$('#roles').onclick=e=>{const t=e.target.closest('.tab');if(t){role=t.dataset.r;poll()}};
+$('#inbox').onclick=async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.trace)return openTrace(+b.dataset.trace);
+  b.disabled=true;const r=await post(`/api/task/${b.dataset.id}/act`,{action:b.dataset.a});const j=await r.json();toast(r.ok?j.msg:(j.detail||'failed'));poll()};
+setInterval(poll,2500);poll();connect();
+const pct=v=>v==null?'—':Math.round(v*100)+'%';
+async function perf(){
+  try{
+    const j=await (await fetch('/api/performance?dim='+$('#pdim').value+'&'+xq())).json();
+    $('#pinfo').textContent=`${j.claims.toLocaleString()} claims · ${j.decisions.toLocaleString()} agent decisions in scope`;
+    const H=j.head, ix=n=>H.indexOf(n);
+    const cols=['Group','Agent name','Decisions','Raised something','Tasks done','Done by staff bot','Avg days to finish a task','Acceptance rate','$ detected','$ confirmed with payer money','Mirror hold hit rate'];
+    const fmt=(c,v)=>v==null?'—':c==='Acceptance rate'||c==='Mirror hold hit rate'?pct(v):c.startsWith('$')?money(v):v;
+    $('#ptable').innerHTML='<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>'+(j.rows.length?j.rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(fmt(c,r[ix(c)]))}</td>`).join('')+'</tr>').join(''):'<tr><td colspan="11" class="note">No agent activity in this period and filter yet. Start the clock, or widen the period.</td></tr>')+'</tbody>';
+    const oc=j.out_head;
+    $('#otable').innerHTML='<thead><tr>'+oc.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>'+j.out.map(r=>'<tr>'+oc.map((c,i)=>`<td>${esc(c.startsWith('Share')||c==='Denial rate'?pct(r[i]):c==='Charges'||c==='Paid'?money(r[i]):r[i]==null?'—':r[i])}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  }catch(e){}
+}
+$('#pdim').addEventListener('change',perf);setTimeout(perf,2500);setInterval(perf,15000);
+
+// ---- the designed workflow: the original diagram, lit up by what really happens
+const FL={doc:null,ready:false};
+const OFF=['a1','a2','a4','a11'];
+const NODE_EDGES={A3:['a3-rpa'],A5:['a4-a5','a5-a6'],A6:['a6-ch'],A7:['a7-rpa'],A8:['a8-judge'],A10:['a8-a10','a10-a11']};
+const NODE_OUT={A7:['ch-a7'],A5:['emr-a1']};   // outside connectors, flashed amber only when the database could not answer
+const WORLD_PULSE={visit:{n:['emr'],e:['emr-a3']},claim:{e:['a4-a5']},submitted:{n:['ch'],e:['a6-ch']},accepted:{e:['ch-payer']},paid:{n:['payer'],e:['ch-payer','ch-a7']},denied:{n:['payer'],e:['ch-payer','ch-a7']},human:{n:['judge']},win:{n:['payer']}};
+$('#flow').addEventListener('load',()=>{try{FL.doc=$('#flow').contentDocument;initFlow()}catch(e){}});
+function fnode(id){return FL.doc&&FL.doc.getElementById('node-'+id)}
+function initFlow(){
+  const st=FL.doc.createElement('style');
+  st.textContent='.kn-glow{filter:drop-shadow(0 0 6px #3b5bdb) drop-shadow(0 0 12px #3b5bdb)}.kn-red{filter:drop-shadow(0 0 6px #d6336c) drop-shadow(0 0 12px #d6336c)}.kn-off{opacity:.35}.kn-edge{stroke:#3b5bdb!important;filter:drop-shadow(0 0 3px #3b5bdb)}.kn-out{stroke:#f08c00!important;filter:drop-shadow(0 0 4px #f08c00)}.kn-badge{font:600 10px ui-monospace,Menlo,monospace;fill:#1f9d57}';
+  FL.doc.head.appendChild(st);
+  OFF.forEach(id=>fnode(id)&&fnode(id).classList.add('kn-off'));
+  FL.doc.querySelectorAll('[id^="node-"]').forEach(g=>{const r=g.querySelector('rect');if(!r)return;const t=FL.doc.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('class','kn-badge');t.setAttribute('x',+r.getAttribute('x')+(+r.getAttribute('width'))-4);t.setAttribute('y',+r.getAttribute('y')+(+r.getAttribute('height'))-5);t.setAttribute('text-anchor','end');t.id='kn-'+g.id.slice(5);g.appendChild(t)});
+  FL.ready=true;
+}
+function badge(id,text){if(!FL.ready)return;const t=FL.doc.getElementById('kn-'+id);if(t)t.textContent=text}
+function pulseNode(id,red){const n=fnode(id);if(!n)return;const c=red?'kn-red':'kn-glow';n.classList.add(c);setTimeout(()=>n.classList.remove(c),1500)}
+function pulseEdge(id,out){if(!FL.ready)return;const c=out?'kn-out':'kn-edge';FL.doc.querySelectorAll(`[data-edge-id="${id}"]`).forEach(p=>{p.classList.add(c);setTimeout(()=>p.classList.remove(c),1800)})}
+function flowEvents(m){
+  if(!FL.ready)return;const nodes=new Map(),edges=new Set(),outs=new Set();
+  m.agent.forEach(a=>{const id=a.a.toLowerCase();if(fnode(id))nodes.set(id,nodes.get(id)||['hold','denial'].includes(a.kind));(NODE_EDGES[a.a]||[]).forEach(e=>edges.add(e));if(a.out){(NODE_OUT[a.a]||[]).forEach(e=>outs.add(e));nodes.set('ch',false)}});
+  m.world.forEach(w=>{const wp=WORLD_PULSE[w.kind];if(!wp)return;(wp.n||[]).forEach(id=>nodes.set(id,nodes.get(id)||w.kind==='denied'));(wp.e||[]).forEach(e=>edges.add(e))});
+  nodes.forEach((red,id)=>pulseNode(id,red));edges.forEach(e=>pulseEdge(e,false));outs.forEach(e=>pulseEdge(e,true));
+}
+async function flowBadges(){
+  if(!FL.ready)return;
+  try{
+    const s=await (await fetch('/api/state')).json();if(!s.agents)return;const m=await (await fetch('/api/metrics')).json();const c=s.counters||{};
+    ['a3','a5','a6','a7','a8','a10'].forEach(id=>{const a=s.agents[id.toUpperCase()];if(a)badge(id,`${a.decisions} decisions`)});
+    OFF.forEach(id=>badge(id,'not live here'));
+    badge('emr',`${c.visit||0} visits`);badge('ch',`${c.submitted||0} claims sent`);badge('payer',`${(c.paid||0)+(c.denied||0)} answers`);
+    badge('rpa',`${(m.writebacks||{}).PM||0} notes (suppressed)`);badge('portal',`${(m.writebacks||{}).portal||0} portal (suppressed)`);badge('judge',`${m.approvals||0} approvals`);
+  }catch(e){}
+}
+setInterval(flowBadges,2500);
+
+// ---- trace and claim views
+async function openTrace(id){
+  const t=await (await fetch('/api/trace/'+id)).json();
+  const reads=t.reads.map((r,i)=>`<div class="rd"><div>${i===0&&t.reads.length>1?'<span class="note">the query that surfaced this item</span><br>':''}${(r.plan_tables||[]).map(x=>`<b style="font-weight:600">${esc(x)}</b>`).join(', ')||'<span class="note">tables unknown</span>'}
+     <span class="note">· ${r.rows} row${r.rows==1?'':'s'} · ${r.ms} ms</span></div>
+     <div style="margin-top:3px">${(r.plan_columns||[]).map(c=>`<span class="col">${esc(c)}</span>`).join('')}</div>
+     <pre>${esc(r.sql)}</pre><div class="note">parameters: ${esc(JSON.stringify(r.params))}</div>
+     ${r.sample&&r.sample.length?`<div class="kv">first rows it got back: ${esc(JSON.stringify(r.sample[0]))}${r.rows>1?` (+${r.rows-1} more)`:''}</div>`:''}<div class="note">${esc(r.why||'')}</div>
+     <button data-run="${i}" class="quiet">Run it again now</button><div class="kv" id="rr-${i}"></div></div>`).join('');
+  const rules=t.rules.map(x=>`<tr><td>${esc(x.rule)}</td><td class="${x.result==='pass'?'ok':'no'}">${x.result==='pass'?'✓ pass':'✗ fail'}</td><td>${esc(x.observed)}</td><td>${esc(x.expected)}</td><td>${x.payer_rule_id?'rule #'+x.payer_rule_id:'built in'}</td></tr>`).join('');
+  const c=t.creates||{};
+  const ds=t.data_source;
+  const dfhtml=ds?`<div style="margin-bottom:6px"><b style="font-weight:600" class="${ds.outbound.length?'no':'ok'}">${ds.outbound.length?'⚠ the database could not answer everything, so an outside call was justified':'✓ answered from the database: no outside call needed'}</b></div>`+ds.checks.map(x=>`<div class="rd"><div><b style="font-weight:600">${esc(x.question)}</b> <span class="${x.answerable?'ok':'no'}">${x.answerable?'✓ the database can answer':'✗ the database cannot answer'}</span></div><div class="note">${(x.tables||[]).map(y=>`<span class="col">${esc(y)}</span>`).join('')} ${esc(x.why)}</div>${x.outbound?`<div class="kv" style="margin-top:4px">Outside call: ${esc(x.outbound.kind)} via ${esc(x.outbound.via)}<br>Why: ${esc(x.outbound.reason)}<br>Status: ${esc(x.outbound.status)}</div>`:''}</div>`).join(''):'<span class="note">Not recorded for this decision (made before the rule existed).</span>';
+  $('#trbody').innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${color(t.agent)}">${t.agent}</span><b>${esc(t.agent_name)}</b><span class="note">${esc(t.decision_type)} · ${esc(t.date)} · decision #${t.id} · shadow mode</span><span class="pill" style="margin-left:auto">${t.ms} ms end to end</span></div>
+   <div class="sec"><h4>1 · What triggered it</h4>${esc(t.trigger)}</div>
+   <div class="sec"><h4>2 · What it read: ${t.tables_read.length} tables, ${t.columns_read.length} columns (as Postgres reports them)</h4>${reads}</div>
+   <div class="sec"><h4>3 · Rules it checked</h4><table><thead><tr><th>Rule</th><th>Result</th><th>Observed</th><th>Expected</th><th>Source</th></tr></thead><tbody>${rules||'<tr><td colspan=5 class="note">no rules: an evidence check</td></tr>'}</tbody></table></div>
+   <div class="sec"><h4>4 · Data first: could the database answer?</h4>${dfhtml}</div>
+   <div class="sec"><h4>5 · Its answer</h4><b style="font-weight:600">${esc(t.outcome)}</b> · ${esc(t.answer)}<div class="note">confidence ${t.confidence} · ${t.amount?money(t.amount)+' at stake':'no dollars at stake'}</div></div>
+   <div class="sec"><h4>6 · What it wrote</h4><span class="kv">agent_decision #${t.id}${c.finding?` · agent_finding #${c.finding}`:''}${c.task?` · agent_task #${c.task}`:''}${c.values?` · agent_value ×${c.values}`:''}</span></div>
+   <div class="sec"><h4>7 · Why it moved on</h4>${esc(t.handoff)}</div>
+   <p class="note">Logged to <code>${esc(t.log_file)}</code>. Every statement above was actually executed by this agent's own connection when it decided; the tables and columns come from Postgres's own EXPLAIN of the same statement.</p>`;
+  $('#trbody').querySelectorAll('[data-run]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.run,out=$('#rr-'+i);out.textContent='running…';const r=await (await fetch(`/api/trace/${id}/run/${i}`,{method:'POST'})).json();
+    out.innerHTML=`${r.n} row(s) in ${r.ms} ms now. ${esc(r.note)}<br>${r.rows.slice(0,3).map(x=>esc(JSON.stringify(x))).join('<br>')}`});
+  $('#trdlg').showModal();
+}
+async function openClaim(id){
+  clearInterval(followTimer);followTimer=setInterval(()=>{if($('#cldlg').open)render(id);},2000);await render(id);if(!$('#cldlg').open)$('#cldlg').showModal();
+}
+async function render(id){
+  const j=await (await fetch('/api/claim/'+id)).json();
+  $('#clbody').innerHTML=`<h3 style="margin:0">${esc(j.claim)} <span class="pill run"><i></i>following live</span> <span class="note">${esc(j.payer)} · ${money(j.amount)} · ${esc(j.status)}</span></h3><ul style="padding-left:18px">`+
+   j.events.map(e=>`<li><span class="note">${esc((e.date||'').toString().slice(0,16).replace('T',' '))}</span> · <b style="font-weight:600">${esc(e.who)}</b>: ${esc(e.text)}${e.trace?` <a href="#" data-t="${e.trace}">trace</a>`:''}</li>`).join('')+'</ul>';
+  $('#clbody').querySelectorAll('a[data-t]').forEach(a=>a.onclick=ev=>{ev.preventDefault();$('#cldlg').close();openTrace(+a.dataset.t)});
+}
+{const p=new URLSearchParams(location.search).get('trace');if(p)setTimeout(()=>openTrace(+p),900)}
+</script>
+</body>
+</html>
