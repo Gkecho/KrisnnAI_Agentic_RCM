@@ -39,12 +39,23 @@ button:disabled{opacity:.4;cursor:not-allowed}
 @media (max-width:860px){.layout{grid-template-columns:1fr;padding:12px 16px 40px}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
 .stack{display:grid;gap:14px;align-content:start;min-width:0}
-#tree ul{list-style:none;margin:0;padding-left:14px;border-left:1px dashed var(--line)}
-#tree>ul{padding-left:0;border:0}
-#tree li{margin:2px 0}
-#tree .n{all:unset;cursor:pointer;display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:8px;width:100%}
-#tree .n:hover{background:var(--sunk)} #tree .n.sel{background:var(--accent-soft);color:var(--accent);font-weight:600}
-#tree .n:focus-visible{outline:3px solid var(--accent)}
+.scope{display:grid;gap:2px;margin-top:6px}
+.step{display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;position:relative;padding:3px 0 9px}
+.step:not(:last-child)::before{content:"";position:absolute;left:7px;top:20px;bottom:-4px;width:2px;background:var(--line)}
+.step.above:not(:last-child)::before{background:var(--accent)}
+.step .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);background:var(--surface);margin-top:6px;z-index:1;box-sizing:border-box}
+.step.above .dot{border-color:var(--accent);background:var(--accent-soft)}
+.step.active .dot{border-color:var(--accent);background:var(--accent)}
+.step.below .sbody{opacity:.75}
+.sbody{display:grid;gap:5px;min-width:0;padding:6px 8px;border-radius:10px;border:1px solid transparent}
+.step.active .sbody{background:var(--accent-soft);border-color:var(--accent)}
+.sbody select{width:100%}
+.stepbtn{all:unset;cursor:pointer;display:block;font-weight:600;line-height:1.3;border-radius:6px}
+.stepbtn:hover{text-decoration:underline} .stepbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.slab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.here{font:600 10px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);white-space:nowrap}
+.scopenote{font-size:12.5px;line-height:1.45;margin:10px 0 0;padding:9px 11px;border-radius:10px;background:var(--sunk)}
+.scopenote b{font-weight:600}
 .lvl{font:600 10px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:30px}
 .pill{display:inline-flex;align-items:center;font:600 11px var(--f-mono);padding:2px 9px;border-radius:999px;white-space:nowrap}
 .pill.solution{background:var(--accent-soft);color:var(--accent)} .pill.parent_app{background:var(--sunk);color:var(--ink)}
@@ -80,8 +91,9 @@ textarea#sql{width:100%;min-height:300px;font:12.5px/1.5 var(--f-mono);resize:ve
   <button id="pubsite">Publish to site data</button>
 </header>
 <div class="layout">
-  <nav class="card" id="tree" aria-label="Scope hierarchy"><h3>Hierarchy</h3><div id="treebox"></div>
-    <p class="muted" style="font-size:12px;margin:10px 0 0">A query saved at a level applies to everything below it. The narrowest published override wins.</p></nav>
+  <nav class="card" id="tree" aria-label="Where am I editing"><h3>Where am I editing?</h3><div id="treebox" class="scope"></div>
+    <p class="scopenote" id="scopenote" aria-live="polite"></p>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Top to bottom is broad to narrow. A query saved at a level applies to everything below it; the narrowest published override wins.</p></nav>
   <main class="stack">
     <div id="banner"></div>
     <section class="card">
@@ -124,18 +136,52 @@ function say(text, kind){const b=$("banner");b.replaceChildren(text?el("div",{cl
 const actor = () => $("actor").value.trim()||"admin";
 const guard = (fn) => async (...a) => {try{await fn(...a)}catch(e){say(e.message,"err")}};
 
+let TREE = [], BYID = {}, PARENT = {};
+const ORDER = ["solution","parent_app","application","customer","role"];
+function indexTree(nodes, par){for(const n of nodes){BYID[n.id]=n;PARENT[n.id]=par;indexTree(n.children,n.id)}}
+function chainOf(id){const c=[];while(id!=null){c.unshift(BYID[id]);id=PARENT[id]}return c}
 async function loadTree(){
   const t = await api("/api/tree"); $("mode").value = t.approval_mode;
-  const draw = (n) => el("li",{}, el("button",{class:"n"+(n.id===sel.node?" sel":""),"data-id":n.id,onclick:()=>pickNode(n.id)}, el("span",{class:"lvl"},({solution:"sol",parent_app:"par",application:"app",customer:"cust",role:"role"})[n.level]), n.name),
-      n.children.length?el("ul",{},n.children.map(draw)):null);
-  $("treebox").replaceChildren(el("ul",{},t.tree.map(draw)));
-  if(sel.node===null){const app=findFirst(t.tree,"application"); pickNode(app?app.id:t.tree[0].id)}
+  TREE = t.tree; BYID = {}; PARENT = {}; indexTree(TREE, null);
+  if(sel.node===null){const app=findFirst(TREE,"application"); await pickNode(app?app.id:TREE[0].id)} else drawPicker();
 }
 function findFirst(nodes, level){for(const n of nodes){if(n.level===level)return n;const f=findFirst(n.children,level);if(f)return f}return null}
 const pickNode = guard(async (id) => {
-  sel.node = id; sel.query = null; $("editor").hidden = true; await loadTree0(); await loadQueries();
+  sel.node = id; sel.query = null; $("editor").hidden = true; drawPicker(); await loadQueries();
 });
-async function loadTree0(){document.querySelectorAll("#tree .n").forEach(b=>b.classList.toggle("sel",+b.dataset.id===sel.node))}
+function drawPicker(){
+  const ch = chainOf(sel.node), at = {}; ch.forEach(n => at[n.level] = n);
+  const act = ORDER.indexOf(ch[ch.length-1].level), sol = at.solution, par = at.parent_app, app = at.application, cust = at.customer, role = at.role;
+  const cls = (l) => "step " + (ORDER.indexOf(l)===act ? "active" : ORDER.indexOf(l)<act ? "above" : "below");
+  const kids = (n, level) => n ? n.children.filter(c => c.level===level) : [];
+  const dropdown = (items, current, placeholder, enabled, onchoose) => {
+    const s = el("select", {"aria-label": placeholder}); s.append(el("option", {value: ""}, placeholder));
+    for(const n of items){const o = el("option", {value: String(n.id)}, n.name); if(current && current.id===n.id) o.selected = true; s.append(o)}
+    s.disabled = !enabled; s.onchange = () => onchoose(s.value); return s;
+  };
+  const step = (level, title, control) => el("div", {class: cls(level)}, el("span", {class: "dot"}),
+    el("div", {class: "sbody"}, el("div", {class: "slab"}, el("span", {class: "pill " + level}, title), ORDER.indexOf(level)===act ? el("span", {class: "here"}, "editing") : null), control));
+  const chooseApp = (v) => {
+    if(!v){pickNode(par ? par.id : sol.id); return}
+    const a = BYID[+v]; let target = a;
+    if(cust){const c2 = kids(a,"customer").find(c => c.name===cust.name); if(c2){target = c2; if(role){const r2 = kids(c2,"role").find(r => r.name===role.name); if(r2) target = r2}}}
+    pickNode(target.id);
+  };
+  const stepBtn = (n) => el("button", {class: "stepbtn", onclick: () => pickNode(n.id)}, n.name);
+  $("treebox").replaceChildren(
+    step("solution", "Solution", stepBtn(sol)),
+    par ? step("parent_app", "Parent application", stepBtn(par)) : null,
+    step("application", "Application (page)", dropdown(kids(par,"application"), app, "Choose a page…", !!par, chooseApp)),
+    step("customer", "Customer", dropdown(kids(app,"customer"), cust, "All customers", !!app, (v) => pickNode(v ? +v : app.id))),
+    step("role", "Role", dropdown(kids(cust,"role"), role, "All roles", !!cust, (v) => pickNode(v ? +v : cust.id))));
+  const who = {
+    solution: () => "every page, customer and role",
+    parent_app: () => `every ${par.name} page, for all customers and roles`,
+    application: () => `the ${app.name} page, for all customers and roles`,
+    customer: () => `the ${app.name} page, for ${cust.name} only (all roles)`,
+    role: () => `the ${app.name} page, for ${cust.name}, ${role.name} only`}[ORDER[act]]();
+  $("scopenote").replaceChildren(el("b", {}, "A query saved here applies to: "), who + ". Narrower overrides, if any, still win.");
+}
 async function loadQueries(){
   const r = await api("/api/queries?node="+sel.node);
   $("crumbs").replaceChildren(...r.path.flatMap((n,i)=>[i?el("span",{class:"muted"},"›"):"", el("span",{class:"pill "+n.level},lvlName(n.level)), n.name]));
