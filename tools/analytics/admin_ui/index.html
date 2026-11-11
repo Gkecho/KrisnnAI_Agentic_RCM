@@ -138,6 +138,7 @@ const guard = (fn) => async (...a) => {try{await fn(...a)}catch(e){say(e.message
 
 let TREE = [], BYID = {}, PARENT = {};
 const ORDER = ["solution","parent_app","application","customer","role"];
+const kids0 = (n, level) => n ? n.children.filter(c => c.level===level) : [];
 function indexTree(nodes, par){for(const n of nodes){BYID[n.id]=n;PARENT[n.id]=par;indexTree(n.children,n.id)}}
 function chainOf(id){const c=[];while(id!=null){c.unshift(BYID[id]);id=PARENT[id]}return c}
 async function loadTree(){
@@ -151,7 +152,7 @@ const pickNode = guard(async (id) => {
 });
 function drawPicker(){
   const ch = chainOf(sel.node), at = {}; ch.forEach(n => at[n.level] = n);
-  const act = ORDER.indexOf(ch[ch.length-1].level), sol = at.solution, par = at.parent_app, app = at.application, cust = at.customer, role = at.role;
+  const act = ORDER.indexOf(ch[ch.length-1].level), sol = at.solution, par = at.parent_app || kids0(at.solution, "parent_app")[0], app = at.application, cust = at.customer, role = at.role;
   const cls = (l) => "step " + (ORDER.indexOf(l)===act ? "active" : ORDER.indexOf(l)<act ? "above" : "below");
   const kids = (n, level) => n ? n.children.filter(c => c.level===level) : [];
   const dropdown = (items, current, placeholder, enabled, onchoose) => {
@@ -168,12 +169,12 @@ function drawPicker(){
     pickNode(target.id);
   };
   const stepBtn = (n) => el("button", {class: "stepbtn", onclick: () => pickNode(n.id)}, n.name);
-  $("treebox").replaceChildren(
+  $("treebox").replaceChildren(...[
     step("solution", "Solution", stepBtn(sol)),
     par ? step("parent_app", "Parent application", stepBtn(par)) : null,
     step("application", "Application (page)", dropdown(kids(par,"application"), app, "Choose a page…", !!par, chooseApp)),
     step("customer", "Customer", dropdown(kids(app,"customer"), cust, "All customers", !!app, (v) => pickNode(v ? +v : app.id))),
-    step("role", "Role", dropdown(kids(cust,"role"), role, "All roles", !!cust, (v) => pickNode(v ? +v : cust.id))));
+    step("role", "Role", dropdown(kids(cust,"role"), role, "All roles", !!cust, (v) => pickNode(v ? +v : cust.id)))].filter(Boolean));
   const who = {
     solution: () => "every page, customer and role",
     parent_app: () => `every ${par.name} page, for all customers and roles`,
