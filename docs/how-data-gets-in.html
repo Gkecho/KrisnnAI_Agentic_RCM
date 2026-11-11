@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How Data Gets In</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#1c2333;--mute:#586277;--line:#ded8c8;--navy:#1f3864;--soft:#ece7da;--g:#15803d;--b:#1d4ed8;--a:#b45309;--x:#6b7280}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#8fb0ea;--soft:#222b3d;--g:#6fd39a;--b:#8fb0ff;--a:#f0b35f;--x:#aab2c0}}
+:root[data-theme="dark"]{--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#8fb0ea;--soft:#222b3d;--g:#6fd39a;--b:#8fb0ff;--a:#f0b35f;--x:#aab2c0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,Arial,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px 56px}
+header{padding:30px 0 6px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+h1{margin:0;font-size:clamp(26px,4vw,40px);line-height:1.1;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:8px 0 0;max-width:74ch}
+.btn{font:inherit;color:inherit;border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:8px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:16px 0 14px;font-size:13px;color:var(--mute)}
+.legend span{display:inline-flex;gap:7px;align-items:center}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.d-g{background:var(--g)}.d-b{background:var(--b)}.d-a{background:var(--a)}.d-x{background:var(--x)}
+.flow{display:grid;grid-template-columns:1.15fr 28px 1fr 28px 1fr 28px 1.1fr;gap:6px;align-items:stretch}
+.arrow{display:grid;place-items:center;color:var(--mute);font-size:26px}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.col>h2{margin:0 0 2px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+.col>h2 b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--panel);margin-right:7px;letter-spacing:0;font-size:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.card b{display:block;font-size:14px}
+.card .what{color:var(--mute);font-size:12.5px}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;margin-top:5px;margin-right:10px}
+.st.g{color:var(--g)}.st.b{color:var(--b)}.st.a{color:var(--a)}.st.x{color:var(--x)}
+.lane{border-radius:10px;padding:10px 12px;border:1px solid var(--line);background:var(--panel)}
+.lane h3{margin:0 0 4px;font-size:14px}
+.lane p{margin:0;color:var(--mute);font-size:13px}
+.lane.batch{border-left:5px solid var(--navy)}
+.lane.live{border-left:5px solid #be123c}
+.lane.out{border-left:5px solid #0f766e}
+.door{background:color-mix(in srgb,var(--navy) 9%,var(--panel));border:1px solid color-mix(in srgb,var(--navy) 40%,var(--line));border-radius:10px;padding:8px 11px;font-size:13.5px;display:flex;gap:9px;align-items:flex-start}
+.door i{flex:none;font-style:normal;font-weight:800;color:var(--navy)}
+.land{border-radius:10px;border:1px solid var(--line);background:var(--panel);padding:8px 11px}
+.land b{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);display:block;margin-bottom:4px}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+code{font-family:Consolas,monospace;font-size:12px;background:var(--soft);border-radius:4px;padding:1px 6px}
+.under{margin:12px 0 0;text-align:center;color:var(--mute);font-size:13px}
+h2.sec{margin:34px 0 4px;font-size:21px}
+.steps{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch;margin-top:10px}
+.step{flex:1 1 140px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px}
+.step b{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.sa{display:grid;place-items:center;color:var(--mute);font-size:20px}
+.ex{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.ex h3{margin:0;font-size:16px}
+.ahead{margin-top:26px;background:color-mix(in srgb,var(--a) 10%,var(--panel));border:1px solid color-mix(in srgb,var(--a) 45%,var(--line));border-radius:12px;padding:12px 16px}
+.ahead h3{margin:0 0 4px;font-size:16px}
+.ahead ul{margin:6px 0 0;padding-left:20px;color:var(--ink)}
+.note{margin-top:26px;color:var(--mute);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
+@media (max-width:980px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);height:22px}.sa{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>How data gets in</h1>
+    <p class="sub">Every fact starts in someone else's system. This is the road in: where data lives, how it travels, what the front door does to it, and which tables it lands in. Everything runs on synthetic data and local or sandbox services.</p>
+  </div>
+  <button class="btn" id="theme" aria-label="Toggle light and dark">Theme</button>
+</header>
+<div class="legend" aria-label="Status key">
+  <span><i class="dot d-g"></i>Built, tested on synthetic data</span>
+  <span><i class="dot d-b"></i>Tested live on a sandbox</span>
+  <span><i class="dot d-a"></i>Mock or stand-in only</span>
+  <span><i class="dot d-x"></i>Design only, not built</span>
+</div>
+
+<div class="flow">
+  <div class="col">
+    <h2><b>1</b>Where data lives</h2>
+    <div class="card"><b>EHR: OpenEMR (dev instance)</b><span class="what">Appointments, visits, patients, notes, charges. REST API and extract files.</span><br><span class="st g"><i class="dot d-g"></i>Built</span></div>
+    <div class="card"><b>EHR via FHIR R4</b><span class="what">Patient, Appointment, Encounter, DocumentReference. A local Microsoft FHIR server: 1,777 appointments, 2,243 encounters and 2,134 notes round-tripped with no differences.</span><br><span class="st g"><i class="dot d-g"></i>Built</span><span class="st a"><i class="dot d-a"></i>A real EMR's profiles will differ</span></div>
+    <div class="card"><b>EHR via HL7 v2</b><span class="what">Scheduling (SIU), visits (ADT), charges (DFT), documents (MDM).</span><br><span class="st x"><i class="dot d-x"></i>Design only</span></div>
+    <div class="card"><b>PM system and scheduler</b><span class="what">Charges, claims, payments, AR, fee schedule, provider and payer lists, open slots. File drop, export or database view.</span><br><span class="st g"><i class="dot d-g"></i>Built for files and CSV feeds</span></div>
+    <div class="card"><b>Clearinghouse</b><span class="what">837 claims, 999 and 277CA acknowledgements, 277 status, 835 remittance, 271 eligibility, 278 authorization.</span><br><span class="st b"><i class="dot d-b"></i>Stedi sandbox: eligibility (270/271) verified</span><span class="st a"><i class="dot d-a"></i>Everything else: mock</span></div>
+    <div class="card"><b>Payer portals</b><span class="what">Authorization and claim status, contract rates.</span><br><span class="st a"><i class="dot d-a"></i>Mock portal bots</span></div>
+    <div class="card"><b>Public code sets</b><span class="what">CPT/HCPCS, ICD-10, modifiers, CARC/RARC, NPI registry.</span><br><span class="st a"><i class="dot d-a"></i>Some tables are synthetic stand-ins</span></div>
+    <div class="card"><b>Client documents</b><span class="what">Contracts and fee schedules. Reading them with a model needs an approved BAA.</span><br><span class="st x"><i class="dot d-x"></i>Design only</span></div>
+  </div>
+  <div class="arrow" aria-hidden="true">&rarr;</div>
+  <div class="col">
+    <h2><b>2</b>How it travels</h2>
+    <div class="lane batch"><h3>Batch: daily files</h3><p>837, 835, 999, 277CA and the PM's CSV feeds land in a folder. The daily loader picks them up in a set order.</p></div>
+    <div class="lane live"><h3>Live: events</h3><p>A watcher polls the EHR every few seconds. A new booking starts a coverage check straight away, then again 3 days and 1 day before the visit.</p></div>
+    <div class="lane out"><h3>Bots that ask</h3><p>Bots send a 270 (eligibility), 276 (claim status) or a corrected 837 to the clearinghouse. The answer comes back as a file the same loader reads.</p></div>
+    <div class="card" style="margin-top:auto"><b>Safety on the road</b><span class="what">Clients refuse any non-local address unless a flag is set. Keys come from environment variables only. Nothing talks to a real payer.</span></div>
+  </div>
+  <div class="arrow" aria-hidden="true">&rarr;</div>
+  <div class="col">
+    <h2><b>3</b>The front door (ingest)</h2>
+    <div class="door"><i>1</i><span><b>Parse and map.</b> Read the X12 segments, FHIR resources or CSV columns into our fields.</span></div>
+    <div class="door"><i>2</i><span><b>Hash identities.</b> Patient and member numbers become salted hashes at this boundary. Raw ones never land in a table or a log.</span></div>
+    <div class="door"><i>3</i><span><b>Never twice.</b> A file is skipped if its hash and its control numbers (<code>ISA13</code>, <code>GS06</code>, <code>ST02</code>) were already loaded.</span></div>
+    <div class="door"><i>4</i><span><b>Stamp every row.</b> Tenant, source, <code>known_at</code>, <code>loaded_at</code>, and a flag if the row was rebuilt from other data.</span></div>
+    <div class="door"><i>5</i><span><b>Record the fallback.</b> <code>data_feed</code> notes which feed and fallback step each table runs on, so a missing feed shows as "unavailable", not zero.</span></div>
+    <div class="door"><i>6</i><span><b>Fail safely.</b> A file that does not parse is marked failed with a reason, and nothing half-loaded is stored.</span></div>
+  </div>
+  <div class="arrow" aria-hidden="true">&rarr;</div>
+  <div class="col">
+    <h2><b>4</b>Where it lands</h2>
+    <div class="land"><b>Appointment</b><div class="tags"><code>appointment</code><code>appointment_details</code><code>appointment_slot</code><code>referral</code><code>eligibility_check</code></div></div>
+    <div class="land"><b>Encounter</b><div class="tags"><code>encounter</code><code>encounter_details</code><code>document</code><code>order</code></div></div>
+    <div class="land"><b>Bill and claim</b><div class="tags"><code>bill</code><code>bill_details</code><code>claim</code><code>claim_details</code><code>claim_status_history</code><code>authorization</code><code>claim_attachment</code></div></div>
+    <div class="land"><b>Money</b><div class="tags"><code>transactions</code><code>payment</code><code>denial</code><code>denial_details</code><code>appeal</code><code>ar</code><code>ar_interval</code></div></div>
+    <div class="land"><b>Reference</b><div class="tags"><code>patient</code><code>coverage</code><code>provider</code><code>payer</code><code>facility</code><code>cpt_code</code><code>diagnosis_code</code><code>contract_rate</code><code>fee_list</code></div></div>
+    <div class="land"><b>Control</b><div class="tags"><code>data_feed</code></div></div>
+  </div>
+</div>
+<p class="under">Agents <b>read</b> from the tables on the right and write only to their own <code>agent_*</code> tables. They never write back into these.</p>
+
+<h2 class="sec">Two journeys through the front door</h2>
+<div class="ex">
+  <h3>Live: a new booking</h3>
+  <div class="steps">
+    <div class="step"><b>1 EHR</b>Front desk books an appointment</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>2 Watcher</b>Sees it within seconds (it only reads, never writes)</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>3 Gatekeeper</b>Sends one 270 per insurance policy</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>4 Clearinghouse</b>The payer's 271 comes back</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>5 Front door</b>Parsed, member number hashed, stamped</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>6 Tables</b><code>appointment</code>, <code>eligibility_check</code>, <code>coverage</code></div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>7 Ledger</b>Gaps found, decision recorded, task for the officer</div>
+  </div>
+</div>
+<div class="ex">
+  <h3>Batch: a payment letter</h3>
+  <div class="steps">
+    <div class="step"><b>1 Payer</b>Pays and sends the 835 explanation</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>2 Clearinghouse</b>Drops the file in the daily folder</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>3 Front door</b>Hash check, parse, stamp</div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>4 Tables</b><code>payment</code>, <code>transactions</code>, <code>denial</code></div><div class="sa" aria-hidden="true">&rarr;</div>
+    <div class="step"><b>5 Agents notice</b>Advocate (denial), Auditor (short pay), Bookkeeper (posting)</div>
+  </div>
+</div>
+
+<div class="ahead">
+  <h3>What is still ahead</h3>
+  <ul>
+    <li><b>The loader fills the earlier data model.</b> The 57-table canonical model is the design target, and wiring the loader to it is the next piece of work.</li>
+    <li><b>A real EHR's FHIR API will differ</b> in profiles and permissions (SMART on FHIR). Not tested yet.</li>
+    <li><b>Stedi:</b> only eligibility is verified live. Claim status and claim submission have not been run on the sandbox.</li>
+    <li><b>HL7 v2, payer portals and contract reading</b> are not built, and contract reading needs an approved BAA first.</li>
+  </ul>
+</div>
+<p class="note">Sources and status: docs/integrations.md, docs/ROADMAP.md and the Source compatibility sheet of the data model workbook. The same picture is described in docs/ARCHITECTURE.md.</p>
+</div>
+<script>
+document.getElementById("theme").addEventListener("click",function(){var r=document.documentElement,dark=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",dark?"light":"dark")});
+</script>
+</body>
+</html>

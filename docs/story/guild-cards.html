@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Revenue Guild</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#1c2333;--mute:#586277;--line:#ded8c8;--navy:#1f3864;--soft:#ece7da}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#6f95d8;--soft:#222b3d}}
+:root[data-theme="dark"]{--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#6f95d8;--soft:#222b3d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px 56px}
+header{padding:34px 0 12px}
+h1{margin:0;font-size:clamp(26px,4vw,40px);letter-spacing:-.01em;line-height:1.1}
+.sub{color:var(--mute);margin:8px 0 0;max-width:70ch}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+button,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:8px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.oaths{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:18px 0 6px}
+.oath{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:8px;padding:10px 12px}
+.oath b{display:block;font-size:14px}
+.oath span{color:var(--mute);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0 14px}
+.bar input{flex:1;min-width:200px;max-width:340px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.pill{border:1px solid var(--line);background:var(--panel);padding:4px 11px;border-radius:999px;cursor:pointer;font-size:13px}
+.pill[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.count{color:var(--mute);font-size:13px;margin-left:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{--c:#1f3864;background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:12px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px}
+.card[hidden]{display:none}
+.row{display:flex;gap:12px;align-items:center}
+.shield{flex:none;width:52px;height:60px;background:var(--c);color:#fff;font-weight:800;font-size:17px;display:grid;place-items:center;clip-path:polygon(50% 0,100% 14%,100% 58%,50% 100%,0 58%,0 14%);padding-bottom:6px}
+.card h2{margin:0;font-size:19px;line-height:1.2}
+.role{color:var(--mute);font-size:13px}
+.power{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;border-radius:6px;padding:2px 8px;background:color-mix(in srgb,var(--c) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--c) 40%,var(--line))}
+.chip.v::before{content:"Villain: ";font-weight:700}
+.chip.o::before{content:"Officer: ";font-weight:700}
+.rank{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+details{border-top:1px dashed var(--line);padding-top:8px}
+summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--navy);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";font-weight:800}
+details[open] summary::before{content:"\2212  "}
+dl{margin:10px 0 0;display:grid;gap:8px}
+dt{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+dd{margin:2px 0 0}
+code{font-family:Consolas,monospace;font-size:12px;background:var(--soft);border-radius:4px;padding:1px 5px}
+.weak{border-left:3px solid #c0392b;padding-left:9px}
+h3.sec{margin:34px 0 10px;font-size:20px}
+.officers{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.off{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.off b{display:block}
+.off span{display:block;color:var(--mute);font-size:13px}
+.note{margin-top:30px;color:var(--mute);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="top">
+    <div>
+      <h1>The Revenue Guild of Maple Street</h1>
+      <p class="sub">Fifteen agents, the leaks they hunt, and the officers who hold the keys. Fiction built on the real design: every power, weakness and table below is real.</p>
+    </div>
+    <button class="btn" id="theme" aria-label="Toggle light and dark">Theme</button>
+  </div>
+  <div class="oaths" id="oaths"></div>
+</header>
+<div class="bar">
+  <input id="q" type="search" placeholder="Search powers, villains, tables..." aria-label="Search the guild">
+  <span id="pills" style="display:contents"></span>
+  <button class="btn" id="expand">Open all</button>
+  <span class="count" id="count" aria-live="polite"></span>
+</div>
+<main class="grid" id="grid"></main>
+<h3 class="sec">The officers</h3>
+<p class="sub" style="margin-bottom:12px">Humans hold the keys. Nothing that moves money happens without a named officer.</p>
+<div class="officers" id="officers"></div>
+<p class="note">All agents stand at <b>L0, in the Shadow Grounds</b>: they write what they would do and send nothing. Patients are synthetic and appear only as hashes. Source: docs/story/THE-REVENUE-GUILD.md (rebuild with tools/story/build_cards.py).</p>
+</div>
+<script id="data" type="application/json">{"agents": [{"code": "A1", "name": "The Gatekeeper", "role": "Pre-Visit Financial Clearance", "stage": "Before the visit", "power": "Sees whether a traveler's coverage will hold on the day of the visit.", "move": "Spots a new booking, sends a coverage question across the Relay Tower (a 270) for every policy the traveler holds, reads the answer (a 271), and asks again 3 days and 1 day before the visit.", "trait": "Punctual to the minute. Politely suspicious. Never assumes a card means coverage.", "weakness": "Trusts the answer it is given; a vague 271 leaves it guessing. The real clearinghouse bridge is not built yet.", "villain": "*The Lapsed Policy*, who lets a visit happen on coverage that ended last month.", "officer": "The Front Desk Officer.", "reads": ["appointment", "coverage", "patient"], "writes": ["eligibility_check", "agent_finding", "agent_task"]}, {"code": "A2", "name": "The Permit Clerk", "role": "Authorization Intelligence", "stage": "Before the visit", "power": "Knows which procedures the Great Houses demand a permit for, and whether the permit is still valid.", "move": "Checks at 7 days and 2 days before a visit: none requested, denied, expired, units used up, still pending.", "trait": "Fussy about paperwork, calm under deadlines, always has a form in hand.", "weakness": "Cannot walk into a payer's portal; it prepares the request, an officer files it.", "villain": "*The Missing Permit*, who turns a healthy visit into an unpayable one.", "officer": "The Authorization Officer.", "reads": ["authorization", "referral", "payer_rule", "appointment_details"], "writes": ["agent_task", "agent_finding"]}, {"code": "A3", "name": "The Note Chaser", "role": "Documentation Completeness", "stage": "After the visit", "power": "Finds the notes nobody signed and the charges nobody entered, before the claim goes stale.", "move": "Climbs the escalation ladder: the provider, the provider again, the practice manager, the medical director (levels still to be confirmed).", "trait": "Relentless but never rude. Remembers every promise made in the hallway.", "weakness": "Reads note *status and elements*, never note text. It cannot judge whether the medicine is good, only whether the scroll is complete.", "villain": "*The Unsigned Scroll*, and her sister *The Late Charge*.", "officer": "The Provider (the clinician) and the Practice Manager.", "reads": ["encounter", "document", "bill_details"], "writes": ["agent_task", "agent_finding"]}, {"code": "A4", "name": "The Code Whisperer", "role": "Coding and Charge Integrity Copilot", "stage": "After the visit", "power": "Hears when the code on a visit does not match what was documented, in either direction.", "move": "Whispers \"this looks undercoded\" or \"this looks overcoded,\" with the dollar difference at the contract rate.", "trait": "Humble. Speaks only in suggestions. Cares more about being right than being first.", "weakness": "The liability boundary is absolute: it never changes a code. Its level table is a placeholder and it does not yet reason about diagnoses or modifiers.", "villain": "*Level Drift*, a quiet creature that makes visits look smaller, or bolder, than they were.", "officer": "The Coding Officer, who alone decides.", "reads": ["encounter_details", "bill_details", "document"], "writes": ["agent_finding"]}, {"code": "A5", "name": "The Mirror", "role": "Claim Prevention and Digital Twin", "stage": "Before the claim leaves", "power": "Holds up a looking glass to a claim and shows how the Great Houses will treat it.", "move": "Runs the claim through the rules and the twin, and reports the chance of denial, the likely reason, and the amount it expects to be allowed.", "trait": "Honest to a fault. A little vain about its predictions, which is why they are scored against what really happens.", "weakness": "Its payer-rule library is still thin, and some of its code-pair tables are synthetic stand-ins.", "villain": "*The Edit Trap*: a payer's hidden rule that rejects a perfectly good claim.", "officer": "The Billing Officer.", "reads": ["claim", "claim_details", "payer_rule", "contract_rate"], "writes": ["agent_finding", "agent_forecast"]}, {"code": "A6", "name": "The Courier", "role": "Claim Submission and Response", "stage": "Before the claim leaves", "power": "Carries the claim over the Relay Tower, and meets what comes back.", "move": "When a rejection or acknowledgement (999, 277CA) returns, it reads it in seconds and hands the fix to the right officer.", "trait": "Fast, practical, speaks in short sentences. Hates a package that comes back unopened.", "weakness": "The sending side is not complete: it still needs a release signal and its own claim writer.", "villain": "*The Silent Bounce*, a claim that is rejected at the gate and nobody notices for a week.", "officer": "The Billing Officer.", "reads": ["claim", "claim_status_history"], "writes": ["claim_status_history", "agent_task"]}, {"code": "A7", "name": "The Hunter", "role": "AR Next-Best-Action", "stage": "After submission", "power": "Smells the claims that have gone quiet.", "move": "Each week sweeps every submitted claim, compares its age to how long that payer usually takes, and ranks the overdue ones by dollars and filing risk.", "trait": "Patient predator. Never chases the same trail twice in the same day.", "weakness": "Real status inquiries (276/277) are not wired yet; it infers silence from age.", "villain": "*The Quiet Claim*, which sits in a payer's queue until the filing deadline passes.", "officer": "The Billing Officer.", "reads": ["claim", "claim_status_history", "ar"], "writes": ["agent_task", "agent_finding"]}, {"code": "A8", "name": "The Advocate", "role": "Denial Resolution and Appeal", "stage": "After submission", "power": "Gives every denial a category, an owner and a deadline, and drafts the argument.", "move": "Reads the sealed letter (835), finds what the denial really says, and builds the appeal packet with the evidence an officer needs.", "trait": "Fierce on the page, courteous in person. Believes every denial deserves a hearing.", "weakness": "Cannot yet gather evidence from the EHR on its own, or track the final outcome without help.", "villain": "*The Denial Dragon*.", "officer": "The Denials Officer, whose name goes on every appeal.", "reads": ["denial", "transactions", "adjustment_reason", "remark_code", "document"], "writes": ["appeal", "agent_task", "agent_approval"]}, {"code": "A9", "name": "The Coach", "role": "Denial Prevention Learning", "stage": "After submission", "power": "Notices when the same denial keeps coming back and teaches the others to stop it.", "move": "Clusters denials by payer, procedure and reason over 120 days, proposes a new rule, and, after a named approval, hands it to the Mirror.", "trait": "Teacherly. Loves a lesson that is tested before it is taught.", "weakness": "Its thresholds are placeholders and it works one rule family so far.", "villain": "*The Repeating Wraith*, the same denial, again and again.", "officer": "The Compliance Officer, who must approve every new rule by name.", "reads": ["denial", "claim_details"], "writes": ["payer_rule", "agent_value"]}, {"code": "A10", "name": "The Auditor", "role": "Contract and Underpayment", "stage": "Payment", "power": "Knows what the contract says each payment should have been.", "move": "Compares every payment to the contract rate, names the cause, spots payer-wide patterns, drafts the dispute.", "trait": "Meticulous, dry, quietly delighted by a rounding error.", "weakness": "Needs the real signed contracts; today many rates are inferred and marked as such.", "villain": "*The Short-Pay Goblin*, who pays a little less every time and hopes nobody checks.", "officer": "The Billing Officer, with the Practice Manager for payer disputes.", "reads": ["payment", "claim_details", "contract_rate", "fee_list"], "writes": ["agent_finding", "agent_value"]}, {"code": "A11", "name": "The Bookkeeper", "role": "Payment Posting and Reconciliation", "stage": "Payment", "power": "Matches the letter of payment to what the clinic's books actually recorded.", "move": "Finds a claim that was paid but not posted, or posted for less than paid, and measures days to post.", "trait": "Neat. Counts everything twice. Does not trust anyone's \"I think it's posted.\"", "weakness": "Does not see the bank any more (the bank deposit feed was removed by design), so it reconciles *payment to posting*, not payment to account.", "villain": "*The Cash Ghost*: money received, recorded nowhere.", "officer": "The Finance Officer.", "reads": ["payment", "transactions", "claim"], "writes": ["agent_finding", "agent_task"]}, {"code": "A12", "name": "The Concierge", "role": "Patient Financial Engagement", "stage": "Patient and people", "power": "Explains a patient's balance in plain words, so staff can speak to it with confidence.", "move": "Sorts open balances by kind and age and writes a short, kind explanation for the staff member.", "trait": "Warm and patient. Treats a bill as a conversation.", "weakness": "Staff-facing only. No outreach, no payment processing and no write-off until legal review of texting and collection rules is done.", "villain": "*The Forgotten Balance*.", "officer": "The Patient Accounts Officer.", "reads": ["ar", "patient_statement", "payment_plan", "patient_contact_preference"], "writes": ["agent_task"]}, {"code": "A13", "name": "The Credentialing Sentinel", "role": "Credentialing and Enrollment", "stage": "Patient and people", "power": "Watches the seals that let each provider be paid by each House.", "move": "Counts the dollars at risk when an enrollment is about to lapse or a screening finds a problem, and raises it early.", "trait": "Grave, patient, remembers dates.", "weakness": "No portal and no live exclusion-list lookup yet.", "villain": "*The Lapsed Seal*.", "officer": "The Credentialing Officer.", "reads": ["enrollment", "provider", "payer", "claim"], "writes": ["agent_finding"]}, {"code": "A14", "name": "The Captain", "role": "RCM Control Tower", "stage": "Across the realm", "power": "Sees every agent's finding in one hall and decides what the officers should look at first.", "move": "The morning council: one inbox, a cash forecast whose accuracy is measured, four standing signals, and a daily review of what is stuck.", "trait": "Calm. Allergic to noise. Never raises a card without a dollar amount.", "weakness": "No screen of its own yet, and its forecast model is simple.", "villain": "*The Fog*: everyone busy, nobody knowing what matters.", "officer": "The Practice Manager (the Commander).", "reads": ["agent_*"], "writes": ["agent_forecast", "agent_task"]}, {"code": "A15", "name": "The Detective / Scout", "role": "Revenue Assurance Investigator", "stage": "Across the realm", "power": "Notices slow bleeding that no single alarm catches.", "move": "Compares what a payer actually pays to what the contract expects, recent weeks against a baseline, then explains each slice and names which upstream agent had flagged the claim before billing.", "trait": "Curious. Never satisfied with \"it just dipped.\"", "weakness": "Detects and explains, but cannot fix; it depends on the others to act.", "villain": "*The Slow Bleed*, a thousand small leaks that add up to a flood.", "officer": "The Practice Manager and the Finance Officer.", "reads": ["payment", "claim_details", "contract_rate", "agent_finding"], "writes": ["agent_finding", "agent_value"]}], "stages": ["Before the visit", "After the visit", "Before the claim leaves", "After submission", "Payment", "Patient and people", "Across the realm"], "officers": [{"name": "Commander** (Practice Manager)", "key": "Priorities, payer disputes, the escalation ladder", "works": "Captain, Detective / Scout"}, {"name": "Front Desk Officer", "key": "Booking, insurance cards, calling patients", "works": "Gatekeeper"}, {"name": "Authorization Officer", "key": "Filing permits with the Great Houses", "works": "Permit Clerk"}, {"name": "The Provider** (clinician)", "key": "Notes, signatures, medical judgement", "works": "Note Chaser"}, {"name": "Coding Officer", "key": "Every code, final word", "works": "Code Whisperer"}, {"name": "Billing Officer", "key": "Releasing, fixing and following up claims", "works": "Mirror, Courier, Hunter, Auditor"}, {"name": "Denials Officer", "key": "Putting a name on an appeal", "works": "Advocate"}, {"name": "Finance Officer", "key": "Posting, refunds, write-offs", "works": "Bookkeeper"}, {"name": "Patient Accounts Officer", "key": "Speaking to patients about balances", "works": "Concierge"}, {"name": "Credentialing Officer", "key": "Enrollment and revalidation", "works": "Credentialing Sentinel"}, {"name": "Compliance Warden", "key": "Approving rules, guarding the Oaths", "works": "Coach, and everyone"}], "oaths": [{"title": "We look, we do not touch.", "text": "No agent writes into the clinic's own books (the PM and EHR). It reads, and it leaves notes and tasks."}, {"title": "No gold moves without a name.", "text": "A code is never changed, and a refund or write-off never made, without a named officer's approval."}, {"title": "Every deed is written down.", "text": "Each decision goes into the *Ledger of Deeds* (the decision record): what was seen, which rule fired, when it was known, who approved. No entry, no action."}, {"title": "Earn your rank.", "text": "Every new power starts in the *Shadow Grounds*, where the agent only writes what it *would* do and sends nothing. Rank is earned with evidence."}]}</script>
+<script>
+(function(){
+var D=JSON.parse(document.getElementById("data").textContent);
+var COLORS={};var PAL=["#0f766e","#b45309","#6d28d9","#be123c","#15803d","#1d4ed8","#475569"];
+D.stages.forEach(function(s,i){COLORS[s]=PAL[i%PAL.length]});
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function md(s){return esc(s).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/\*([^*]+)\*/g,"<i>$1</i>")}
+function $(id){return document.getElementById(id)}
+$("oaths").innerHTML=D.oaths.map(function(o){return '<div class="oath"><b>'+md(o.title)+'</b><span>'+md(o.text)+'</span></div>'}).join("");
+$("officers").innerHTML=D.officers.map(function(o){return '<div class="off"><b>'+esc(o.name)+'</b><span>Holds: '+md(o.key)+'</span><span>Works with: '+md(o.works)+'</span></div>'}).join("");
+var stage="All";
+$("pills").innerHTML=["All"].concat(D.stages).map(function(s){return '<button class="pill" aria-pressed="'+(s==="All")+'" data-s="'+esc(s)+'">'+esc(s)+'</button>'}).join("");
+$("grid").innerHTML=D.agents.map(function(a,i){
+  var tabs=function(l){return l.map(function(t){return '<code>'+esc(t)+'</code>'}).join(" ")};
+  return '<article class="card" style="--c:'+COLORS[a.stage]+'" data-i="'+i+'" data-s="'+esc(a.stage)+'">'
+   +'<div class="row"><div class="shield" aria-hidden="true">'+esc(a.code)+'</div><div><h2>'+esc(a.name)+'</h2><div class="role">'+esc(a.role)+' &middot; '+esc(a.stage)+'</div></div></div>'
+   +'<p class="power">'+md(a.power)+'</p>'
+   +'<div class="chips"><span class="chip v">'+md(a.villain)+'</span><span class="chip o">'+md(a.officer)+'</span></div>'
+   +'<div class="rank">Rank L0 &middot; Shadow Grounds</div>'
+   +'<details><summary>Powers, traits and limits</summary><dl>'
+   +'<div><dt>Signature move</dt><dd>'+md(a.move)+'</dd></div>'
+   +'<div><dt>Trait</dt><dd>'+md(a.trait)+'</dd></div>'
+   +'<div class="weak"><dt>Weakness (real limit today)</dt><dd>'+md(a.weakness)+'</dd></div>'
+   +'<div><dt>Reads</dt><dd>'+tabs(a.reads)+'</dd></div>'
+   +'<div><dt>Writes</dt><dd>'+tabs(a.writes)+'</dd></div>'
+   +'</dl></details></article>'}).join("");
+var cards=[].slice.call(document.querySelectorAll(".card"));
+function apply(){
+  var q=$("q").value.trim().toLowerCase(),n=0;
+  cards.forEach(function(c){
+    var a=D.agents[+c.dataset.i],hay=JSON.stringify(a).toLowerCase();
+    var ok=(stage==="All"||a.stage===stage)&&(!q||hay.indexOf(q)>=0);
+    c.hidden=!ok;if(ok)n++});
+  $("count").textContent=n+" of "+cards.length+" agents"}
+$("q").addEventListener("input",apply);
+$("pills").addEventListener("click",function(e){var b=e.target.closest(".pill");if(!b)return;stage=b.dataset.s;
+  [].forEach.call(document.querySelectorAll(".pill"),function(p){p.setAttribute("aria-pressed",p===b)});apply()});
+var open=false;$("expand").addEventListener("click",function(){open=!open;
+  [].forEach.call(document.querySelectorAll("details"),function(d){d.open=open});this.textContent=open?"Close all":"Open all"});
+$("theme").addEventListener("click",function(){var r=document.documentElement,dark=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",dark?"light":"dark")});
+apply();
+})();
+</script>
+</body>
+</html>

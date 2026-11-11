@@ -1,0 +1,230 @@
+"""Build docs/story/guild-story-map.html: the story as a picture (a road map of one claim's journey plus a comic strip per scene).
+
+    python tools/story/build_visual.py            (override the output with KRISNNAI_VISUAL_OUT)
+
+Scene text lives in SCENES below and mirrors docs/story/THE-REVENUE-GUILD.md part 4.
+"""
+import json, os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.environ.get("KRISNNAI_VISUAL_OUT") or os.path.normpath(os.path.join(HERE, "..", "..", "docs", "story", "guild-story-map.html"))
+
+STAGE = {  # agent code -> (name, colour)
+    "A1": ("Gatekeeper", "#0f766e"), "A2": ("Permit Clerk", "#0f766e"), "A3": ("Note Chaser", "#b45309"), "A4": ("Code Whisperer", "#b45309"),
+    "A5": ("Mirror", "#6d28d9"), "A6": ("Courier", "#6d28d9"), "A7": ("Hunter", "#be123c"), "A8": ("Advocate", "#be123c"), "A9": ("Coach", "#be123c"),
+    "A10": ("Auditor", "#15803d"), "A11": ("Bookkeeper", "#15803d"), "A12": ("Concierge", "#1d4ed8"), "A13": ("Credentialing", "#1d4ed8"),
+    "A14": ("Captain", "#475569"), "A15": ("Detective", "#475569"),
+}
+SCENES = [
+    dict(n=1, place="Booking", title="The lapsed policy", leaks=["Lapsed Policy", "Missing Permit"],
+         problem="The patient's insurance ended last month. Nobody knows until the claim bounces weeks later.",
+         agents=[["A1", "Asks the payer if coverage holds, now, 3 days and 1 day before the visit"], ["A2", "Sees the procedure needs a permit and prepares the request"]],
+         officers=[["Imani", "Front Desk", "Phones the patient for the new card"], ["Tomas", "Authorization", "Files the permit"]],
+         result="The visit is covered and permitted before the patient walks in.", words="A booking is made. The Gatekeeper checks coverage at once and finds it lapsed. A person fixes it."),
+    dict(n=2, place="The visit", title="The unsigned scroll", leaks=["Unsigned Scroll", "Level Drift"],
+         problem="The note is unsigned and the charge is not entered. The code on the visit looks a level too low.",
+         agents=[["A3", "Nudges the doctor, then climbs the ladder: doctor, manager, medical director"], ["A4", "Whispers 'looks undercoded' with the dollar difference. Never changes a code."]],
+         officers=[["Dr. Okafor", "Provider", "Signs the note"], ["Lin", "Coding", "Decides every code"]],
+         result="Note signed, charge entered, and a human chose the final code.", words="The agents chase and suggest. The doctor and the coder decide."),
+    dict(n=3, place="Claim ready", title="The mirror and the bounce", leaks=["Edit Trap", "Silent Bounce"],
+         problem="The payer has a hidden rule that rejects this claim. Then a typo in the member number bounces it at the gate.",
+         agents=[["A5", "Shows a 31% chance of denial and why, before the claim leaves"], ["A6", "Reads the rejection within seconds and routes the fix"]],
+         officers=[["Sven", "Billing", "Fixes the modifier pair, then the member number, and resends"]],
+         result="A clean claim is on the road the same day.", words="The Mirror warns before sending. The Courier catches the bounce within seconds."),
+    dict(n=4, place="The wait", title="The quiet claim", leaks=["Quiet Claim"],
+         problem="Thirty-five days and no answer. The filing deadline is getting close.",
+         agents=[["A7", "Ranks every overdue claim by dollars and filing risk"]],
+         officers=[["Sven", "Billing", "Calls the payer about the top of the list"]],
+         result="The lost claim is found and moves again.", words="The Hunter sniffs out the claims that went silent and puts the riskiest first."),
+    dict(n=5, place="The verdict", title="Denial, short-pay, cash ghost", leaks=["Denial Dragon", "Short-Pay Goblin", "Cash Ghost"],
+         problem="One line is denied, one is paid below the contract, and some of the money was never posted.",
+         agents=[["A8", "Categorises the denial and drafts the appeal"], ["A10", "Compares payment to the contract and drafts the dispute"], ["A11", "Finds paid money that was never posted"]],
+         officers=[["Priya", "Denials", "Reads the appeal, edits, signs her name"], ["Carlos", "Finance", "Posts the missing money"]],
+         result="Appeal sent under a name, dispute ready, cash posted.", words="Three agents find three problems in one payment letter. Two officers act."),
+    dict(n=6, place="The balance", title="The forgotten balance", leaks=["Forgotten Balance"],
+         problem="What insurance did not pay is now the patient's balance, and nobody has explained it.",
+         agents=[["A12", "Writes a plain-words explanation for staff. Sends nothing itself."]],
+         officers=[["Hana", "Patient Accounts", "Speaks to the patient in her own voice"]],
+         result="The patient hears a kind, clear explanation from a person.", words="The agent drafts the words. A person says them."),
+    dict(n=7, place="Across weeks", title="The slow bleed", leaks=["Slow Bleed", "Repeating Wraith", "Lapsed Seal"],
+         problem="One payer pays 6% below contract across a month. The same denial keeps returning. A provider's enrollment is about to expire.",
+         agents=[["A15", "Spots the drift and traces it to the procedure"], ["A9", "Proposes a rule to stop the repeating denial"], ["A13", "Prices the claims at risk from the expiring enrollment"]],
+         officers=[["Warden Bell", "Compliance", "Approves the new rule by name"], ["Ravi", "Credentialing", "Renews the enrollment"]],
+         result="The drift is explained, the rule is taught to the Mirror, and the seal is renewed.", words="Small leaks add up. The Guild connects them and the officers act."),
+    dict(n=8, place="Morning", title="The morning council", leaks=["The Fog"],
+         problem="Everyone is busy and nobody knows what matters most today.",
+         agents=[["A14", "One inbox ranked by dollars, a cash forecast with its error measured, four signals"]],
+         officers=[["Commander", "Practice Manager", "Assigns two, dismisses one"]],
+         result="The team starts the day on the right problems.", words="The Captain turns everything into one ranked list."),
+]
+
+tpl = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Road of the Claim</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#1c2333;--mute:#586277;--line:#ded8c8;--navy:#1f3864;--soft:#ece7da;--road:#b9ae94;--river:#cfe3f3;--bad:#b3261e;--good:#15803d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#8fb0ea;--soft:#222b3d;--road:#5b5646;--river:#1e3a52;--bad:#ff8a80;--good:#6fd39a}}
+:root[data-theme="dark"]{--bg:#10141c;--panel:#192030;--ink:#e8ecf4;--mute:#9ba8bc;--line:#2a3347;--navy:#8fb0ea;--soft:#222b3d;--road:#5b5646;--river:#1e3a52;--bad:#ff8a80;--good:#6fd39a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,Arial,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px 60px}
+header{padding:30px 0 6px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+h1{margin:0;font-size:clamp(26px,4vw,40px);line-height:1.1;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:8px 0 0;max-width:72ch}
+.btn{font:inherit;color:inherit;border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:8px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:14px 0 8px;font-size:13px;color:var(--mute)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.mapbox{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+#map{display:block;min-width:1000px;width:100%;height:auto}
+#map text{font-family:"Segoe UI",system-ui,Arial,sans-serif;fill:var(--ink)}
+.stoplabel{font-size:12px;font-weight:700}
+.small{font-size:11px}
+.leakname{font-size:11px;font-weight:600}
+.coin{animation:fall 3.2s ease-in infinite}
+@keyframes fall{0%{transform:translateY(0);opacity:1}85%{opacity:1}100%{transform:translateY(120px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.coin,.traveler{display:none}}
+h2{margin:34px 0 4px;font-size:22px}
+.scene{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:14px}
+.scene h3{margin:0 0 2px;font-size:18px;display:flex;align-items:center;gap:10px}
+.num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--panel);display:grid;place-items:center;font-weight:800;font-size:14px}
+.words{color:var(--mute);margin:0 0 12px 40px}
+.strip{display:grid;grid-template-columns:1fr 26px 1.25fr 26px 1fr 26px 1fr;gap:6px;align-items:stretch}
+.arrow{display:grid;place-items:center;color:var(--mute);font-size:22px}
+.panel{border-radius:10px;padding:10px 12px;border:1px solid var(--line);display:flex;flex-direction:column;gap:7px;min-width:0}
+.panel .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.p-bad{background:color-mix(in srgb,var(--bad) 9%,var(--panel));border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.p-bad .tag{color:var(--bad)}
+.p-agent{background:var(--panel)}
+.p-off{background:color-mix(in srgb,var(--navy) 10%,var(--panel));border-color:color-mix(in srgb,var(--navy) 40%,var(--line))}
+.p-off .tag{color:var(--navy)}
+.p-good{background:color-mix(in srgb,var(--good) 10%,var(--panel));border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
+.p-good .tag{color:var(--good)}
+.leaks{display:flex;flex-wrap:wrap;gap:6px}
+.leak{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+.row{display:flex;gap:9px;align-items:flex-start}
+.shield{flex:none;width:34px;height:39px;color:#fff;font-weight:800;font-size:11px;display:grid;place-items:center;clip-path:polygon(50% 0,100% 14%,100% 58%,50% 100%,0 58%,0 14%);padding-bottom:4px}
+.who{font-weight:700;font-size:13px}
+.what{font-size:13px;color:var(--mute)}
+.person{flex:none;width:30px;height:34px}
+.loop{display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr;gap:8px;align-items:stretch;margin-top:12px}
+.box{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 14px}
+.box b{display:block;margin-bottom:3px}
+.note{margin-top:30px;color:var(--mute);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
+@media (max-width:900px){.strip,.loop{grid-template-columns:1fr}.arrow{transform:rotate(90deg);height:20px}.words{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>The Road of the Claim</h1>
+    <p class="sub">One patient visit, from the booking bell to the money in the bank. Watch the traveler walk the road. At every bridge a leak waits, an agent stands guard, and an officer holds the key.</p>
+  </div>
+  <button class="btn" id="theme" aria-label="Toggle light and dark">Theme</button>
+</header>
+<div class="legend">
+  <span><svg width="20" height="22" viewBox="-12 -13 24 28" aria-hidden="true"><polygon points="0,-12 11,-7 11,6 0,14 -11,6 -11,-7" fill="#0f766e"/></svg>Agent (looks, drafts, warns)</span>
+  <span><svg width="24" height="18" viewBox="-14 -10 28 22" aria-hidden="true"><ellipse rx="12" ry="8" fill="#2b2233"/><circle cx="-4" cy="-1" r="2.5" fill="#fff"/><circle cx="4" cy="-1" r="2.5" fill="#fff"/></svg>A leak (what goes wrong)</span>
+  <span><svg width="16" height="20" viewBox="-8 -10 16 20" aria-hidden="true"><circle cy="-5" r="4" fill="#1f3864"/><path d="M-7,9 Q-7,0 0,0 Q7,0 7,9Z" fill="#1f3864"/></svg>Officer (a human who decides)</span>
+  <span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle r="6" fill="#e0a800"/></svg>Money that would leak</span>
+</div>
+<div class="mapbox"><svg id="map" viewBox="0 70 1200 400" role="img" aria-label="A winding road with eight stops. At each stop agents guard the bridge, a leak waits in the river below and an officer stands beside the road."></svg></div>
+
+<h2>Eight scenes, one frame each</h2>
+<p class="sub">Read each strip left to right: what goes wrong, which agents step in, which person decides, and how it ends.</p>
+<div id="scenes"></div>
+
+<h2>The rule behind every scene</h2>
+<div class="loop">
+  <div class="box"><b>1. The agent looks and drafts</b>It reads the clinic's data, finds the problem and prepares a suggestion. It never touches the clinic's own books.</div>
+  <div class="arrow" aria-hidden="true">&rarr;</div>
+  <div class="box"><b>2. The officer decides and signs</b>Anything that changes a code, moves money or goes to a payer needs a named person.</div>
+  <div class="arrow" aria-hidden="true">&rarr;</div>
+  <div class="box"><b>3. The Ledger of Deeds records it</b>What was seen, which rule fired, who approved. In the Shadow Grounds nothing is sent, the Guild only writes what it <i>would</i> do.</div>
+</div>
+<p class="note">Fiction built on the real design. Patients are synthetic and appear only as hashes. Source: docs/story/THE-REVENUE-GUILD.md. Rebuild this page with tools/story/build_visual.py.</p>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function(){
+var D=JSON.parse(document.getElementById("data").textContent),S=D.stage,SC=D.scenes,NS="http://www.w3.org/2000/svg";
+function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function T(txt,a,p){var t=el("text",a,p);t.textContent=txt;return t}
+var svg=document.getElementById("map");
+// river
+el("path",{d:"M0,352 C150,332 250,372 400,352 S650,332 800,352 S1050,372 1200,352 L1200,470 L0,470Z",fill:"var(--river)"},svg);
+T("THE RIVER OF LEAKS",{x:14,y:462,"font-size":11,"font-weight":700,"letter-spacing":".12em",opacity:.6},svg);
+// road
+function ry(x){return 215+38*Math.sin((x-40)/105)}
+var pts=[];for(var x=40;x<=1160;x+=8)pts.push((x===40?"M":"L")+x+","+ry(x).toFixed(1));
+var road=el("path",{id:"road",d:pts.join(" "),fill:"none",stroke:"var(--road)","stroke-width":26,"stroke-linecap":"round","stroke-linejoin":"round"},svg);
+el("path",{d:pts.join(" "),fill:"none",stroke:"var(--panel)","stroke-width":2,"stroke-dasharray":"2 12","stroke-linecap":"round",opacity:.9},svg);
+function shield(cx,cy,code,col){var g=el("g",{transform:"translate("+cx+","+cy+")"},svg);
+  el("title",{},g).textContent=code+" "+S[code][0];
+  el("polygon",{points:"0,-19 17,-11 17,8 0,22 -17,8 -17,-11",fill:col,stroke:"var(--panel)","stroke-width":2},g);
+  T(code,{x:0,y:3,"text-anchor":"middle","font-size":10,"font-weight":800,style:"fill:#fff"},g)}
+function person(cx,cy){var g=el("g",{transform:"translate("+cx+","+cy+")"},svg);
+  el("circle",{cy:-7,r:5.5,fill:"var(--navy)"},g);el("path",{d:"M-9,12 Q-9,0 0,0 Q9,0 9,12Z",fill:"var(--navy)"},g)}
+function blob(cx,cy,sc){var g=el("g",{transform:"translate("+cx+","+cy+") scale("+(sc||1)+")"},svg);
+  el("ellipse",{rx:27,ry:19,fill:"#2b2233"},g);
+  el("path",{d:"M-14,-15 L-9,-26 L-4,-16 M4,-16 L9,-26 L14,-15",fill:"#2b2233"},g);
+  el("circle",{cx:-9,cy:-3,r:5,fill:"#fff"},g);el("circle",{cx:9,cy:-3,r:5,fill:"#fff"},g);
+  el("circle",{cx:-8,cy:-2,r:2.4,fill:"#c0392b"},g);el("circle",{cx:10,cy:-2,r:2.4,fill:"#c0392b"},g);
+  el("path",{d:"M-13,-9 L-5,-6 M13,-9 L5,-6",stroke:"#fff","stroke-width":1.6,fill:"none"},g);
+  el("path",{d:"M-8,8 Q0,13 8,8",stroke:"#c0392b","stroke-width":2,fill:"none"},g)}
+var n=SC.length,x0=95,dx=(1110-95)/(n-1);
+SC.forEach(function(sc,i){
+  var x=x0+i*dx,y=ry(x);
+  // coins falling from the road
+  for(var c=0;c<2;c++){var coin=el("circle",{cx:x-8+c*16,cy:y+14,r:5,fill:"#e0a800",stroke:"#9a7400","stroke-width":1,"class":"coin",style:"animation-delay:"+(i*.4+c*1.5)+"s"},svg)}
+  el("circle",{cx:x,cy:y,r:17,fill:"var(--navy)",stroke:"var(--panel)","stroke-width":3},svg);
+  T(String(sc.n),{x:x,y:y+5,"text-anchor":"middle","font-size":15,"font-weight":800,style:"fill:var(--panel)"},svg);
+  T(sc.place,{x:x,y:y-26,"text-anchor":"middle","class":"stoplabel"},svg);
+  // agents above
+  var na=sc.agents.length,w=40,start=x-(na-1)*w/2;
+  sc.agents.forEach(function(a,k){shield(start+k*w,y-82,a[0],S[a[0]][1])});
+  T(sc.agents.map(function(a){return S[a[0]][0]}).join(" + "),{x:x,y:y-50,"text-anchor":"middle","class":"small",opacity:.8},svg);
+  // officers below the road
+  var no=sc.officers.length,ow=44,os=x-(no-1)*ow/2;
+  sc.officers.forEach(function(o,k){person(os+k*ow,y+58);T(o[0],{x:os+k*ow,y:y+84,"text-anchor":"middle","class":"small"},svg)});
+  // leaks in the river
+  var nl=sc.leaks.length,lw=nl>=3?62:(nl==2?66:0),ls=x-(nl-1)*lw/2,bs=nl>=3?.72:(nl==2?.9:1);
+  sc.leaks.forEach(function(l,k){var bx=ls+k*lw;blob(bx,396,bs);
+    var words=l.split(" "),a=words.length>1?words.slice(0,Math.ceil(words.length/2)).join(" "):l,b=words.length>1?words.slice(Math.ceil(words.length/2)).join(" "):"";
+    T(a,{x:bx,y:430,"text-anchor":"middle","class":"leakname"},svg);if(b)T(b,{x:bx,y:443,"text-anchor":"middle","class":"leakname"},svg)});
+});
+// the traveler
+var tr=el("g",{"class":"traveler"},svg);
+el("circle",{r:11,fill:"#e0a800",stroke:"var(--ink)","stroke-width":2},tr);T("T",{x:0,y:4,"text-anchor":"middle","font-size":11,"font-weight":800,style:"fill:#1c2333"},tr);
+var am=el("animateMotion",{dur:"26s",repeatCount:"indefinite",rotate:"0"},tr);var mp=el("mpath",{},am);mp.setAttributeNS("http://www.w3.org/1999/xlink","href","#road");mp.setAttribute("href","#road");
+
+// the scene strips
+document.getElementById("scenes").innerHTML=SC.map(function(sc){
+  var shields=function(a){return '<div class="row"><div class="shield" style="background:'+S[a[0]][1]+'" aria-hidden="true">'+esc(a[0])+'</div><div><div class="who">'+esc(S[a[0]][0])+'</div><div class="what">'+esc(a[1])+'</div></div></div>'};
+  var offs=function(o){return '<div class="row"><svg class="person" viewBox="-10 -12 20 26" aria-hidden="true"><circle cy="-6" r="5" fill="var(--navy)"/><path d="M-9,12 Q-9,1 0,1 Q9,1 9,12Z" fill="var(--navy)"/></svg><div><div class="who">'+esc(o[0])+' <span class="what">('+esc(o[1])+')</span></div><div class="what">'+esc(o[2])+'</div></div></div>'};
+  var leaks=sc.leaks.map(function(l){return '<span class="leak"><svg width="22" height="16" viewBox="-14 -10 28 22" aria-hidden="true"><ellipse rx="12" ry="8" fill="#2b2233"/><circle cx="-4" cy="-1" r="2.5" fill="#fff"/><circle cx="4" cy="-1" r="2.5" fill="#fff"/></svg>'+esc(l)+'</span>'}).join("");
+  return '<section class="scene"><h3><span class="num">'+sc.n+'</span>'+esc(sc.title)+'</h3><p class="words">'+esc(sc.words)+'</p>'
+   +'<div class="strip">'
+   +'<div class="panel p-bad"><span class="tag">What goes wrong</span><div class="leaks">'+leaks+'</div><div class="what" style="color:var(--ink)">'+esc(sc.problem)+'</div></div>'
+   +'<div class="arrow" aria-hidden="true">&rarr;</div>'
+   +'<div class="panel p-agent"><span class="tag" style="color:var(--mute)">Agents step in</span>'+sc.agents.map(shields).join("")+'</div>'
+   +'<div class="arrow" aria-hidden="true">&rarr;</div>'
+   +'<div class="panel p-off"><span class="tag">An officer decides</span>'+sc.officers.map(offs).join("")+'</div>'
+   +'<div class="arrow" aria-hidden="true">&rarr;</div>'
+   +'<div class="panel p-good"><span class="tag">How it ends</span><div style="font-weight:600">'+esc(sc.result)+'</div></div>'
+   +'</div></section>'}).join("");
+document.getElementById("theme").addEventListener("click",function(){var r=document.documentElement,dark=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",dark?"light":"dark")});
+})();
+</script>
+</body>
+</html>
+'''
+data = json.dumps(dict(stage=STAGE, scenes=SCENES), ensure_ascii=False).replace("<", "\\u003c")
+open(OUT, "w", encoding="utf-8").write(tpl.replace("__DATA__", data))
+print("saved", OUT)
