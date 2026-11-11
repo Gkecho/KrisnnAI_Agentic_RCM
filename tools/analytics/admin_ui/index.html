@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KrisnnAI Query Admin</title>
+<style>
+/* tokens copied from the KrisnnAI site base.css (indigo palette, light + dark) */
+:root{
+  --bg:#f2f3f8; --surface:#ffffff; --sunk:#e9ebf4; --ink:#1a1c31; --muted:#5b5f7e; --line:#d4d7e6;
+  --accent:#4b4fd8; --accent-ink:#ffffff; --accent-soft:#e5e6fb;
+  --ok:#16805a; --ok-soft:#dcf2e8; --part:#a86a0b; --part-soft:#fbefd9; --gap:#c23b3b; --gap-soft:#f8e1e1;
+  --f-display:"Instrument Sans",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11121d; --surface:#1a1c2c; --sunk:#222438; --ink:#e8e9f6; --muted:#9a9db9; --line:#30334a;
+  --accent:#8b8ef5; --accent-ink:#11121d; --accent-soft:#2a2c52;
+  --ok:#4fc493; --ok-soft:#173a2d; --part:#f0b34a; --part-soft:#3a2f1a; --gap:#ef7b7b; --gap-soft:#3d1f22; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11121d; --surface:#1a1c2c; --sunk:#222438; --ink:#e8e9f6; --muted:#9a9db9; --line:#30334a;
+  --accent:#8b8ef5; --accent-ink:#11121d; --accent-soft:#2a2c52;
+  --ok:#4fc493; --ok-soft:#173a2d; --part:#f0b34a; --part-soft:#3a2f1a; --gap:#ef7b7b; --gap-soft:#3d1f22; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body)}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.01em}
+h2{font-size:15px} h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:var(--f-mono)}
+.muted{color:var(--muted)} .mono{font-family:var(--f-mono)}
+header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+header h1{font-size:18px} header .sp{flex:1}
+label.f{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button{font:600 13px var(--f-display);cursor:pointer;border-radius:9px;padding:8px 13px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}
+button.ghost{background:transparent;color:var(--accent)}
+button.warn{background:transparent;border-color:var(--gap);color:var(--gap)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.layout{display:grid;grid-template-columns:270px 1fr;gap:16px;padding:16px 20px 40px;max-width:1500px;margin:0 auto}
+@media (max-width:860px){.layout{grid-template-columns:1fr;padding:12px 16px 40px}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.stack{display:grid;gap:14px;align-content:start;min-width:0}
+#tree ul{list-style:none;margin:0;padding-left:14px;border-left:1px dashed var(--line)}
+#tree>ul{padding-left:0;border:0}
+#tree li{margin:2px 0}
+#tree .n{all:unset;cursor:pointer;display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:8px;width:100%}
+#tree .n:hover{background:var(--sunk)} #tree .n.sel{background:var(--accent-soft);color:var(--accent);font-weight:600}
+#tree .n:focus-visible{outline:3px solid var(--accent)}
+.lvl{font:600 10px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:30px}
+.pill{display:inline-flex;align-items:center;font:600 11px var(--f-mono);padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill.solution{background:var(--accent-soft);color:var(--accent)} .pill.parent_app{background:var(--sunk);color:var(--ink)}
+.pill.application{background:var(--ok-soft);color:var(--ok)} .pill.customer{background:var(--part-soft);color:var(--part)}
+.pill.role{background:var(--gap-soft);color:var(--gap)}
+.pill.st{background:var(--sunk);color:var(--muted)} .pill.st.published{background:var(--ok-soft);color:var(--ok)}
+.pill.st.in_review,.pill.st.approved{background:var(--part-soft);color:var(--part)} .pill.st.draft{background:var(--accent-soft);color:var(--accent)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+tr.q{cursor:pointer} tr.q:hover td{background:var(--sunk)} tr.q.sel td{background:var(--accent-soft)}
+tr.q:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.scroll{overflow:auto;max-width:100%}
+textarea#sql{width:100%;min-height:300px;font:12.5px/1.5 var(--f-mono);resize:vertical;tab-size:2;white-space:pre}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.msg{padding:8px 12px;border-radius:10px;font-size:13px;background:var(--sunk)}
+.msg.err{background:var(--gap-soft);color:var(--gap)} .msg.ok{background:var(--ok-soft);color:var(--ok)}
+.diffadd{background:var(--ok-soft)} .diffrem{background:var(--gap-soft)}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{background:transparent;color:var(--muted);border-color:var(--line)} .tabs button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.badge-big{font-size:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Query Admin</h1><span class="muted">KrisnnAI RCM analytics &middot; local only</span>
+  <span class="sp"></span>
+  <label class="f">Acting as <input id="actor" size="12" value="gopi" aria-label="Acting as"></label>
+  <label class="f">Approval <select id="mode" aria-label="Approval mode"><option value="demo">demo (maker may approve)</option><option value="strict">strict (maker cannot approve)</option></select></label>
+  <button id="theme" class="ghost" aria-label="Toggle theme">Theme</button>
+  <button id="pubsite">Publish to site data</button>
+</header>
+<div class="layout">
+  <nav class="card" id="tree" aria-label="Scope hierarchy"><h3>Hierarchy</h3><div id="treebox"></div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">A query saved at a level applies to everything below it. The narrowest published override wins.</p></nav>
+  <main class="stack">
+    <div id="banner"></div>
+    <section class="card">
+      <div class="crumbs" id="crumbs"></div>
+      <div class="scroll"><table id="qtable"><thead><tr><th>Query</th><th>Charts</th><th>Effective level</th><th>Inherited from</th><th>Ver</th><th>Open</th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section class="card" id="editor" hidden>
+      <div class="row" style="justify-content:space-between"><h2 id="qtitle"></h2><span id="qbadge"></span></div>
+      <p class="muted" id="qmeta" style="margin:4px 0 10px"></p>
+      <textarea id="sql" spellcheck="false" aria-label="SQL editor"></textarea>
+      <div class="row" style="margin:8px 0"><input id="note" size="40" placeholder="Change note" aria-label="Change note">
+        <span class="muted" id="vstatus"></span></div>
+      <div class="row">
+        <button id="b-save" class="ghost">Save draft</button><button id="b-test">Test run</button>
+        <button id="b-submit" class="ghost">Submit for review</button><button id="b-approve" class="ghost">Approve</button>
+        <button id="b-reject" class="warn">Send back</button><button id="b-publish">Publish</button>
+        <button id="b-retire" class="warn">Retire override</button><button id="b-discard" class="warn">Discard draft</button>
+      </div>
+      <div id="impact" class="msg" style="margin-top:10px"></div>
+      <div id="result" style="margin-top:10px"></div>
+    </section>
+    <section class="card" id="histcard" hidden>
+      <div class="tabs"><button id="t-hist" class="on">History</button><button id="t-audit">Audit log</button></div>
+      <div class="scroll" id="histbox" style="margin-top:8px"></div>
+    </section>
+  </main>
+</div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let sel = {node: null, query: null}, detail = null, tab = "hist";
+function el(tag, attrs, ...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(k==="class")e.className=v;else if(k.startsWith("on"))e.addEventListener(k.slice(2),v);else e.setAttribute(k,v)}for(const k of kids.flat()){if(k==null)continue;e.append(k.nodeType?k:document.createTextNode(String(k)))}return e}
+const lvlName = (l) => l.replace("_"," ");
+async function api(path, body){
+  const o = body===undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json","X-Admin-Request":"1"}, body:JSON.stringify(body)};
+  const r = await fetch(path, o); const j = await r.json();
+  if(!r.ok) throw new Error(j.error||r.statusText); return j;
+}
+function say(text, kind){const b=$("banner");b.replaceChildren(text?el("div",{class:"msg "+(kind||"")},text):"")}
+const actor = () => $("actor").value.trim()||"admin";
+const guard = (fn) => async (...a) => {try{await fn(...a)}catch(e){say(e.message,"err")}};
+
+async function loadTree(){
+  const t = await api("/api/tree"); $("mode").value = t.approval_mode;
+  const draw = (n) => el("li",{}, el("button",{class:"n"+(n.id===sel.node?" sel":""),"data-id":n.id,onclick:()=>pickNode(n.id)}, el("span",{class:"lvl"},({solution:"sol",parent_app:"par",application:"app",customer:"cust",role:"role"})[n.level]), n.name),
+      n.children.length?el("ul",{},n.children.map(draw)):null);
+  $("treebox").replaceChildren(el("ul",{},t.tree.map(draw)));
+  if(sel.node===null){const app=findFirst(t.tree,"application"); pickNode(app?app.id:t.tree[0].id)}
+}
+function findFirst(nodes, level){for(const n of nodes){if(n.level===level)return n;const f=findFirst(n.children,level);if(f)return f}return null}
+const pickNode = guard(async (id) => {
+  sel.node = id; sel.query = null; $("editor").hidden = true; await loadTree0(); await loadQueries();
+});
+async function loadTree0(){document.querySelectorAll("#tree .n").forEach(b=>b.classList.toggle("sel",+b.dataset.id===sel.node))}
+async function loadQueries(){
+  const r = await api("/api/queries?node="+sel.node);
+  $("crumbs").replaceChildren(...r.path.flatMap((n,i)=>[i?el("span",{class:"muted"},"›"):"", el("span",{class:"pill "+n.level},lvlName(n.level)), n.name]));
+  const tb = $("qtable").tBodies[0]; tb.replaceChildren(...r.queries.map(q=>{
+    const tr = el("tr",{class:"q"+(q.query_id===sel.query?" sel":""),tabindex:"0","data-q":q.query_id,onclick:()=>pickQuery(q.query_id),onkeydown:(e)=>{if(e.key==="Enter")pickQuery(q.query_id)}},
+      el("td",{}, el("div",{}, q.title), el("div",{class:"muted mono"},q.query_id)), el("td",{class:"muted"},q.charts.join(", ")),
+      el("td",{}, el("span",{class:"pill "+q.level,"data-level":q.level}, lvlName(q.level))),
+      el("td",{}, q.inherited? q.from_node : "this level"), el("td",{class:"mono"},"v"+q.version),
+      el("td",{}, q.open_status?el("span",{class:"pill st "+q.open_status},q.open_status):""));
+    return tr}));
+}
+const pickQuery = guard(async (qid) => {sel.query=qid; await loadQueries(); await loadDetail(); $("result").replaceChildren()});
+async function loadDetail(){
+  detail = await api(`/api/query?query_id=${sel.query}&node=${sel.node}`);
+  const d = detail, ov = d.open_version, e = d.effective;
+  $("editor").hidden=false; $("histcard").hidden=false;
+  $("qtitle").textContent = d.spec.title;
+  $("qbadge").replaceChildren(el("span",{class:"pill badge-big "+e.level,id:"effbadge"},"effective: "+lvlName(e.level)+(e.inherited?" (inherited from "+e.from_node+")":" (set here)")+" v"+e.version));
+  $("qmeta").textContent = `${d.spec.query_id} · columns: ${d.spec.columns.map(c=>c[0]).join(", ")} · binds: ${d.spec.params.map(p=>":"+p).join(", ")} · editing at ${d.node.name} (${lvlName(d.node.level)})`;
+  $("sql").value = ov ? ov.sql : e.sql;
+  $("note").value = ov ? ov.change_note : "";
+  $("vstatus").replaceChildren(ov? el("span",{class:"pill st "+ov.status},`v${ov.version} ${ov.status}`+(ov.approval_note?" · "+ov.approval_note:"")+(ov.tested_ok?" · test passed":" · not tested")) : "No open version here: saving creates a draft at this level.");
+  const st = ov?ov.status:null, pubHere = d.history.some(h=>h.status==="published");
+  $("b-save").disabled = !!ov && ov.status!=="draft"; $("b-test").disabled = !!ov && ov.status!=="draft";
+  $("b-submit").disabled = st!=="draft"; $("b-approve").disabled = st!=="in_review"; $("b-reject").disabled = !(st==="in_review"||st==="approved");
+  $("b-publish").disabled = st!=="approved"; $("b-discard").disabled = st!=="draft";
+  $("b-retire").disabled = !pubHere || d.node.level==="solution";
+  $("sql").readOnly = !!ov && ov.status!=="draft";
+  const im = d.impact; $("impact").textContent = "Impact preview: "+im.summary+(im.shadowed.length?" Shadowed: "+im.shadowed.join(", ")+".":"");
+  await drawHist();
+}
+async function drawHist(){
+  const box=$("histbox");
+  if(tab==="audit"){
+    const a = await api("/api/audit?limit=60&query_id="+sel.query);
+    box.replaceChildren(el("div",{class:"muted"},"Hash chain: "+(a.chain_ok?"intact":"BROKEN")), el("table",{},el("thead",{},el("tr",{},...["When","Who","Action","Ver","Mode","Detail"].map(h=>el("th",{},h)))),
+      el("tbody",{},a.audit.map(r=>el("tr",{},el("td",{class:"mono"},r.ts.slice(0,19).replace("T"," ")),el("td",{},r.actor),el("td",{},r.action),el("td",{},r.version??""),el("td",{},r.mode),el("td",{class:"muted"},JSON.stringify(r.detail)))))));
+    return;
+  }
+  const h = detail.history;
+  box.replaceChildren(h.length? el("table",{},el("thead",{},el("tr",{},...["Ver","Status","Author","Approver","Updated","Note",""].map(x=>el("th",{},x)))),
+    el("tbody",{},h.map(v=>el("tr",{},el("td",{class:"mono"},"v"+v.version),el("td",{},el("span",{class:"pill st "+v.status},v.status)),el("td",{},v.author),el("td",{},(v.approver||"")+(v.approval_note?" ("+v.approval_note+")":"")),
+      el("td",{class:"mono"},v.updated_at.slice(0,19).replace("T"," ")),el("td",{class:"muted"},v.change_note),
+      el("td",{},v.status==="retired"?el("button",{class:"ghost",onclick:guard(()=>rollback(v.version))},"Roll back to v"+v.version):"")))))
+    : el("div",{class:"muted"},"No versions at this level yet. The query is inherited."));
+}
+async function rollback(v){await api("/api/rollback",{query_id:sel.query,node_id:sel.node,to_version:v,actor:actor(),note:""});say(`Rolled back: v${v} re-published as a new version.`,"ok");await refresh()}
+async function refresh(){await loadQueries();await loadDetail()}
+async function saveDraft(){const r=await api("/api/draft",{query_id:sel.query,node_id:sel.node,sql:$("sql").value,note:$("note").value,actor:actor()});say("Draft saved.","ok");await refresh();return r}
+const act = (path, msg, extra) => guard(async()=>{const ov=detail.open_version;await api(path,{version_id:ov.id,actor:actor(),node_id:sel.node,...(extra||{})});say(msg,"ok");await refresh()});
+
+function table(cols, rows, cls){
+  return el("div",{class:"scroll"},el("table",{},el("thead",{},el("tr",{},...cols.map(c=>el("th",{},c)))),el("tbody",{},rows.map(r=>el("tr",{class:cls||""},...r.map(c=>el("td",{class:"mono"},c===null?"null":c)))))));
+}
+$("b-save").onclick = guard(saveDraft);
+$("b-test").onclick = guard(async()=>{
+  await saveDraft(); say("Running read-only test...");
+  const r = await api("/api/test",{version_id:detail.open_version.id,actor:actor(),node_id:sel.node});
+  say(r.ok?"Test passed.":"Test failed: "+(r.error||"unknown"), r.ok?"ok":"err");
+  const out=[];
+  if(r.row_count!==undefined) out.push(el("div",{},el("b",{},r.row_count+" rows"),el("span",{class:"muted"}," · tenant "+r.tenant_id+" · tenant probe: "+(r.tenant_probe_ok?"clean":"LEAK")+" · columns: "+r.columns.join(", "))), table(r.columns,r.preview));
+  if(r.baseline){const b=r.baseline;out.push(el("h3",{style:"margin-top:12px"},"Diff vs currently effective ("+lvlName(b.level)+" v"+b.version+", "+b.row_count+" rows)"),
+    b.identical?el("div",{class:"msg ok"},"Identical output."):el("div",{},el("div",{class:"msg"},`${b.rows_removed} row(s) removed, ${b.rows_added} row(s) added`),
+      b.sample_removed.length?table(r.columns,b.sample_removed,"diffrem"):"", b.sample_added.length?table(r.columns,b.sample_added,"diffadd"):""))}
+  $("result").replaceChildren(...out); await refresh();
+});
+$("b-submit").onclick = act("/api/submit","Submitted for review.");
+$("b-approve").onclick = act("/api/approve","Approved.");
+$("b-reject").onclick = act("/api/reject","Sent back to draft.");
+$("b-publish").onclick = act("/api/publish","Published. Run “Publish to site data” to regenerate fin_data.js.");
+$("b-discard").onclick = act("/api/discard","Draft discarded.");
+$("b-retire").onclick = guard(async()=>{await api("/api/retire",{query_id:sel.query,node_id:sel.node,actor:actor()});say("Override retired: the query falls through to the broader level.","ok");await refresh()});
+$("mode").onchange = guard(async()=>{await api("/api/mode",{mode:$("mode").value,actor:actor()});say("Approval mode set to "+$("mode").value+".","ok");if(sel.query)await loadDetail()});
+$("t-hist").onclick=()=>{tab="hist";$("t-hist").className="on";$("t-audit").className="";drawHist()};
+$("t-audit").onclick=guard(async()=>{tab="audit";$("t-audit").className="on";$("t-hist").className="";await drawHist()});
+$("pubsite").onclick = guard(async()=>{
+  $("pubsite").disabled=true; say("Regenerating site data from the resolved queries (about 25 s)...");
+  try{const r=await api("/api/publish_site",{actor:actor()});
+    const non=Object.entries(r.queries).filter(([,v])=>v.level!=="solution").map(([k,v])=>k+" @"+lvlName(v.level)+" v"+v.version);
+    $("banner").replaceChildren(el("div",{class:"msg ok"},el("div",{},el("b",{},"Written: "),el("span",{class:"mono"},r.path)," (",r.bytes.toLocaleString()," bytes)"),
+      el("div",{},"Content hash (without generated_at): ",el("span",{class:"mono"},r.sha256.slice(0,16))),
+      el("div",{},non.length?"Queries resolved below solution level: "+non.join(", "):"All queries resolved at the solution level."),
+      el("div",{},r.next_step)));
+  } finally {$("pubsite").disabled=false}
+});
+$("theme").onclick=()=>{const r=document.documentElement,dark=getComputedStyle(r).colorScheme==="dark"||r.dataset.theme==="dark";r.dataset.theme=dark?"light":"dark"};
+loadTree().catch(e=>say(e.message,"err"));
+</script>
+</body>
+</html>
