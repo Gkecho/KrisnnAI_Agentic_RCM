@@ -5,6 +5,7 @@ history, (3) every agent evaluates the events that reached it, using only rows k
 (4) the new agent rows are queued for the database writer. Shadow mode: nothing is sent anywhere.
 """
 import datetime as dt
+import bisect
 import heapq
 import queue
 import json
@@ -21,9 +22,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "synth"))
 from core import Synth, h, connect, TODAY  # noqa: E402
 from journey import q, is_biz, next_biz  # noqa: E402
 import tracelog  # noqa: E402
+from world import connect_replay, is_r2  # noqa: E402
 
 D = Decimal
-START = dt.date(2025, 11, 3)
+
+
+def _env_date(name, default):
+    v = os.environ.get(name, "").strip()
+    return dt.date.fromisoformat(v) if v else default
+
+
+# The simulated calendar. Defaults are today's canonical window; KRISNNAI_REPLAY_START / KRISNNAI_REPLAY_END (ISO dates) override it, e.g. for a one-month run on R2.
+START = _env_date("KRISNNAI_REPLAY_START", dt.date(2025, 11, 3))
+TODAY = _env_date("KRISNNAI_REPLAY_END", TODAY)
+# Dates the agents used to hard-code, now expressed relative to START (identical to the old constants when START is the default).
+RULES_FROM = START - dt.timedelta(days=2)             # was 2025-11-01
+A15_FROM = START + dt.timedelta(days=63)              # was 2026-01-05
+A14_FROM = START + dt.timedelta(days=91)              # was 2026-02-02
+# A5 reviews a claim on the day it is submitted. R2 claims are dated on any weekday/weekend, and the engine only runs on business days, so for R2 (or KRISNNAI_REPLAY_A5_NEXT_BIZ=1)
+# a claim submitted on a non-business day is reviewed on the NEXT business day, using only what is known by that day. Canonical default: unchanged.
+A5_NEXT_BIZ = is_r2() or os.environ.get("KRISNNAI_REPLAY_A5_NEXT_BIZ", "") == "1"
+# A12 on R2 reads the latest ar_snapshot known on the replay date (rule 9) instead of one current snapshot.
+AR_AS_OF = is_r2()
 VERSION = "v0.9-shadow"
 NAMES = {"A1": "Gatekeeper", "A2": "Permit Clerk", "A3": "Note Chaser", "A4": "Code Whisperer", "A5": "Mirror", "A6": "Courier", "A7": "Hunter",
          "A8": "Advocate", "A9": "Coach", "A10": "Auditor", "A11": "Bookkeeper", "A12": "Concierge", "A13": "Credentialing", "A14": "Captain", "A15": "Detective"}
@@ -122,9 +142,11 @@ class Replay:
                 if n > W.auth[a]["units_approved"]:
                     T["A2"][nb(max(ap["appointment_date"] - dt.timedelta(days=7), ap["booked_date"] or START))].append((ap, n, a))
         for e in W.t["encounter"]:
-            if W.bill_by_enc[e["encounter_id"]]["bill_type"] == "insurance":      # self-pay visits never become claims
+            eb = W.bill_by_enc.get(e["encounter_id"])      # R2 has encounters that never produced a bill (no charge to hold, nothing to bill)
+            if eb is not None and eb["bill_type"] == "insurance":      # self-pay visits never become claims
                 E["visit"][e["encounter_date"]].append(e)
-            T["A3"][nb(e["encounter_date"] + dt.timedelta(days=3))].append(e)
+            if eb is not None:
+                T["A3"][nb(e["encounter_date"] + dt.timedelta(days=3))].append(e)
             if e["note_signed_date"]:
                 E["note"][e["note_signed_date"]].append(e)
                 if any(l["documented_level"] for l in W.enc_lines[e["encounter_id"]]):
@@ -134,9 +156,10 @@ class Replay:
                 E["charged"][b["charge_entered_date"]].append(b)
         for c in W.t["claim"]:
             E["submitted"][c["submitted_date"]].append(c)
-            T["A5"][c["submitted_date"]].append(c)
+            T["A5"][nb(c["submitted_date"]) if A5_NEXT_BIZ else c["submitted_date"]].append(c)
             turn = W.payer[c["payer_id"]]["standard_turnaround_days"]
-            T["A7"][nb(c["submitted_date"] + dt.timedelta(days=turn + 14))].append(c)
+            if turn is not None:                 # no standard turnaround for this payer (NULL in R2): A7 has no rule to apply, so it abstains
+                T["A7"][nb(c["submitted_date"] + dt.timedelta(days=turn + 14))].append(c)
         for cl, evs in W.hist.items():
             for x in evs:
                 E["hist"][x["event_date"]].append((cl, x))
@@ -150,9 +173,21 @@ class Replay:
         for p in W.t["payment"]:
             E["cash"][p["payment_date"]].append(p)
             T["A11"][nb(p["payment_date"] + dt.timedelta(days=1))].append(p)
-        for a in W.t["ar"]:
-            if a["balance_owner"] == "patient" and a["days_outstanding"] >= 20:
-                T["A12"][nb(a["service_date"] + dt.timedelta(days=30))].append(a)
+        if AR_AS_OF:
+            by_bill = defaultdict(list)
+            for a in W.t["ar"]:
+                if a["balance_owner"] == "patient":
+                    by_bill[a["bill_id"]].append(a)
+            for lst in by_bill.values():
+                lst.sort(key=lambda x: x["as_of_date"])
+                dd = nb(lst[-1]["service_date"] + dt.timedelta(days=30))
+                k = bisect.bisect_right([x["as_of_date"] for x in lst], dd)
+                if k and lst[k - 1]["days_outstanding"] >= 20:          # latest snapshot on or before the review date; none yet = abstain
+                    T["A12"][dd].append(lst[k - 1])
+        else:
+            for a in W.t["ar"]:
+                if a["balance_owner"] == "patient" and a["days_outstanding"] >= 20:
+                    T["A12"][nb(a["service_date"] + dt.timedelta(days=30))].append(a)
         for en in W.t["enrollment"]:
             if en["event_type"] == "enrollment":
                 T["A13"][nb(max(START, en["expires_date"] - dt.timedelta(days=60)))].append(en)
@@ -323,6 +358,9 @@ class Replay:
         return max(n, 1)
 
     def has_poc(self, e):
+        """True / False, or None (unknown) when the document table holds no plan_of_care rows at all (R2: the table is empty)."""
+        if "plan_of_care" not in self.W.doc_types:
+            return None
         lst = self.W.pat_enc[e["patient_id"]]
         ev = max((x["encounter_date"] for x in lst if x["encounter_type"] == "evaluation" and x["encounter_date"] <= e["encounter_date"]), default=None)
         return any(dd["document_type"] == "plan_of_care" and ev and ev <= dd["document_date"] <= e["encounter_date"] for dd in self.W.pat_doc[e["patient_id"]])
@@ -403,6 +441,8 @@ class Replay:
         W = self.W
         for cl in items:
             self.cur_src = cl
+            if A5_NEXT_BIZ and self.remit.get(cl["claim_id"], d) < d:      # the payer had already answered before this (next-business-day) review: nothing left to predict
+                continue
             e = W.enc[cl["encounter_id"]]
             code = W.payer_code[cl["payer_id"]]
             lines = W.cd[cl["claim_id"]]
@@ -414,7 +454,7 @@ class Replay:
                 results.append(self.rule("R-AUTH-VISITS", not bad, f"visit {n}", f"<= {au['units_approved']}", "high", self.generic["R-AUTH-VISITS"]))
                 if bad:
                     fails.append(("198", .92))
-            cv = W.cov[cl["coverage_id"]]
+            cv = W.cov.get(cl["coverage_id"]) or {"termination_date": None}      # a claim can carry no coverage row (3 in R2): treated as no end date
             bad = bool(cv["termination_date"] and cv["termination_date"] < e["encounter_date"])
             results.append(self.rule("R-COV-ACTIVE", not bad, (f"ended {cv['termination_date']}" if cv["termination_date"] else "no end date"), f">= {e['encounter_date']}", "high", self.generic["R-COV-ACTIVE"]))
             if bad:
@@ -423,13 +463,16 @@ class Replay:
             if L and L["since"] <= d:
                 if L["carc"] == "50":
                     vn, poc = self.visit_no(e), self.has_poc(e)
-                    bad = vn >= L["threshold"] and not poc
-                    results.append(self.rule("R-UHC-POC-V", not bad, f"visit {vn}, plan of care {'on file' if poc else 'missing'}", f"visit < {L['threshold']} or plan on file", "high", L["id"]))
+                    if poc is None:                 # no plan_of_care documents exist at all: unknown, not "missing". The rule abstains.
+                        bad = False
+                    else:
+                        bad = vn >= L["threshold"] and not poc
+                        results.append(self.rule("R-UHC-POC-V", not bad, f"visit {vn}, plan of care {'on file' if poc else 'missing'}", f"visit < {L['threshold']} or plan on file", "high", L["id"]))
                 else:
                     l97 = [x for x in lines if W.cpt[x["cpt_code_id"]] == "97530"]
                     pair = any(W.cpt[x["cpt_code_id"]] == "97140" for x in lines) and l97
                     mods = {x["modifier_2_id"] for x in l97} | {x["modifier_1_id"] for x in l97}
-                    bad = bool(pair) and not (mods & {W.mod["XU"], W.mod["59"]})
+                    bad = bool(pair) and not (mods & {W.mod.get("XU"), W.mod.get("59")} - {None})
                     results.append(self.rule("R-AET-XU", not bad, "97140+97530 without XU/59" if bad else "ok", "distinct-service modifier", "high", L["id"]))
                 if bad:
                     fails.append((L["carc"], .85))
@@ -439,9 +482,9 @@ class Replay:
                 exp_allowed = sum((x["expected_allowed"] or 0) for x in lines)
                 dec, fid, tid = self.emit("A5", "prerelease_review", "claim", cl["claim_id"], d, "hold", cl["total_charge"], results, self.refs_of(cl),
                                           f"Would hold {cl['claim_number']}: CARC {carc_c} risk ({[x[0] for x in results if x[1] == 'fail'][0]})",
-                                          finding=dict(finding_type="predicted_denial", finding_status="open", upstream_stage=W.carc[W.carc_id[carc_c]]["upstream_stage"], is_preventable=True,
+                                          finding=dict(finding_type="predicted_denial", finding_status="open", upstream_stage=W.carc.get(W.carc_id.get(carc_c), {}).get("upstream_stage"), is_preventable=True,
                                                        severity="high", amount_at_risk=q(cl["total_charge"]), predicted_probability=D(str(p)).quantize(D("0.0001")),
-                                                       predicted_reason_category=W.carc[W.carc_id[carc_c]]["reason_category"], predicted_allowed_amount=q(exp_allowed),
+                                                       predicted_reason_category=W.carc.get(W.carc_id.get(carc_c), {}).get("reason_category"), predicted_allowed_amount=q(exp_allowed),
                                                        summary=f"Predicted CARC {carc_c}: {[x[0] for x in results if x[1] == 'fail'][0]}"),
                                           task=dict(ttype="claim_hold_review", role="biller", priority="hi", title=f"Review before release: CARC {carc_c} risk"), conf=p, kind="hold")
                 self.mirror_find[cl["claim_id"]] = self.S.rows["agent_finding"][-1]
@@ -524,6 +567,8 @@ class Replay:
             for pc, pid in W.payer_id.items():
                 if pc in self.learned:
                     continue
+                if carc_c == "50" and "plan_of_care" not in W.doc_types:      # the rule can only be checked against plan-of-care documents; none exist, so do not learn it
+                    continue
                 recent = [x for x in self.denials_seen if x["payer_id"] == pid and W.carc[x["adjustment_reason_id"]]["carc_code"] == carc_c and (d - x["denial_date"]).days <= 60]
                 if len(recent) < 10:
                     continue
@@ -605,10 +650,12 @@ class Replay:
         W = self.W
         if d.weekday() == 0:           # Monday: the week's cash forecast per payer
             for pc, pid in W.payer_id.items():
-                if W.payer[pid]["payer_type"] == "self_pay" or d < dt.date(2026, 2, 2):
+                if W.payer[pid]["payer_type"] == "self_pay" or d < A14_FROM:
                     continue
                 w0, w1 = d + dt.timedelta(days=1), d + dt.timedelta(days=7)
                 turn = W.payer[pid]["standard_turnaround_days"]
+                if turn is None:                 # same gap as A7: no payer turnaround, no forecast window
+                    continue
                 exp, cnt = D(0), 0
                 for cl in self.claims_by_payer[pid]:
                     if cl["submitted_date"] > d or cl["submitted_date"] < d - dt.timedelta(days=75) or (cl["claim_id"] in self.remit and self.remit[cl["claim_id"]] <= d):
@@ -632,7 +679,7 @@ class Replay:
 
     def a15(self, d):
         W = self.W
-        if d.weekday() != 0 or d < dt.date(2026, 1, 5):
+        if d.weekday() != 0 or d < A15_FROM:
             return
         cells = defaultdict(lambda: [D(0), D(0), 0])
         for cl in W.t["claim"]:
@@ -784,8 +831,10 @@ class Replay:
         """Clears every agent output table (the history stays) and sets up the learned-rule state."""
         self._reset_state()
         if self.write:
-            conn, db = connect()
-            assert db.startswith("krisnnai_canonical")
+            if is_r2():
+                raise RuntimeError("write mode is not enabled for krisnnai_r2 yet (the R2 agent_* tables are written in a later step); run with write=False / --dry")
+            conn, db = connect_replay()
+            assert db.startswith("krisnnai_canonical") or db == "krisnnai_r2"
             cur = conn.cursor()
             for sql in ("UPDATE appeal SET agent_decision_id = NULL, agent_approval_id = NULL",
                         "UPDATE agent_decision SET finding_id = NULL, task_id = NULL, supersedes_decision_id = NULL",
@@ -798,11 +847,11 @@ class Replay:
             conn.commit(); conn.close()
         for code, fam, act in [("R-AUTH-VISITS", "authorization", "hold_for_review"), ("R-COV-ACTIVE", "eligibility", "hold_for_review")]:
             rid, _ = self.add("payer_rule", START, rule_code=code, rule_family=fam, rule_action=act, rule_source_code="built_in", is_enabled=True, is_synthetic=True, approval_status="approved",
-                              effective_from=dt.date(2025, 11, 1), owner_role="front_desk", severity="high", approved_by_staff_id=self.W.staff["M01"], approved_date=dt.date(2025, 11, 1))
+                              effective_from=RULES_FROM, owner_role="front_desk", severity="high", approved_by_staff_id=self.W.staff["M01"], approved_date=RULES_FROM)
             self.generic[code] = rid
 
     def writer(self):
-        conn, db = connect()
+        conn, db = connect_replay()
         cur = conn.cursor()
         import io, csv
         while True:

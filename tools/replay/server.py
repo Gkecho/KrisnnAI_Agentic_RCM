@@ -2,9 +2,12 @@
 
 Start:  python tools/replay/server.py        then open http://127.0.0.1:8765
 Local only (127.0.0.1). Reads the history from the canonical Postgres and writes agent rows there while it runs.
+KRISNNAI_REPLAY_DB=krisnnai_r2 reads R2 through the canon_compat views instead (run tools/replay/r2_compat.py once); KRISNNAI_REPLAY_PORT overrides the port (default 8765).
+Writing agent rows to R2 is not enabled yet: a Run on R2 stops with an error message.
 """
 import asyncio
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -14,7 +17,7 @@ from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 
 from engine import Replay, AGENT_TABLES, NAMES
-from world import World
+from world import World, connect_replay, is_r2
 
 HERE = Path(__file__).resolve().parent
 app = FastAPI(title="KrisnnAI replay")
@@ -109,13 +112,16 @@ def speed(body: dict):
 
 @app.get("/api/dbcounts")
 def dbcounts():
-    from core import connect
-    conn, db = connect()
+    conn, db = connect_replay()
     cur = conn.cursor()
     out = {}
     for n in AGENT_TABLES:
-        cur.execute(f'SELECT count(*) FROM "{n}"')
-        out[n] = cur.fetchone()[0]
+        try:
+            cur.execute(f'SELECT count(*) FROM {"public." if is_r2() else ""}"{n}"')     # R2: search_path is canon_compat (views only), so read the real tables by schema
+            out[n] = cur.fetchone()[0]
+        except Exception:                                                                   # R2 has no agent_decision_details (it is agent_decision_check)
+            conn.rollback()
+            out[n] = None
     conn.close()
     return dict(db=db, counts=out)
 
@@ -153,7 +159,6 @@ def get_trace(tid: int):
 @app.post("/api/trace/{tid}/run/{i}")
 def run_read(tid: int, i: int):
     """Re-runs one logged read against the database (read-only, the engine's own SQL) so it can be compared with what the agent saw."""
-    from core import connect
     r = state["replay"]
     tr = r.traces.get(tid) if r else None
     if not tr or i >= len(tr["reads"]):
@@ -161,7 +166,7 @@ def run_read(tid: int, i: int):
     rd = tr["reads"][i]
     if not rd.get("runnable", True):
         raise HTTPException(400, "this read is computed inside the engine and has no single SQL statement")
-    conn, db = connect()
+    conn, db = connect_replay()
     try:
         conn.set_session(readonly=True)
         cur = conn.cursor()
@@ -175,9 +180,8 @@ def run_read(tid: int, i: int):
 
 
 def _export_fetch():
-    from core import connect
     import psycopg2.extras
-    conn, db = connect()
+    conn, db = connect_replay()
     conn.set_session(readonly=True)
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -195,6 +199,8 @@ def export(basis: str = "service", start: str = "2025-11-01", end: str = "2026-1
     from fastapi.responses import StreamingResponse
     sys.path.insert(0, str(HERE.parent / "live"))
     from claim_log_export import build_workbook
+    if is_r2():
+        raise HTTPException(501, "the claim-log export reads canonical tables the canon_compat layer does not cover; not available on R2 yet")
     r = state["replay"]
     conn, fetch = _export_fetch()
     try:
@@ -237,4 +243,4 @@ async def stream():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("KRISNNAI_REPLAY_PORT", "8765")), log_level="warning")

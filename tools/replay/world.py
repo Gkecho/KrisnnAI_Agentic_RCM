@@ -3,12 +3,40 @@
 Only the columns the replay needs are read. Nothing here changes the database.
 """
 import datetime as dt
+import os
 from collections import defaultdict
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "synth"))
 from core import connect  # noqa: E402
+
+R2_DB = "krisnnai_r2"
+
+
+def replay_db():
+    """Database the replay reads. Unset (default) = whatever core.connect() uses today (krisnnai_canonical). KRISNNAI_REPLAY_DB=krisnnai_r2 selects R2 through the canon_compat views."""
+    v = os.environ.get("KRISNNAI_REPLAY_DB", "").strip()
+    if v and v != R2_DB:
+        raise ValueError(f"KRISNNAI_REPLAY_DB must be unset or exactly {R2_DB!r}")
+    return v or None
+
+
+def is_r2():
+    return replay_db() == R2_DB
+
+
+def connect_replay():
+    """Like core.connect(), but honours KRISNNAI_REPLAY_DB: for R2 it connects to krisnnai_r2 and points search_path at canon_compat (views only, tenant 1)."""
+    if not is_r2():
+        return connect()
+    os.environ["KRISNNAI_PG_DB"] = R2_DB
+    conn, db = connect()
+    assert db == R2_DB, db
+    cur = conn.cursor()
+    cur.execute("SET search_path TO canon_compat")
+    conn.commit()
+    return conn, db
 
 COLS = {
     "payer": "*", "cpt_code": "cpt_code_id, code, is_timed", "patient": "patient_id", "fee_list": "cpt_code_id, fee_per_unit", "adjustment_reason": "*", "modifier": "*", "staff": "*", "provider": "provider_id, provider_name, provider_type",
@@ -34,11 +62,14 @@ COLS = {
 
 class World:
     def __init__(self, log=print):
-        self.conn, self.db = connect()
+        self.conn, self.db = connect_replay()
         self.conn.set_session(readonly=True)
         cur = self.conn.cursor()
         self.t = {}
-        for n, cols in COLS.items():
+        cols_by = dict(COLS)
+        if is_r2():
+            cols_by["ar"] += ", as_of_date, snapshot_type"       # the R2 compat view exposes every snapshot; the engine picks the latest one known on each replay date
+        for n, cols in cols_by.items():
             log(f"reading {n}")
             cur.execute(f'SELECT {cols} FROM "{n}"')
             names = [c[0] for c in cur.description]
@@ -47,6 +78,7 @@ class World:
         self.practice = cur.fetchone()[0]
         self.conn.close()
         t = self.t
+        self.doc_types = {d["document_type"] for d in t["document"]}
         self.payer_code = {p["payer_id"]: p["payer_code"] for p in t["payer"]}
         self.payer_id = {v: k for k, v in self.payer_code.items()}
         self.payer = {p["payer_id"]: p for p in t["payer"]}

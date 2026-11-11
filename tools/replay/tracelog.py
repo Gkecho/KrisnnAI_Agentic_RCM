@@ -93,7 +93,7 @@ def _code_review(R, W, d, e, rules, refs, outcome):
 # ------------------------------------------------------------------ A5
 def _prerelease_review(R, W, d, cl, rules, refs, outcome):
     e = W.enc[cl["encounter_id"]]
-    cv = W.cov[cl["coverage_id"]]
+    cv = W.cov.get(cl["coverage_id"]) or {"termination_date": None}
     reads = [
         read("claim", ["payer_id", "encounter_id", "coverage_id", "total_charge"], "SELECT payer_id, encounter_id, coverage_id, total_charge FROM claim WHERE claim_id = %s", [cl["claim_id"]],
              dict(payer=W.payer_code[cl["payer_id"]], total_charge=cl["total_charge"]), "the claim about to be released"),
