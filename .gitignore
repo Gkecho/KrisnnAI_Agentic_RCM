@@ -12,3 +12,14 @@ __pycache__/
 *.mdf
 *.ldf
 .env.db
+.env.live
+
+# Local query-registry database (SQLite) and other local state
+/var/
+
+# Synthea generator output, jar and logs (large, regenerable)
+/tools/synthea/output/
+/tools/synthea/work/
+/tools/synthea/*.jar
+/tools/synthea/synthea.log
+/tools/synthea/*.log
