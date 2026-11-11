@@ -169,6 +169,12 @@ erDiagram
     remark_code {
         int remark_code_id PK
     }
+    resource {
+        bigint resource_id PK
+    }
+    resource_allocation {
+        bigint resource_allocation_id PK
+    }
     specialty {
         int specialty_id PK
     }
@@ -512,6 +518,18 @@ erDiagram
     provider ||--o{ referral : has
     referral ||--o{ referral : has
     specialty ||--o{ referral : has
+    facility ||--o{ resource : has
+    practice ||--o{ resource : has
+    provider ||--o{ resource : has
+    specialty ||--o{ resource : has
+    appointment ||--o{ resource_allocation : has
+    appointment_slot ||--o{ resource_allocation : has
+    cpt_code ||--o{ resource_allocation : has
+    facility ||--o{ resource_allocation : has
+    practice ||--o{ resource_allocation : has
+    provider ||--o{ resource_allocation : has
+    resource ||--o{ resource_allocation : has
+    resource_allocation ||--o{ resource_allocation : has
     practice ||--o{ staff : has
     adjustment_reason ||--o{ transactions : has
     bill_details ||--o{ transactions : has
@@ -530,7 +548,7 @@ erDiagram
     transactions ||--o{ transactions : has
 ```
 
-## 1 Appointment (5 tables, with the tables they link to)
+## 1 Appointment (6 tables, with the tables they link to)
 
 ```mermaid
 erDiagram
@@ -593,6 +611,12 @@ erDiagram
     }
     referral {
         bigint referral_id PK
+    }
+    resource {
+        bigint resource_id PK
+    }
+    resource_allocation {
+        bigint resource_allocation_id PK
     }
     specialty {
         int specialty_id PK
@@ -711,6 +735,18 @@ erDiagram
     provider ||--o{ referral : has
     referral ||--o{ referral : has
     specialty ||--o{ referral : has
+    facility ||--o{ resource : has
+    practice ||--o{ resource : has
+    provider ||--o{ resource : has
+    specialty ||--o{ resource : has
+    appointment ||--o{ resource_allocation : has
+    appointment_slot ||--o{ resource_allocation : has
+    cpt_code ||--o{ resource_allocation : has
+    facility ||--o{ resource_allocation : has
+    practice ||--o{ resource_allocation : has
+    provider ||--o{ resource_allocation : has
+    resource ||--o{ resource_allocation : has
+    resource_allocation ||--o{ resource_allocation : has
 ```
 
 ## 2 Encounter (4 tables, with the tables they link to)
@@ -1807,7 +1843,7 @@ erDiagram
     transactions ||--o{ transactions : has
 ```
 
-## Reference (21 tables, with the tables they link to)
+## Reference (22 tables, with the tables they link to)
 
 ```mermaid
 erDiagram
@@ -1868,6 +1904,9 @@ erDiagram
     remark_code {
         int remark_code_id PK
     }
+    resource {
+        bigint resource_id PK
+    }
     specialty {
         int specialty_id PK
     }
@@ -1921,6 +1960,10 @@ erDiagram
     practice ||--o{ provider : has
     provider ||--o{ provider : has
     specialty ||--o{ provider : has
+    facility ||--o{ resource : has
+    practice ||--o{ resource : has
+    provider ||--o{ resource : has
+    specialty ||--o{ resource : has
     practice ||--o{ staff : has
 ```
 

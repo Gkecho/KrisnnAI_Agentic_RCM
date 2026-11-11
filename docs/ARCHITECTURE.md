@@ -47,6 +47,57 @@ flowchart LR
 
 Two rules keep this honest: agents **never write into the canonical tables**, and anything an agent concludes is stored as its own output, never mixed with source data.
 
+### 3a. How data gets in
+
+Picture: open `docs/how-data-gets-in.html` in a browser (where data lives, how it travels, the front door, where it lands, two worked journeys).
+
+```mermaid
+flowchart LR
+    subgraph Sources
+      EHR[EHR: OpenEMR<br/>REST API and files]
+      FHIR[EHR via FHIR R4]
+      HL7[EHR via HL7 v2<br/>design only]
+      PM[PM and scheduler<br/>files, CSV feeds]
+      CH[Clearinghouse<br/>Stedi sandbox, mock]
+      PP[Payer portals<br/>mock bots]
+      CODES[Public code sets]
+    end
+    subgraph Travel
+      B[Batch: daily files<br/>837, 835, 999, 277CA, CSV]
+      L[Live: watcher polls the EHR<br/>new booking starts a 270]
+      Q[Bots that ask<br/>270, 276, corrected 837]
+    end
+    EHR --> L
+    FHIR --> B
+    PM --> B
+    CH --> B
+    PP --> Q
+    CODES --> B
+    L --> Q
+    Q --> CH
+    B --> FD
+    L --> FD
+    subgraph FD[The front door]
+      P1[Parse and map] --> P2[Hash patient and member ids] --> P3[Skip files already loaded<br/>file hash and ISA13, GS06, ST02] --> P4[Stamp tenant, source, known_at, loaded_at]
+    end
+    FD --> T[(Canonical tables<br/>plus data_feed)]
+```
+
+| Door | Status today |
+|---|---|
+| OpenEMR dev instance (API and files) | Built, synthetic data |
+| FHIR R4 (local Microsoft FHIR server) | Built; 1,777 appointments, 2,243 encounters and 2,134 notes round-tripped with no differences. A real EHR's profiles and permissions (SMART on FHIR) will differ and are untested |
+| HL7 v2 (SIU, ADT, DFT, MDM) | Design only |
+| PM export, file drop, scheduler | Built for files and CSV feeds |
+| Clearinghouse | Stedi sandbox: eligibility (270/271) verified live with a test key; claim status and claim submission not run there. Everything else runs on a local mock |
+| Payer portals | Mock portal bots |
+| Public code sets | Partly built; some tables (for example code-pair rules) are synthetic stand-ins |
+| Client documents (contracts, fee schedules) | Design only; reading them with a model needs an approved BAA |
+
+Two ways data arrives: **batch** (daily files, loaded in a set order) and **live** (a watcher polls the EHR every few seconds; a new booking triggers a coverage check straight away, then again 3 days and 1 day before the visit). Nothing talks to a real payer, clearinghouse or EMR: the clients refuse non-local addresses unless a flag is set, and keys come only from environment variables. Details: `docs/integrations.md`, and the Source compatibility sheet of the data model workbook lists which tables each source type fills.
+
+**Still ahead:** the loader fills the earlier data model today; wiring it to the canonical model is the next piece of work.
+
 ## 4. The fifteen agents
 
 All fifteen are built in shadow mode (see `docs/ROADMAP.md` for what each still needs).

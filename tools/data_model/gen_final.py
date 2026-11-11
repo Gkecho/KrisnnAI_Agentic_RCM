@@ -454,7 +454,7 @@ addr("contract_rate", I_, "What a payer has agreed to allow per unit. Effective-
     L("multi_procedure_reduction_pct", "DECIMAL(5,2)", O_, "", "Multiple-procedure reduction.", "Blank"), L("dispute_days", "SMALLINT", O_, "", "Dispute window.", "Blank")])
 addr("adjustment_reason", M_, "A payer adjustment or denial reason code (CARC). Effective-dated.", "Decides what counts as a denial in the whole model. The classification columns are an editable default rule table and never trigger actions.", "Denial classification, routing, appealable mix", "1 public X12 code list, 2 our default classification, 3 client overrides, 4 codes seen on remittances classed unknown", [
     L("carc_code", "VARCHAR(10)", M_, "", "The reason code.", "Codes seen on remittances"), L("effective_from", "DATE", M_, "", "The list changes during the year.", "Date of first use"), L("effective_to", "DATE", M_, "", "End of validity.", "Blank while open"),
-    L("reason_class", "VARCHAR(20)", M_, "", "Denial, contractual, patient_responsibility, other_adjustment, informational. A PR group always means patient responsibility.", "Unknown"),
+    L("reason_class", "VARCHAR(25)", M_, "", "Denial, contractual, patient_responsibility, other_adjustment, informational. A PR group always means patient responsibility.", "Unknown"),
     L("short_label", "VARCHAR(60)", I_, "", "Our own words.", "The code"), L("reason_category", "VARCHAR(30)", I_, "", "Eligibility, authorization, coding, documentation, timely filing, duplicate, coordination of benefits, bundling, technical.", "Unknown"),
     L("suggested_action", "VARCHAR(25)", I_, "", "Fix and resubmit, appeal, write-off review, bill patient, informational. A proposal only.", "Unknown"), L("owner_role", "VARCHAR(20)", I_, "", "Billing, coding, front desk, provider, patient.", "Billing"),
     L("upstream_stage", "VARCHAR(15)", I_, "", "Which journey stage could have caught it.", "Unknown"), L("is_appealable", "BIT", I_, "", "Default.", "Unknown"), L("is_technical", "BIT", I_, "", "Default.", "Unknown"),
@@ -629,13 +629,13 @@ TBD.append(("patient_contact_preference", "3", "Patient contact consent and pref
             "Optional", "Statements and reminders that respect consent", "patient (language), payment_plan (autopay)", "Not available; Concierge outreach waits for this table"))
 SETTINGS.append(("Clearinghouse interchange IDs (sender and receiver)", "Per connection", "practice_settings"))
 NEWLIST = sorted(NEWF.items())
-# ======================= PLANNED-TABLE REVIEW: tables designed by four design modules (plan/plan_A..D.py)
+# ======================= PLANNED-TABLE REVIEW: tables designed by five design modules (plan/plan_A..E.py)
 import os as _os
 PLAN_NEW = "New: designed this round, not yet reviewed"
 PLAN_REMAP = {}   # module letter -> REMAP dict
 PLAN_DONE = []
 _PD = _os.path.join(HERE, "plan")
-for _k in "".join(c for c in "ABCD" if c not in _os.environ.get("KRISNNAI_SKIP_PLAN", "")):  # test_plan.py skips the module under test
+for _k in "".join(c for c in "ABCDE" if c not in _os.environ.get("KRISNNAI_SKIP_PLAN", "")):  # test_plan.py skips the module under test
     _before = set(T)
     _path = _os.path.join(_PD, f"plan_{_k}.py")
     exec(compile(open(_path, encoding="utf-8").read(), _path, "exec"), globals())
