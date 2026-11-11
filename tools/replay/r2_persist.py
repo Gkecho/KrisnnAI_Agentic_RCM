@@ -391,10 +391,18 @@ def reset(conn, tenant_id=TENANT, source=SOURCE):
     assert_r2(conn)
     cur = conn.cursor()
     out = {}
-    for t in reversed(TABLES):
-        assert t.startswith("agent_")
-        cur.execute(f'DELETE FROM "{t}" WHERE tenant_id = %s AND source = %s', (tenant_id, source))
-        out[t] = cur.rowcount
+    # The FK columns that point at agent_decision are not indexed (and agent_decision references itself), so with the
+    # FK triggers on, every deleted decision scans whole tables (hours at 38k rows). Only this tenant's agent_* rows of
+    # this source are deleted, children first, and nothing outside agent_* references them (appeal.agent_decision_id and
+    # claim_edit.agent_decision_id are never written by this module), so the checks are skipped for the deletes only.
+    cur.execute("SET session_replication_role = replica")
+    try:
+        for t in reversed(TABLES):
+            assert t.startswith("agent_")
+            cur.execute(f'DELETE FROM "{t}" WHERE tenant_id = %s AND source = %s', (tenant_id, source))
+            out[t] = cur.rowcount
+    finally:
+        cur.execute("SET session_replication_role = DEFAULT")
     return out
 
 

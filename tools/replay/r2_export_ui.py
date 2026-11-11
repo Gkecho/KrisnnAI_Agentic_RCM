@@ -60,15 +60,19 @@ AGENT_INFO = [
     ("A15", "Revenue assurance investigator", "Watches realisation against contract by payer and CPT and explains each drop."),
 ]
 # (agent, replay task_type) -> the site's action type; owner_role (+agent) -> the site's owner
-ACTION = {("A1", "coverage_follow_up"): "a1_coverage_exception_review", ("A2", "authorization_check"): "a2_auth_request_task", ("A3", "unsigned_note"): "a3_signature_task",
+ACTION = {("A1", "coverage_follow_up"): "a1_coverage_exception_review", ("A2", "authorization_check"): "a2_auth_request_task", ("A3", "unsigned_note"): "a3_signature_task", ("A3", "unbilled_visit"): "a3_unbilled_task",
           ("A4", "code_review"): "a4_coding_review", ("A5", "claim_hold_review"): "a5_hold_review", ("A6", "fix_rejection"): "a6_rejection_task",
           ("A7", "claim_follow_up"): "a7_escalate_review", ("A8", "denial_work"): "a8_fix_task", ("A9", "rule_review"): "a9_rule_proposal_review",
           ("A10", "dispute_package"): "a10_dispute_review", ("A11", "post_remit"): "a11_posting_task", ("A12", "patient_follow_up"): "a12_followup_task",
           ("A13", "revalidation"): "a13_enrollment_task", ("A15", "dispute_package"): "a15_investigation_review"}
+# The site's personas (product.html PERSONAS) pick queue items by owner `o` or agent `a`: biller {o: biller | o: billing + a6/a7}, denials {a: a8_denial}, arlead {o: ar_lead},
+# poster {o: payment_poster}, finance {o: finance}, provider {o: provider}, coder {o: coder/coding + a4/a5}, frontdesk {o: front_desk}, manager {o: practice_manager},
+# owner {o: revenue_assurance_lead}. The engine's owner_role is mapped to those words here, so product.html needs no change.
 OWNER = {"front_desk": "front_desk", "biller": "biller", "denial_specialist": "billing", "coder": "coder", "ar_specialist": "ar_lead", "payment_poster": "payment_poster",
-         "billing_lead": "billing", "manager": "practice_manager", "provider": "provider"}
-OWNER_BY_AGENT = {"A12": "patient_billing", "A13": "credentialing", "A15": "revenue_assurance_lead"}
-LABEL = {"a1_coverage_exception_review": "Coverage exceptions", "a2_auth_request_task": "Authorization requests", "a3_signature_task": "Note signatures",
+         "billing_lead": "billing", "manager": "practice_manager", "provider": "provider", "patient_billing": "patient_billing"}
+# agent-wide overrides: A10 disputes are approved by finance; A12 balances are patient billing; A13 enrollment; A15 variances go to the revenue-assurance lead
+OWNER_BY_AGENT = {"A10": "finance", "A12": "patient_billing", "A13": "credentialing", "A15": "revenue_assurance_lead"}
+LABEL = {"a1_coverage_exception_review": "Coverage exceptions", "a2_auth_request_task": "Authorization requests", "a3_signature_task": "Note signatures", "a3_unbilled_task": "Unbilled visits",
          "a4_coding_review": "Coding reviews", "a5_hold_review": "Claim holds", "a6_rejection_task": "Rejected claims", "a7_escalate_review": "Unpaid claim escalation",
          "a8_appeal_task": "Appeals", "a8_fix_task": "Denial fixes", "a9_rule_proposal_review": "Rule approvals", "a10_dispute_review": "Underpayment disputes",
          "a11_posting_task": "Remit posting", "a12_followup_task": "Patient balances", "a13_enrollment_task": "Enrollment revalidation",
@@ -76,6 +80,7 @@ LABEL = {"a1_coverage_exception_review": "Coverage exceptions", "a2_auth_request
 NEXT = {"a1_coverage_exception_review": ["Confirm the patient's current insurance before the visit", "Update the coverage on file in the practice-management system"],
         "a2_auth_request_task": ["Ask the payer for more visits before the next appointment", "Record the answer on the authorization"],
         "a3_signature_task": ["Ask the provider to sign the visit note", "The charge stays on hold until the note is signed"],
+        "a3_unbilled_task": ["Find out why the visit has no charge", "Enter the charge in the practice-management system (a person does it) or record why none is due"],
         "a4_coding_review": ["A coder reviews the suggested level against the note", "A person changes the code; the agent never does"],
         "a5_hold_review": ["Review the flagged rule before the claim is released", "Fix the cause (a person edits), then release"],
         "a6_rejection_task": ["Correct the rejected claim data", "Resubmit through the clearinghouse after a named approval"],
@@ -134,9 +139,20 @@ def age_bucket(days):
     return "30+"
 
 
+def owner_of(agent, owner_role):
+    """The site's owner word for an engine task: an agent-wide override first (A10 finance, A12 patient billing, A13, A15), else the engine's owner_role mapped."""
+    return OWNER_BY_AGENT.get(agent) or OWNER.get(owner_role, owner_role)
+
+
 def _carc_of(summary):
     m = re.search(r"CARC (\d+)", summary or "")
     return m.group(1) if m else None
+
+
+def _carcs_of(summary):
+    """Every CARC a prediction names: 'Predicted CARC 4, 151: rules' -> ['4', '151']."""
+    m = re.match(r"Predicted CARC ((?:\d+(?:, )?)+)", summary or "")
+    return re.findall(r"\d+", m.group(1)) if m else []
 
 
 # ---------------------------------------------------------------- pure builders
@@ -185,7 +201,7 @@ def build_cards(inp, as_of, states):
         action = ACTION.get((a, t["task_type"]), f"{site}_{t['task_type']}")
         if a == "A8":
             action = "a8_appeal_task" if t["owner_role"] == "denial_specialist" else "a8_fix_task"
-        owner = OWNER_BY_AGENT.get(a) or OWNER.get(t["owner_role"], t["owner_role"])
+        owner = owner_of(a, t["owner_role"])
         conf = d.get("confidence")
         stake = D(str(t.get("amount_at_stake") or d.get("amount_at_stake") or 0))
         value = (stake * D(str(conf))).quantize(D("0.01")) if conf is not None else stake
@@ -306,11 +322,18 @@ def baseline_section(findings, as_of):
     by_type = defaultdict(lambda: {"findings": 0, "recoverable": D(0), "structural": D(0)})
     rec = stru = D(0)
     n = 0
+    prevention = {"findings": 0, "at_risk": D(0)}
     for f in findings:
         if _d(f["found_date"]) > as_of:
             continue
-        n += 1
         risk = D(str(f.get("amount_at_risk") or 0))
+        if f["finding_type"] == "predicted_denial":
+            # A5 holds a claim BEFORE submission: that is prevention, not money left behind, and it overlaps the denials
+            # that follow if the claim is released anyway. Reported on its own so the leakage totals are not inflated.
+            prevention["findings"] += 1
+            prevention["at_risk"] += risk
+            continue
+        n += 1
         got = D(str(f.get("amount_recovered") or 0)) if f.get("resolved_date") and _d(f["resolved_date"]) <= as_of else D(0)
         left = max(D(0), risk - got)
         k = by_type[BASELINE_TYPE.get(f["finding_type"], f["finding_type"])]
@@ -324,7 +347,9 @@ def baseline_section(findings, as_of):
     for key in ("denial", "rejection", "timely_filing", "unbilled_visit", "underpayment"):
         by_type[key]                                     # the site's cause table expects these five rows even when empty
     return {"by_type": {k: {"findings": v["findings"], "recoverable": _m(v["recoverable"]), "structural": _m(v["structural"])} for k, v in sorted(by_type.items())},
-            "fallback_priced": 0, "findings": n, "recoverable": _m(rec), "structural": _m(stru)}
+            "fallback_priced": 0, "findings": n, "recoverable": _m(rec), "structural": _m(stru),
+            "prevention": {"findings": prevention["findings"], "at_risk": _m(prevention["at_risk"]),
+                           "note": "Claims A5 held before submission (billed amount at risk); not counted in recoverable or structural."}}
 
 
 def slices_section(findings, payers, cpt, as_of):
@@ -356,12 +381,11 @@ def replay_section(inp, as_of):
                     "line_no": None, "location": "", "payer": payers.get(f.get("payer_id"), {}).get("payer_code", ""), "provider": f"PRV-{f['provider_id']}" if f.get("provider_id") else "",
                     "rank": rank, "reason": f.get("summary") or "", "status": "recoverable" if f.get("is_preventable") else "structural",
                     "type": BASELINE_TYPE.get(f["finding_type"], f["finding_type"]), "visit": ""})
-    # were the generator's denial patterns caught before the denial? claim level: planted = claims denied with that CARC; found = of those, claims A5 had already flagged
+    # were the generator's denial patterns caught before the denial? claim level: planted = claims denied with that CARC; found = of those, claims with an A5 hold naming that CARC raised before the denial
     pred = defaultdict(lambda: [0, 0])
     for f in findings:
         if f["finding_type"] == "predicted_denial":
-            c = _carc_of(f.get("summary"))
-            if c:
+            for c in _carcs_of(f.get("summary")):
                 pred[c][0] += 1
                 pred[c][1] += 1 if f["finding_status"] == "accepted" else 0
     fvp = []
@@ -586,7 +610,8 @@ def load_inputs(conn, tenant_id=1, as_of=None, source="replay"):
     inp["fvp"] = {k: {"planted": p, "found": f} for k, p, f in _rows3(cur, """
         select a.carc_code, count(distinct d.claim_id),
                count(distinct d.claim_id) filter (where exists (select 1 from agent_finding f where f.tenant_id = d.tenant_id and f.source = %s and f.agent_code = 'A5'
-                                                                  and f.claim_id = d.claim_id and f.found_date < d.denial_date))
+                                                                  and f.finding_type = 'predicted_denial' and f.claim_id = d.claim_id and f.found_date < d.denial_date
+                                                                  and f.summary ~ ('^Predicted CARC ([0-9]+, )*' || a.carc_code || '[,:]')))
         from denial d join adjustment_reason a on a.adjustment_reason_id = d.adjustment_reason_id and a.tenant_id = d.tenant_id
         where d.tenant_id = %s and d.denial_date <= %s and a.carc_code in ('96','4','151','11','197') group by 1""", (source, tenant_id, as_of))}
     inp["health"] = _health(cur, tenant_id, as_of)
