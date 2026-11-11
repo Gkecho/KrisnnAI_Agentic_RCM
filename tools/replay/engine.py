@@ -10,6 +10,7 @@ import heapq
 import queue
 import json
 import os
+import re
 import threading
 import time
 from collections import defaultdict
@@ -48,20 +49,229 @@ VERSION = "v0.9-shadow"
 NAMES = {"A1": "Gatekeeper", "A2": "Permit Clerk", "A3": "Note Chaser", "A4": "Code Whisperer", "A5": "Mirror", "A6": "Courier", "A7": "Hunter",
          "A8": "Advocate", "A9": "Coach", "A10": "Auditor", "A11": "Bookkeeper", "A12": "Concierge", "A13": "Credentialing", "A14": "Captain", "A15": "Detective"}
 ROLE_STAFF = {"front_desk": ["FD01", "FD02"], "biller": ["B01", "B02"], "denial_specialist": ["D01"], "coder": ["C01", "C02", "C03"], "ar_specialist": ["AR01"],
-              "payment_poster": ["PP01"], "billing_lead": ["B03"], "manager": ["M01"], "provider": []}
+              "payment_poster": ["PP01"], "billing_lead": ["B03"], "manager": ["M01"], "provider": [], "patient_billing": ["B01", "B02"]}
 SPEED = {"C02": 1.5, "B02": 1.1, "FD02": 1.3, "C03": .8}
 REWORK = {"C02": .10, "B02": .14, "C03": .18, "FD02": .12, "D01": .05}
 BASE_MIN = {"authorization_check": 14, "coverage_follow_up": 12, "unsigned_note": 6, "code_review": 18, "claim_hold_review": 16, "fix_rejection": 11, "claim_follow_up": 22,
-            "denial_work": 26, "dispute_package": 40, "post_remit": 14, "patient_follow_up": 9, "revalidation": 35, "rule_review": 20}
+            "denial_work": 26, "dispute_package": 40, "post_remit": 14, "patient_follow_up": 9, "revalidation": 35, "rule_review": 20, "unbilled_visit": 10}
 SLA = {"hi": 1, "md": 3, "lo": 5}
 AGENT_TABLES = ["payer_rule", "agent_run", "agent_decision", "agent_finding", "agent_task", "agent_decision_details", "agent_approval", "agent_writeback", "agent_value",
                 "agent_forecast", "patient_statement"]
 TEMPLATES = {"50": ("R-UHC-POC-V", "documentation", "plan_of_care"), "97": ("R-AET-XU", "coding", "xu_modifier")}
 
 
+# ====================================================================== finite staff capacity (R2; canonical keeps the old "everything done in 1-11 days" model)
+# On R2 a task is no longer scheduled to finish by a random lag. It joins its role's backlog and the role's staff work it, a fixed number of items per working day,
+# highest score first (amount x urgency, the ranking the site uses), with carry-over to the next working day. Weekends and holidays are off (journey.is_biz).
+CAPACITY = is_r2() or os.environ.get("KRISNNAI_REPLAY_CAPACITY", "") == "1"
+# engine role -> (R2 staff_role whose people do the work, share of their working time spent on this queue, items one full-time person clears per working day)
+# Items per day follow the minutes in BASE_MIN: 480 min x ~75% productive time (calls on hold, meetings, breaks, training) / minutes per item, then scaled for how quick the
+# typical item is (a hold review on a known payer rule is a few minutes; an appeal prep is long). The people come from canon_compat.staff: the count of distinct staff_id with that
+# staff_role (R2: 3 billers, 2 denial analysts, 2 AR specialists, 1 poster, 3 front desk, 2 coders, 1 biller_manager).
+CAP_POOLS = {
+    "denial_specialist": ("denial_analyst", 1.0, 8),      # ~45 min an item (read the denial, pull records, draft or fix, track the deadline)
+    "biller": ("biller", 0.80, 34),                        # holds fall into five known causes and are fixed in batches: ~14 min an item; the rest of their day is charge entry, posting and patient accounts
+    "patient_billing": ("biller", 0.10, 10),               # patient accounts: ~45 min an item (several call attempts, a payment plan, a statement)
+    "ar_specialist": ("ar_specialist", 1.0, 6),            # a no-response follow-up is several payer calls and portal checks over a day: ~75 min of work an item
+    "payment_poster": ("payment_poster", 1.0, 24),         # ~15 min an item (match the remit, post, clear unapplied)
+    "front_desk": ("front_desk", 0.15, 14),                # front desk is mostly the desk: ~15% of their time goes to follow-ups
+    "coder": ("coder", 0.50, 20),                          # code reviews, half the day
+    "billing_lead": ("biller_manager", 0.60, 12),          # disputes and approvals, ~30 min
+    "manager": ("biller_manager", 0.40, 10),               # rule approvals and revalidation
+}
+A12_TASK_RATE = 1.0 if CAPACITY else .25     # share of sent statements that also become a staff follow-up item (R2: every one; a worklist of patient balances)
+# ---- R2 detectors on top of the old rules (off for canonical unless KRISNNAI_REPLAY_PREVISIT=1)
+PREVISIT = is_r2() or os.environ.get("KRISNNAI_REPLAY_PREVISIT", "") == "1"
+# A7 flags a claim that is past its payer's standard turnaround plus this many days with no answer. Canonical: 14. R2: 0, because R2 payers always answer within turnaround + 3 days,
+# so a grace of 7 or 14 never fires; 0 means "past the standard turnaround with no answer yet" (the task is the follow-up call).
+A7_GRACE = int(os.environ.get("KRISNNAI_REPLAY_A7_GRACE", "0" if is_r2() else "14"))
+# A7 only runs from this day. On R2 the rule "past the standard turnaround with no answer" also fires on every claim a payer answers 1-3 days late (50,000 of them over the history,
+# each closed by the answer itself), so the follow-up worklist goes live for the last 30 days only, like A14 and A15 start after their own warm-up. Set the variable to an ISO date to change it.
+A7_FROM = _env_date("KRISNNAI_REPLAY_A7_FROM", TODAY - dt.timedelta(days=30) if is_r2() else dt.date(1900, 1, 1))
+A1_WINDOW_BD = 3           # A1: an appointment within the next 3 business days is checked for a recent eligibility check
+A1_STALE_DAYS = 30         # a check older than this on the visit date is stale
+A2_EXPIRY_DAYS = 14        # A2: an authorization that ends within this many days of the visit
+A2_LOW_UNITS = 1           # A2: units left after this visit at or under this count = nearly used up
+A3_UNBILLED_DAYS = 3       # A3: an encounter with no bill more than this many days after the visit
+OVERTIME = float(os.environ.get("KRISNNAI_REPLAY_OVERTIME", "0.25"))   # overtime (set the variable to 0 for a hard cap): once the backlog is more than OT_DAYS days of normal capacity the team works extra, +25% at that depth, growing in proportion to the backlog,
+MAX_OVERTIME = 0.60        # up to +60% (borrowed hours, a temp, weekend catch-up). This keeps a busy queue from growing for ever without ever emptying it.
+OT_DAYS = 3
+STALE_BOOST_DAYS = 90      # a task overdue this long (or more) has its score x4: nothing starves for ever
+
+
+class WorkPool:
+    """One role's backlog. add() when a task is created; work(d) on each working day returns the tasks the staff finish that day.
+
+    capacity = items per working day (may be fractional: the remainder carries to the next day, so 2.5 means 2, 3, 2, 3 ...). A task created on day d is first worked on
+    the next working day. Idle capacity is not banked. Deterministic: ties break on the order the tasks arrived.
+    """
+
+    def __init__(self, role, capacity, overtime=OVERTIME, ot_days=OT_DAYS):
+        self.role, self.capacity, self.overtime, self.ot_days = role, float(capacity), overtime, ot_days
+        self.items = []
+        self.credit = 0.0
+        self.seq = 0
+        self.history = []              # (date, backlog_before, items_done, capacity_today)
+
+    @staticmethod
+    def score(d, it):
+        late = max(0, (d - it["due"]).days)
+        urgency = (1.5 if late > 0 else 1.0) * (1.2 if it["priority"] == "hi" else 1.0) * (1 + 3 * min(late, STALE_BOOST_DAYS) / STALE_BOOST_DAYS)
+        return float(it["amount"] or 0) * urgency
+
+    def add(self, created, due, amount, priority, payload, key=None):
+        self.seq += 1
+        self.items.append(dict(created=created, due=due, amount=amount, priority=priority, payload=payload, seq=self.seq, key=key))
+
+    def discard(self, key):
+        """Takes a task out of the backlog without working it (the need went away). True if it was there."""
+        n = len(self.items)
+        self.items = [it for it in self.items if key is None or it["key"] != key]
+        return len(self.items) < n
+
+    def today_capacity(self):
+        deep = self.ot_days * self.capacity
+        if len(self.items) <= deep:
+            return self.capacity
+        return self.capacity * (1 + min(MAX_OVERTIME, self.overtime * len(self.items) / deep))
+
+    def work(self, d):
+        cap = self.today_capacity()
+        self.credit += cap
+        n = int(self.credit + 1e-9)
+        ready = [it for it in self.items if it["created"] < d]
+        ready.sort(key=lambda it: (-self.score(d, it), it["seq"]))
+        take = ready[:n]
+        self.credit -= n                 # only the fractional remainder carries; capacity not used today (nothing ready) is lost, not banked
+        before = len(self.items)
+        if take:
+            ids = {id(it) for it in take}
+            self.items = [it for it in self.items if id(it) not in ids]
+        self.history.append((d, before, len(take), cap))
+        return [it["payload"] for it in take]
+
+
+def role_capacities(staff_rows, pools=None):
+    """Items per working day for each role: people with the mapped R2 staff_role (distinct staff_id) x share x items per person per day. A role whose staff_role has nobody gets no pool."""
+    people = defaultdict(set)
+    for r_ in staff_rows:
+        people[r_["staff_role"]].add(r_["staff_id"])
+    out = {}
+    for role, (srole, share, per_day) in (pools or CAP_POOLS).items():
+        n = len(people.get(srole, ()))
+        if n:
+            out[role] = n * share * per_day
+    return out
+
+
+# ====================================================================== A5 pre-submission pattern rules (the five patterns the R2 data generators built in)
+# Each rule uses only what is known on the review date: the claim, its lines and encounter, the patient's earlier claims submitted by then, and authorizations decided by then.
+CDT_RE = re.compile(r"^D\d{4}$")
+EM_CODES = {"99211", "99213", "99214", "99203", "99204"}
+INJECTION_CODES = {"96372", "95115"}
+UNIT_CAPS = {"96127": 4, "97110": 4, "99408": 1}                        # max units per line per day
+ONCE_A_YEAR = {"G0444": {"MEDICARE"}, "G0136": None}                    # code -> payers that allow it once per calendar year (None = every payer)
+PREVENTIVE_CODES = {"99393", "99395", "99396"}
+ROUTINE_DX = {"Z0000", "Z00129"}                                         # the practice's routine-exam diagnoses
+# payer code -> codes that need prior authorization (the list the authorization stage built into payer_rule; mirrored from tools/synthea/load_auth_eligibility.py, tested equal)
+AUTH_REQUIRED = {"HUMANA": ["90935", "96413", "97110"], "UHC": ["90935", "96413", "95115"], "AETNA": ["90935", "96413"], "CIGNA": ["90935", "96413"], "ANTHEM": ["90935", "96413"],
+                 "BCBS": ["90935", "96413"], "MEDICAID": ["90935", "96413", "97110"], "DUAL": ["90935", "96413", "97110"]}
+# hand-set confidence of each pattern rule (not read from the data): how often a claim that breaks it is denied
+PATTERN_CONF = {"96": .50, "4": .65, "151": .30, "11": .25, "197": .80}
+PATTERN_RULES = [("R-DENTAL-MEDICARE", "coverage", "96"), ("R-EM-INJ-MOD25", "coding", "4"), ("R-UNIT-LIMIT", "unit_limit", "151"), ("R-PREVENTIVE-DX", "dx_required", "11"),
+                 ("R-AUTH-REQUIRED", "authorization", "197")]
+
+
+def _res(code, ok, observed, expected, sev="high"):
+    return (code, "pass" if ok else "fail", observed, expected, sev, None)
+
+
+def auth_on_file(W, claim, ln, d):
+    """True if an approved authorization decided by day d covers this line: date inside its window and cumulative units (this line included) within the approved units."""
+    cid = ln["claim_detail_id"]
+    pt, py, cp, svc = claim["patient_id"], claim["payer_id"], ln["cpt_code_id"], claim["service_date_from"]
+    for a in W.auth_by_key.get((pt, py, cp), ()):
+        if a["status"] != "approved" or a["decision_date"] is None or a["decision_date"] > d or not a["valid_from"] <= svc <= a["valid_to"]:
+            continue
+        used = sum((u or 0) for sd, c2, u, _cl, p2 in W.line_hist.get((pt, cp), ()) if p2 == py and a["valid_from"] <= sd and (sd, c2) <= (svc, cid))
+        if used <= a["units_approved"]:
+            return True
+    return False
+
+
+def pattern_checks(W, cl, d):
+    """The five A5 pattern rules for one claim on review day d. Returns (rule results, fails) with fails = [(carc, confidence, rule_code)].
+    A rule that does not apply to the claim adds nothing; a rule whose inputs are unknown (no diagnosis, no units) abstains. Outside R2 (W.has_ext false) nothing runs."""
+    if not getattr(W, "has_ext", False):
+        return [], []
+    pc = W.payer_code[cl["payer_id"]]
+    lines = W.cd[cl["claim_id"]]
+    code = lambda ln: W.cpt[ln["cpt_code_id"]]            # noqa: E731
+    svc = cl["service_date_from"]
+    res, fails = [], []
+
+    cdt = [code(x) for x in lines if CDT_RE.match(code(x))]
+    if cdt:
+        bad = pc == "MEDICARE"
+        res.append(_res("R-DENTAL-MEDICARE", not bad, f"{cdt[0]} billed to {pc}", "dental (CDT) is not covered by MEDICARE" if bad else "dental covered", "high"))
+        if bad:
+            fails.append(("96", PATTERN_CONF["96"], "R-DENTAL-MEDICARE"))
+
+    em = [x for x in lines if code(x) in EM_CODES]
+    if em and any(W.cpt[x["cpt_code_id"]] in INJECTION_CODES for x in W.enc_lines.get(cl["encounter_id"], ())):
+        m25 = W.mod.get("25")
+        missing = [x for x in em if m25 is None or m25 not in (x["modifier_1_id"], x["modifier_2_id"])]
+        res.append(_res("R-EM-INJ-MOD25", not missing, f"{code(em[0])} with an injection on the visit, modifier 25 {'missing' if missing else 'present'}", "modifier 25 on the E/M line", "high"))
+        if missing:
+            fails.append(("4", PATTERN_CONF["4"], "R-EM-INJ-MOD25"))
+
+    over, checked = [], False
+    for x in lines:
+        cap, u = UNIT_CAPS.get(code(x)), W.line_units.get(x["claim_detail_id"])
+        if cap is not None and u is not None:
+            checked = True
+            if u > cap:
+                over.append(f"{code(x)} {u} units")
+        elif code(x) in ONCE_A_YEAR and (ONCE_A_YEAR[code(x)] is None or pc in ONCE_A_YEAR[code(x)]):
+            checked = True
+            prior = [1 for sd, c2, _u, cid_, _p in W.line_hist.get((cl["patient_id"], x["cpt_code_id"]), ())
+                     if sd.year == svc.year and (sd, c2) < (svc, x["claim_detail_id"]) and W.claim[cid_]["submitted_date"] <= d]
+            if prior:
+                over.append(f"{code(x)} again in {svc.year}")
+    if checked:
+        res.append(_res("R-UNIT-LIMIT", not over, "; ".join(over) or "within unit and frequency limits", "within the payer's unit and once-a-year limits", "high"))
+        if over:
+            fails.append(("151", PATTERN_CONF["151"], "R-UNIT-LIMIT"))
+
+    prev = [x for x in lines if code(x) in PREVENTIVE_CODES]
+    dx = W.claim_dx.get(cl["claim_id"])
+    if prev and dx is not None:
+        bad = dx not in ROUTINE_DX
+        res.append(_res("R-PREVENTIVE-DX", not bad, f"{code(prev[0])} with diagnosis {dx}", "a routine-exam diagnosis (" + ", ".join(sorted(ROUTINE_DX)) + ")", "high"))
+        if bad:
+            fails.append(("11", PATTERN_CONF["11"], "R-PREVENTIVE-DX"))
+
+    need = [x for x in lines if code(x) in AUTH_REQUIRED.get(pc, ())]
+    if need:
+        miss = [code(x) for x in need if not auth_on_file(W, cl, x, d)]
+        res.append(_res("R-AUTH-REQUIRED", not miss, f"{', '.join(miss)} without an approved authorization on file" if miss else "authorization on file", "approved authorization covering the date and units", "high"))
+        if miss:
+            fails.append(("197", PATTERN_CONF["197"], "R-AUTH-REQUIRED"))
+    return res, fails
+
+
 def nb(d):
     while not is_biz(d):
         d += dt.timedelta(days=1)
+    return d
+
+
+def back_biz(d, n):
+    """The business day n business days before d."""
+    while n > 0:
+        d -= dt.timedelta(days=1)
+        if is_biz(d):
+            n -= 1
     return d
 
 
@@ -110,6 +320,8 @@ class Replay:
         self.cur_src = None
         self._t_last = time.perf_counter()
         self.hn = 0
+        self.a7_open = {}
+        self.pools = {role: WorkPool(role, cap) for role, cap in role_capacities(self.W.t.get("staff", [])).items()} if CAPACITY else {}
         self._open_log()
 
     def _open_log(self):
@@ -131,6 +343,13 @@ class Replay:
         T, E = self.T, self.E
         for ck in W.t["eligibility_check"]:
             T["A1"][nb(ck["check_date"])].append(ck)
+        if PREVISIT and W.has_ext:
+            for ap in W.t["appointment"]:         # appointments still scheduled at the end of the data: reviewed when they come within 3 business days, and a week ahead for authorizations
+                if ap["appointment_status"] != "scheduled" or W.payer[ap["payer_id"]]["payer_type"] == "self_pay":
+                    continue
+                first = nb(ap["booked_date"] or START)
+                T["A1"][max(first, back_biz(ap["appointment_date"], A1_WINDOW_BD))].append(dict(_pre=ap))
+                T["A2"][max(first, nb(ap["appointment_date"] - dt.timedelta(days=7)))].append(dict(_sched=ap))
         by_auth = defaultdict(list)
         for ap in W.t["appointment"]:
             a = W.appt_auth.get(ap["appointment_id"])
@@ -147,6 +366,8 @@ class Replay:
                 E["visit"][e["encounter_date"]].append(e)
             if eb is not None:
                 T["A3"][nb(e["encounter_date"] + dt.timedelta(days=3))].append(e)
+            elif PREVISIT and W.has_ext and W.payer[e["payer_id"]]["payer_type"] != "self_pay":      # a visit with no charge at all: the biller is asked why (3 days after, so day 4)
+                T["A3"][nb(e["encounter_date"] + dt.timedelta(days=A3_UNBILLED_DAYS + 1))].append(dict(_unbilled=e))
             if e["note_signed_date"]:
                 E["note"][e["note_signed_date"]].append(e)
                 if any(l["documented_level"] for l in W.enc_lines[e["encounter_id"]]):
@@ -159,7 +380,9 @@ class Replay:
             T["A5"][nb(c["submitted_date"]) if A5_NEXT_BIZ else c["submitted_date"]].append(c)
             turn = W.payer[c["payer_id"]]["standard_turnaround_days"]
             if turn is not None:                 # no standard turnaround for this payer (NULL in R2): A7 has no rule to apply, so it abstains
-                T["A7"][nb(c["submitted_date"] + dt.timedelta(days=turn + 14))].append(c)
+                d7 = nb(c["submitted_date"] + dt.timedelta(days=turn + A7_GRACE))
+                if d7 >= A7_FROM:
+                    T["A7"][d7].append(c)
         for cl, evs in W.hist.items():
             for x in evs:
                 E["hist"][x["event_date"]].append((cl, x))
@@ -296,7 +519,11 @@ class Replay:
         self.agent_stat[agent]["tasks"] += 1
         self.task_rows[tid] = trow
         if role != "provider" or ttype == "unsigned_note":
-            self.sched_at(done, lambda day: self.complete_task(day, tid, trow, dec_row, frow, mins, due, rework, finding))
+            fin = lambda day: self.complete_task(day, tid, trow, dec_row, frow, mins, due, rework, finding)      # noqa: E731
+            if role in self.pools:                 # finite capacity: the role's staff reach it in priority order, on a later working day
+                self.pools[role].add(d, due, amount, priority, fin, key=tid)
+            else:
+                self.sched_at(done, fin)
         return tid
 
     def complete_task(self, day, tid, trow, dec_row, frow, mins, due, rework, finding):
@@ -309,7 +536,11 @@ class Replay:
             done2 = min(TODAY, next_biz(day, 1))
             t2, row2 = self.add("agent_task", day, **{k: v for k, v in trow.items() if k not in ("agent_task_id", "known_at", "loaded_at")}, )
             row2.update(task_status="open", completed_date=None, outcome=None, minutes_spent=None, version=trow["version"] + 1, previous_agent_task_id=trow["agent_task_id"])
-            self.sched_at(done2, lambda d2: self.upd("agent_task", row2, task_status="done", completed_date=d2, outcome="resolved", minutes_spent=int(mins * .6)))
+            fin2 = lambda d2: self.upd("agent_task", row2, task_status="done", completed_date=d2, outcome="resolved", minutes_spent=int(mins * .6))      # noqa: E731
+            if trow["owner_role"] in self.pools:    # the reworked task waits its turn like any other
+                self.pools[trow["owner_role"]].add(day, due, trow["amount_at_stake"], trow["priority"], fin2)
+            else:
+                self.sched_at(done2, fin2)
             self.task_rows[t2] = row2
         else:
             self.upd("agent_task", trow, task_status="done", completed_date=day, outcome="resolved", minutes_spent=mins, contact_channel="system", escalation_level=esc,
@@ -366,8 +597,35 @@ class Replay:
         return any(dd["document_type"] == "plan_of_care" and ev and ev <= dd["document_date"] <= e["encounter_date"] for dd in self.W.pat_doc[e["patient_id"]])
 
     # ================================================================== the agents (each reacts to what reached it today)
+    def a1_pre_visit(self, d, ap):
+        """Appointment within 3 business days: is there an eligibility check, is it recent, does it name another payer as primary? Only checks done by day d count."""
+        W = self.W
+        self.cur_src = ap
+        known = sorted((c for c in W.checks_by_appt.get(ap["appointment_id"], ()) if c["check_date"] <= d), key=lambda c: c["check_date"])
+        last = known[-1] if known else None
+        age = (ap["appointment_date"] - last["check_date"]).days if last else None
+        other = next((W.elig_other[c["eligibility_check_id"]] for c in known if c["eligibility_check_id"] in W.elig_other and W.elig_other[c["eligibility_check_id"]] != ap["payer_id"]), None)
+        rules = [self.rule("R-ELIG-CHECKED", last is not None, "no check on file" if last is None else "checked " + str(last["check_date"]), "a check before the visit on " + str(ap["appointment_date"]), "high"),
+                 self.rule("R-ELIG-FRESH", last is None or age <= A1_STALE_DAYS, "n/a" if last is None else f"{age} days before the visit", f"<= {A1_STALE_DAYS} days", "medium"),
+                 self.rule("R-COB-ORDER", other is None, "primary as booked" if other is None else "check names " + str(W.payer_code.get(other, other)) + " as primary", str(W.payer_code[ap["payer_id"]]) + " primary", "high")]
+        if all(r_[1] == "pass" for r_ in rules):
+            return
+        cause = "R-COB-ORDER" if other is not None else "R-ELIG-CHECKED" if last is None else "R-ELIG-FRESH"
+        txt = {"R-ELIG-CHECKED": "No eligibility check on file for the visit on " + str(ap["appointment_date"]),
+               "R-ELIG-FRESH": f"Last eligibility check is {age} days old for the visit on " + str(ap["appointment_date"]),
+               "R-COB-ORDER": "Another payer is primary for the visit on " + str(ap["appointment_date"])}[cause]
+        ftype = {"R-ELIG-CHECKED": "no_eligibility_check", "R-ELIG-FRESH": "stale_eligibility_check", "R-COB-ORDER": "coverage_order_conflict"}[cause]
+        amt = q(W.appt_expected[ap["appointment_id"]])
+        self.emit("A1", "pre_visit_review", "appointment", ap["appointment_id"], d, "flag", amt, rules, dict(patient_id=ap["patient_id"], payer_id=ap["payer_id"], appointment_id=ap["appointment_id"], provider_id=ap["provider_id"]),
+                  txt, finding=dict(finding_type=ftype, finding_status="open", upstream_stage="eligibility", is_preventable=True, severity="high", amount_at_risk=amt, deadline_date=ap["appointment_date"], summary=txt,
+                                    resolve_with_task="verified"),
+                  task=dict(ttype="coverage_follow_up", role="front_desk", priority="hi", title="Verify coverage before the visit: " + ftype.replace("_", " ")), conf=.9)
+
     def a1(self, d, items):
         for ck in items:
+            if "_pre" in ck:
+                self.a1_pre_visit(d, ck["_pre"])
+                continue
             self.cur_src = ck
             ended = ck["plan_end_date"] and ck["plan_end_date"] < ck["service_date"]
             ap = self.W.appt[ck["appointment_id"]]
@@ -383,8 +641,49 @@ class Replay:
             elif self.r.random() < .03:
                 self.emit("A1", "eligibility_review", "appointment", ck["appointment_id"], d, "clear", 0, rules, refs, "Coverage active", conf=.97, kind="clear")
 
+    def a2_scheduled(self, d, ap):
+        """Scheduled appointment, every planned line: a service on the payer's authorization list with no authorization covering the visit, one that ends within 14 days of the visit, or one nearly used up."""
+        W = self.W
+        self.cur_src = ap
+        pc, adate = W.payer_code[ap["payer_id"]], ap["appointment_date"]
+        problems, rules = [], []
+        for ln_, cp, units in W.appt_lines.get(ap["appointment_id"], ()):
+            code = W.cpt[cp]
+            if code not in AUTH_REQUIRED.get(pc, ()):
+                continue
+            cover = [a for a in W.auth_by_key.get((ap["patient_id"], ap["payer_id"], cp), ()) if a["status"] == "approved" and a["decision_date"] is not None and a["decision_date"] <= d
+                     and a["valid_from"] <= adate <= a["valid_to"]]
+            if not cover:
+                rules.append(self.rule("R-AUTH-ON-FILE", False, f"{code}: no approved authorization covers {adate}", "approved authorization on file", "high"))
+                problems.append(("authorization_missing", f"{code} needs an authorization and none covers the visit"))
+                continue
+            a = max(cover, key=lambda x: x["valid_to"])
+            left = (a["valid_to"] - adate).days
+            used = sum((u or 0) for sd, _c, u, _cl, p2 in W.line_hist.get((ap["patient_id"], cp), ()) if p2 == ap["payer_id"] and a["valid_from"] <= sd <= d)
+            after = a["units_approved"] - used - (units or 0)
+            rules.append(self.rule("R-AUTH-ON-FILE", True, f"{code}: authorization to {a['valid_to']}", "approved authorization on file", "high"))
+            rules.append(self.rule("R-AUTH-EXPIRY", left > A2_EXPIRY_DAYS, f"ends {left} days after the visit", f"> {A2_EXPIRY_DAYS} days", "medium"))
+            rules.append(self.rule("R-AUTH-UNITS", after > A2_LOW_UNITS, f"{after} units left after this visit", f"> {A2_LOW_UNITS}", "medium"))
+            if left <= A2_EXPIRY_DAYS:
+                problems.append(("authorization_expiring", f"{code}: authorization ends {left} days after the visit"))
+            if after <= A2_LOW_UNITS:
+                problems.append(("authorization_units_low", f"{code}: {max(after, 0)} units left after this visit"))
+        if not problems:
+            return
+        ftype, txt = problems[0]
+        txt = f"{txt} ({adate})"
+        amt = q(W.appt_expected[ap["appointment_id"]])
+        self.emit("A2", "scheduled_auth_review", "appointment", ap["appointment_id"], d, "flag", amt, rules, dict(patient_id=ap["patient_id"], payer_id=ap["payer_id"], appointment_id=ap["appointment_id"], provider_id=ap["provider_id"]),
+                  txt, finding=dict(finding_type=ftype, finding_status="open", upstream_stage="authorization", is_preventable=True, severity="high", amount_at_risk=amt, deadline_date=adate, summary=txt,
+                                    resolve_with_task="extension_requested"),
+                  task=dict(ttype="authorization_check", role="front_desk", priority="hi", title="Authorization problem before the visit: " + ftype.replace("authorization_", "").replace("_", " ")), conf=.88)
+
     def a2(self, d, items):
-        for ap, n, aid in items:
+        for it in items:
+            if isinstance(it, dict):
+                self.a2_scheduled(d, it["_sched"])
+                continue
+            ap, n, aid = it
             self.cur_src = (ap, n, aid)
             au = self.W.auth[aid]
             amt = q(self.W.appt_expected[ap["appointment_id"]])
@@ -396,8 +695,31 @@ class Replay:
                                    deadline_date=ap["appointment_date"], summary=f"Authorization allows {au['units_approved']} visits; this is visit {n}", resolve_with_task="extension_requested"),
                       task=dict(ttype="authorization_check", role="front_desk", priority="hi", title="Request more visits before the next appointment"), conf=.9)
 
+    def a3_unbilled(self, d, e):
+        """A visit with no bill 4 days on (insurance only): the biller is asked to enter the charge. An unsigned note also goes to the provider, as for any visit."""
+        W = self.W
+        self.cur_src = e
+        unsigned = not e["note_signed_date"] or e["note_signed_date"] > d
+        amt = q(W.appt_expected.get(e["appointment_id"], 0))
+        refs = dict(patient_id=e["patient_id"], payer_id=e["payer_id"], provider_id=e["rendering_provider_id"], encounter_id=e["encounter_id"])
+        days = (d - e["encounter_date"]).days
+        txt = f"Visit on {e['encounter_date']} has no charge {days} days later (note {'unsigned' if unsigned else 'signed'})"
+        rules = [self.rule("R-CHARGE-ENTERED", False, f"no bill {days} days after the visit", f"a charge within {A3_UNBILLED_DAYS} days", "high"),
+                 self.rule("R-NOTE-SIGNED", not unsigned, "unsigned" if unsigned else f"signed {e['note_signed_date']}", "signed", "medium")]
+        self.emit("A3", "unbilled_visit_review", "encounter", e["encounter_id"], d, "flag", amt, rules, refs, txt,
+                  finding=dict(finding_type="unbilled_visit", finding_status="open", upstream_stage="charge_entry", is_preventable=True, severity="high", amount_at_risk=amt, summary=txt, resolve_with_task="charge_entered"),
+                  task=dict(ttype="unbilled_visit", role="biller", priority="md", title="Visit has no charge: enter the charge or explain why"), conf=.9)
+        if unsigned:
+            self.emit("A3", "documentation_review", "encounter", e["encounter_id"], d, "flag", amt, [self.rule("R-NOTE-SIGNED", False, "unsigned", "signed within 2 days", "medium")], refs,
+                      f"Note unsigned {days} days after the visit ({W.prov_name.get(e['rendering_provider_id'], '')})",
+                      finding=dict(finding_type="unsigned_note", finding_status="open", upstream_stage="documentation", is_preventable=True, severity="medium", amount_at_risk=amt, summary="Note not signed; there is no charge"),
+                      task=dict(ttype="unsigned_note", role="provider", priority="md", title="Sign the visit note"), conf=.97)
+
     def a3(self, d, items):
         for e in items:
+            if "_unbilled" in e:
+                self.a3_unbilled(d, e["_unbilled"])
+                continue
             self.cur_src = e
             if e["note_signed_date"] and e["note_signed_date"] <= d:
                 continue
@@ -476,18 +798,23 @@ class Replay:
                     results.append(self.rule("R-AET-XU", not bad, "97140+97530 without XU/59" if bad else "ok", "distinct-service modifier", "high", L["id"]))
                 if bad:
                     fails.append((L["carc"], .85))
-            will_deny = bool(W.den_by_claim.get(cl["claim_id"]))      # used only to score the prediction later, never to decide
+            pr_, pf_ = pattern_checks(W, cl, d)              # the five generator patterns, on what is known today (R2 only)
+            results += [(c_, r_, o_, e_, sv_, self.generic.get(c_)) for c_, r_, o_, e_, sv_, _ in pr_]
+            fails += [(carc_, p_) for carc_, p_, _rule in pf_]
             if fails:
                 carc_c, p = max(fails, key=lambda x: x[1])
+                carcs = list(dict.fromkeys(c_ for c_, _ in sorted(fails, key=lambda x: -x[1])))      # every CARC predicted, most likely first
+                carc_txt = ", ".join(carcs)
+                failed = [x[0] for x in results if x[1] == "fail"]
                 exp_allowed = sum((x["expected_allowed"] or 0) for x in lines)
                 dec, fid, tid = self.emit("A5", "prerelease_review", "claim", cl["claim_id"], d, "hold", cl["total_charge"], results, self.refs_of(cl),
-                                          f"Would hold {cl['claim_number']}: CARC {carc_c} risk ({[x[0] for x in results if x[1] == 'fail'][0]})",
+                                          f"Would hold {cl['claim_number']}: CARC {carc_txt} risk ({', '.join(failed)})",
                                           finding=dict(finding_type="predicted_denial", finding_status="open", upstream_stage=W.carc.get(W.carc_id.get(carc_c), {}).get("upstream_stage"), is_preventable=True,
                                                        severity="high", amount_at_risk=q(cl["total_charge"]), predicted_probability=D(str(p)).quantize(D("0.0001")),
                                                        predicted_reason_category=W.carc.get(W.carc_id.get(carc_c), {}).get("reason_category"), predicted_allowed_amount=q(exp_allowed),
-                                                       summary=f"Predicted CARC {carc_c}: {[x[0] for x in results if x[1] == 'fail'][0]}"),
-                                          task=dict(ttype="claim_hold_review", role="biller", priority="hi", title=f"Review before release: CARC {carc_c} risk"), conf=p, kind="hold")
-                self.mirror_find[cl["claim_id"]] = self.S.rows["agent_finding"][-1]
+                                                       summary=f"Predicted CARC {carc_txt}: {', '.join(failed)}"),
+                                          task=dict(ttype="claim_hold_review", role="biller", priority="hi", title=f"Review before release: CARC {carc_txt} risk"), conf=p, kind="hold")
+                self.mirror_find[cl["claim_id"]] = (self.S.rows["agent_finding"][-1], set(carcs))
             elif self.r.random() < .03:
                 self.emit("A5", "prerelease_review", "claim", cl["claim_id"], d, "release", cl["total_charge"], results, self.refs_of(cl), f"Released {cl['claim_number']}: all checks pass", conf=.9, kind="clear")
 
@@ -516,13 +843,30 @@ class Replay:
             deadline = cl["service_date_from"] + dt.timedelta(days=filing)
             risk = (deadline - d).days
             self.board["accepted"] = max(0, self.board["accepted"] - 1); self.board["noresp"] += 1
-            self.emit("A7", "claim_follow_up", "claim", cl["claim_id"], d, "flag", cl["total_charge"],
-                      [self.rule("R-PAYER-RESPONSE", False, f"{days} days, no response", f"<= {turn + 14} days", "high"), self.rule("R-FILING-WINDOW", risk > 30, f"{risk} days left", "> 30", "high")],
+            dec, fid, tid = self.emit("A7", "claim_follow_up", "claim", cl["claim_id"], d, "flag", cl["total_charge"],
+                      [self.rule("R-PAYER-RESPONSE", False, f"{days} days, no response", f"<= {turn + A7_GRACE} days", "high"), self.rule("R-FILING-WINDOW", risk > 30, f"{risk} days left", "> 30", "high")],
                       self.refs_of(cl), f"{cl['claim_number']}: no payer response after {days} days; filing window ends {deadline}",
                       finding=dict(finding_type="no_payer_response", finding_status="open", upstream_stage="billing", is_preventable=False, severity="high" if risk <= 30 else "medium",
                                    amount_at_risk=cl["total_charge"], deadline_date=deadline, summary=f"No payer response after {days} days; filing window ends {deadline}"),
                       task=dict(ttype="claim_follow_up", role="ar_specialist", priority="hi" if risk <= 30 else "md", title="Call the payer or resubmit: no response"), conf=.88,
                       values=[("detected", "claim_recovery", cl["total_charge"], d, True, None)])
+            if tid is not None:
+                self.a7_open[cl["claim_id"]] = (self.task_rows[tid], self.S.rows["agent_finding"][-1])
+
+    def a7_answered(self, d, claim_id):
+        """The payer answered a claim A7 had flagged: if the follow-up is still waiting, it closes itself (nothing left to chase) and leaves the backlog."""
+        it = self.a7_open.pop(claim_id, None)
+        if it is None:
+            return
+        trow, frow = it
+        if trow["task_status"] != "open":
+            return
+        pool = self.pools.get(trow["owner_role"])
+        if pool is not None:
+            pool.discard(trow["agent_task_id"])
+        self.upd("agent_task", trow, task_status="done", completed_date=d, outcome="no_action_needed", minutes_spent=0)
+        if frow["finding_status"] != "resolved":
+            self.upd("agent_finding", frow, finding_status="resolved", resolved_date=d, resolution="payer_answered")
 
     def a8(self, d, items):
         W = self.W
@@ -630,12 +974,12 @@ class Replay:
             sid, srow = self.add("patient_statement", d, statement_number=f"STM-{self.counts['patient_statement']:06d}", patient_id=a["patient_id"], statement_date=d, statement_amount=a["balance"],
                                  channel=self.r.choice(["mail", "email", "portal"]), statement_status="sent", practice_id=self.W.practice, bill_id=a["bill_id"], claim_id=a["claim_id"],
                                  due_date=d + dt.timedelta(days=30), sent_at=dt.datetime.combine(d, dt.time(8, 0)), status_date=d, dunning_level=level)
-            if self.r.random() < .25:
+            if self.r.random() < A12_TASK_RATE:
                 self.emit("A12", "balance_follow_up", "ar", a["ar_id"], d, "flag", a["balance"], [self.rule("R-BALANCE-AGE", False, f"{a['days_outstanding']} days", "<= 60", "medium")],
                           dict(patient_id=a["patient_id"], payer_id=a["payer_id"]), f"Patient balance ${float(a['balance']):,.0f}: statement sent",
                           finding=dict(finding_type="patient_balance", finding_status="open", upstream_stage="patient", is_preventable=False, severity="low", amount_at_risk=a["balance"],
                                        summary=f"Patient balance {a['balance']} open {a['days_outstanding']} days"),
-                          task=dict(ttype="patient_follow_up", role="biller", priority="lo", title="Follow up on the patient balance"), conf=.85)
+                          task=dict(ttype="patient_follow_up", role="patient_billing" if CAPACITY else "biller", priority="lo", title="Follow up on the patient balance"), conf=.85)
 
     def a13(self, d, items):
         for en in items:
@@ -733,6 +1077,7 @@ class Replay:
                 b["rejected"] = max(0, b["rejected"] - 1)
                 out.append(dict(k="submitted", txt=f"{c['claim_number']} resubmitted", claim=cl))
             elif et == "remit_835":
+                self.a7_answered(d, cl)
                 b["accepted"] = max(0, b["accepted"] - 1)
                 if x["status_after"] == "paid":
                     b["paid"] += 1; n["paid"] += 1
@@ -744,8 +1089,10 @@ class Replay:
                 mf = self.mirror_find.get(cl)
                 dn = bool(W.den_by_claim.get(cl))
                 if mf is not None:
-                    self.mirror["tp" if dn else "fp"] += 1
-                    self.upd("agent_finding", mf, finding_status="confirmed" if dn else "unconfirmed", resolved_date=d, resolution="denied_confirmed" if dn else "no_denial")
+                    mrow, mcarcs = mf
+                    hit = any(W.carc[x["adjustment_reason_id"]]["carc_code"] in mcarcs for x in W.den_by_claim.get(cl, ()))      # confirmed = denied with a CARC the hold named
+                    self.mirror["tp" if hit else "fp"] += 1
+                    self.upd("agent_finding", mrow, finding_status="confirmed" if hit else "unconfirmed", resolved_date=d, resolution="denied_confirmed" if hit else "no_denial")
                 else:
                     self.mirror["fn" if dn else "tn"] += 1
         for p in self.E["cash"].get(d, []):
@@ -755,11 +1102,24 @@ class Replay:
         n["total"] = len(out)
         return out, dict(n)
 
+    def work_pools(self, d):
+        """Each role's staff clear their daily capacity from the backlog (working days only), before today's new tasks exist."""
+        if not is_biz(d):
+            return
+        for role in sorted(self.pools):
+            for fin in self.pools[role].work(d):
+                fin(d)
+
+    def backlog(self):
+        """Open items per role right now (the finite-capacity backlog)."""
+        return {role: len(p.items) for role, p in self.pools.items()}
+
     def run_day(self, d):
         t0 = time.perf_counter()
         self.day_items = []
         self.new_today = set()
         self.updates = []
+        self.work_pools(d)
         while self.sched and self.sched[0][0] <= d:
             _, _, fn = heapq.heappop(self.sched)
             fn(d)
@@ -849,6 +1209,12 @@ class Replay:
             rid, _ = self.add("payer_rule", START, rule_code=code, rule_family=fam, rule_action=act, rule_source_code="built_in", is_enabled=True, is_synthetic=True, approval_status="approved",
                               effective_from=RULES_FROM, owner_role="front_desk", severity="high", approved_by_staff_id=self.W.staff["M01"], approved_date=RULES_FROM)
             self.generic[code] = rid
+        if is_r2():          # the A5 pattern rules, as built-in payer_rule rows so each check can point at its rule
+            for code, fam, carc in PATTERN_RULES:
+                rid, _ = self.add("payer_rule", START, rule_code=code, rule_family=fam, rule_action="hold_for_review", rule_source_code="built_in", is_enabled=True, is_synthetic=True,
+                                  approval_status="approved", effective_from=RULES_FROM, owner_role="biller", severity="high", approved_by_staff_id=self.W.staff["M01"], approved_date=RULES_FROM,
+                                  adjustment_reason_id=self.W.carc_id.get(carc))
+                self.generic[code] = rid
 
     def writer(self):
         conn, db = connect_replay()

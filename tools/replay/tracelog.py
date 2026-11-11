@@ -64,14 +64,40 @@ def _authorization_review(R, W, d, src, rules, refs, outcome):
 
 # ------------------------------------------------------------------ A3
 def _documentation_review(R, W, d, e, rules, refs, outcome):
-    b = W.bill_by_enc[e["encounter_id"]]
+    b = W.bill_by_enc.get(e["encounter_id"])
     reads = [
         read("encounter", ["note_signed_date", "encounter_date"], "SELECT CASE WHEN note_signed_date <= %s THEN note_signed_date END AS note_signed_date_as_of_today, encounter_date FROM encounter WHERE encounter_id = %s",
              [d, e["encounter_id"]], dict(note_signed_date_as_of_today=None, encounter_date=e["encounter_date"]), "whether the note was signed by today (only facts known today)"),
-        read("bill", ["total_billed", "bill_status"], "SELECT total_billed, bill_status FROM bill WHERE encounter_id = %s", [e["encounter_id"]], dict(total_billed=b["total_billed"]), "charge waiting on the note"),
     ]
+    if b is not None:
+        reads.append(read("bill", ["total_billed", "bill_status"], "SELECT total_billed, bill_status FROM bill WHERE encounter_id = %s", [e["encounter_id"]], dict(total_billed=b["total_billed"]), "charge waiting on the note"))
     trig = f"Three days after the visit on {e['encounter_date']} the note was still unsigned"
     return trig, reads, "Provider gets a task to sign. The charge stays on hold, so no claim exists yet: A4 Code Whisperer waits for the signed note and A5 Mirror sees nothing until then."
+
+
+def _unbilled_visit_review(R, W, d, e, rules, refs, outcome):
+    reads = [read("encounter", ["encounter_date", "note_signed_date", "payer_id"], "SELECT encounter_date, CASE WHEN note_signed_date <= %s THEN note_signed_date END AS note_signed_by_today, payer_id FROM encounter WHERE encounter_id = %s",
+                  [d, e["encounter_id"]], dict(encounter_date=e["encounter_date"]), "the visit"),
+             read("bill", ["bill_id"], "SELECT COUNT(*) AS bills FROM bill WHERE encounter_id = %s AND charge_entered_date <= %s", [e["encounter_id"], d], dict(bills=0), "no charge has been entered for this visit by today")]
+    return (f"Four days after the visit on {e['encounter_date']} no bill exists", reads,
+            "Biller gets a task to enter the charge (or record why there is none). If the note is unsigned the provider also gets the signing task.")
+
+
+def _pre_visit_review(R, W, d, ap, rules, refs, outcome):
+    reads = [read("appointment", ["appointment_date", "payer_id", "coverage_id"], "SELECT appointment_date, payer_id, coverage_id FROM appointment WHERE appointment_id = %s", [ap["appointment_id"]],
+                  dict(appointment_date=ap["appointment_date"]), "the scheduled visit"),
+             read("eligibility_check", ["check_date", "other_payer_id"], "SELECT MAX(check_date) AS last_check, COUNT(other_payer_id) AS other_payer_named FROM eligibility_check WHERE appointment_id = %s AND check_date <= %s",
+                  [ap["appointment_id"], d], dict(note="only checks done by the review date"), "the latest eligibility check known today")]
+    return (f"The visit on {ap['appointment_date']} is within {3} business days", reads, "Front desk gets a task to verify coverage before the visit.")
+
+
+def _scheduled_auth_review(R, W, d, ap, rules, refs, outcome):
+    reads = [read("appointment_line", ["planned_cpt_code_id", "planned_units"], "SELECT k.code, l.planned_units FROM appointment_line l JOIN cpt_code k ON k.cpt_code_id = l.planned_cpt_code_id WHERE l.appointment_id = %s ORDER BY l.line_number",
+                  [ap["appointment_id"]], dict(lines=[W.cpt[c] for _n, c, _u in W.appt_lines.get(ap["appointment_id"], ())]), "every planned line, not only the first", rows=len(W.appt_lines.get(ap["appointment_id"], ()))),
+             read("authorization", ["authorization_status", "valid_from", "valid_to", "units_approved", "decision_date"],
+                  "SELECT authorization_status, valid_from, valid_to, units_approved FROM \"authorization\" WHERE patient_id = %s AND payer_id = %s AND decision_date <= %s", [ap["patient_id"], ap["payer_id"], d],
+                  dict(note="only authorizations decided by the review date"), "authorizations on file that day")]
+    return (f"The visit on {ap['appointment_date']} is a week away", reads, "Front desk gets a task to request, extend or renew the authorization before the visit.")
 
 
 # ------------------------------------------------------------------ A4
@@ -128,6 +154,25 @@ def _prerelease_review(R, W, d, cl, rules, refs, outcome):
                           "SELECT k.code, m1.modifier_code AS modifier_1, m2.modifier_code AS modifier_2 FROM claim_details c JOIN cpt_code k USING (cpt_code_id) "
                           "LEFT JOIN modifier m1 ON m1.modifier_id = c.modifier_1_id LEFT JOIN modifier m2 ON m2.modifier_id = c.modifier_2_id WHERE c.claim_id = %s ORDER BY c.line_number",
                           [cl["claim_id"]], dict(lines=[W.cpt[x["cpt_code_id"]] for x in lines]), "the billed lines and their modifiers", rows=len(lines)))
+    pattern = {"R-DENTAL-MEDICARE", "R-EM-INJ-MOD25", "R-UNIT-LIMIT", "R-PREVENTIVE-DX", "R-AUTH-REQUIRED"} & set(names)
+    if pattern:
+        lines = W.cd[cl["claim_id"]]
+        reads.append(read("claim_line", ["cpt_code_id", "units", "modifier_1_id", "modifier_2_id"],
+                          "SELECT k.code, l.units, m1.modifier_code AS modifier_1, m2.modifier_code AS modifier_2 FROM claim_line l JOIN cpt_code k USING (cpt_code_id) "
+                          "LEFT JOIN modifier m1 ON m1.modifier_id = l.modifier_1_id LEFT JOIN modifier m2 ON m2.modifier_id = l.modifier_2_id WHERE l.claim_id = %s ORDER BY l.line_number",
+                          [cl["claim_id"]], dict(lines=[f"{W.cpt[x['cpt_code_id']]} x{W.line_units.get(x['claim_detail_id'])}" for x in lines]), "the billed lines, units and modifiers", rows=len(lines)))
+    if "R-PREVENTIVE-DX" in pattern:
+        reads.append(read("claim", ["principal_diagnosis_code_id"], "SELECT d.icd10_code FROM claim c JOIN diagnosis_code d ON d.diagnosis_code_id = c.principal_diagnosis_code_id WHERE c.claim_id = %s", [cl["claim_id"]],
+                          dict(icd10=W.claim_dx.get(cl["claim_id"])), "the claim's principal diagnosis"))
+    if "R-UNIT-LIMIT" in pattern:
+        reads.append(read("claim", ["patient_id", "service_date_from", "submitted_date"],
+                          "SELECT COUNT(*) AS earlier_claims FROM claim_line l JOIN claim c USING (claim_id) WHERE c.patient_id = %s AND l.cpt_code_id IN (SELECT cpt_code_id FROM cpt_code WHERE code IN ('G0444', 'G0136')) "
+                          "AND EXTRACT(year FROM l.service_date) = %s AND l.service_date < %s AND c.submitted_date <= %s", [cl["patient_id"], cl["service_date_from"].year, cl["service_date_from"], d],
+                          dict(observed=next(r_[2] for r_ in rules if r_[0] == "R-UNIT-LIMIT")), "earlier once-a-year services already billed by this review date (only claims submitted by then count)"))
+    if "R-AUTH-REQUIRED" in pattern:
+        reads.append(read("authorization", ["authorization_status", "valid_from", "valid_to", "units_approved", "decision_date"],
+                          "SELECT authorization_status, valid_from, valid_to, units_approved FROM \"authorization\" WHERE patient_id = %s AND payer_id = %s AND decision_date <= %s AND authorization_status = 'approved' "
+                          "AND %s BETWEEN valid_from AND valid_to", [cl["patient_id"], cl["payer_id"], d, cl["service_date_from"]], dict(note="only authorizations decided by the review date"), "authorizations on file that day"))
     trig = f"Claim {cl['claim_number']} reached its release date ({cl['submitted_date']}) and is about to go to the clearinghouse"
     hand = ("Biller gets a review task. In shadow mode the claim is not actually stopped: it goes to A6 Courier as normal and this prediction is scored when the payer answers."
             if outcome == "hold" else "No rule failed, so the claim moves on to A6 Courier for submission.")

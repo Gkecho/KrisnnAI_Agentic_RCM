@@ -441,6 +441,84 @@ def test_found_vs_planted_is_honest_about_what_was_caught():
     assert f["carc_96"]["recall"] == 0.0
 
 
+# ======================================================================== owner mapping: the engine's owner_role -> the site's personas
+SITE_HTML = pathlib.Path(r"C:\Users\gopi.v\Downloads\krisnnai-site\product.html")
+# every (agent, engine owner_role) the engine can create, and the persona that must see it
+ENGINE_TASKS = [("A1", "front_desk", "frontdesk"), ("A2", "front_desk", "frontdesk"), ("A3", "provider", "provider"), ("A3", "biller", "biller"), ("A4", "coder", "coder"), ("A5", "biller", "biller"),
+                ("A6", "biller", "biller"), ("A7", "ar_specialist", "arlead"), ("A8", "denial_specialist", "denials"), ("A8", "biller", "denials"), ("A8", "front_desk", "denials"),
+                ("A8", "coder", "denials"), ("A9", "manager", "manager"), ("A10", "billing_lead", "finance"), ("A11", "payment_poster", "poster"), ("A15", "billing_lead", "owner")]
+
+
+def site_personas():
+    """PERSONAS from the site's product.html, read only: {key: [{o: [...], a: [...]}, ...]}. None if the file is not on this machine."""
+    if not SITE_HTML.exists():
+        return None
+    html = SITE_HTML.read_text(encoding="utf-8")
+    block = html[html.index("const PERSONAS={"):html.index("const inSel=")]
+    out = {}
+    for m in re.finditer(r"\n (\w+):\{label:'[^']*',sel:(\[.*?\]),nav:", block):
+        out[m.group(1)] = json.loads(re.sub(r"(\b[oa]):", r'"\1":', m.group(2)).replace("'", '"'))
+    return out
+
+
+def in_sel(sel, owner, agent):
+    """product.html inSel(): some selector matches the owner (if it names owners) and the agent (if it names agents)."""
+    return any((not s.get("o") or owner in s["o"]) and (not s.get("a") or agent in s["a"]) for s in sel)
+
+
+def test_every_engine_task_reaches_its_persona_through_the_owner_mapping():
+    pers = site_personas()
+    if pers is None:
+        pytest.skip("product.html not on this machine")
+    for agent, role, persona in ENGINE_TASKS:
+        owner = ex.owner_of(agent, role)
+        assert in_sel(pers[persona], owner, ex.SITE_AGENT[agent]), (agent, role, owner, persona)
+
+
+def test_a10_goes_to_finance_a12_to_patient_billing_and_a11_to_the_poster():
+    assert ex.owner_of("A10", "billing_lead") == "finance"
+    assert ex.owner_of("A12", "patient_billing") == "patient_billing" and ex.owner_of("A12", "biller") == "patient_billing"
+    assert ex.owner_of("A11", "payment_poster") == "payment_poster" and ex.owner_of("A7", "ar_specialist") == "ar_lead"
+    assert ex.owner_of("A9", "manager") == "practice_manager" and ex.owner_of("A15", "billing_lead") == "revenue_assurance_lead"
+
+
+def test_an_item_lands_in_the_persona_it_is_meant_for_and_not_in_unrelated_ones():
+    pers = site_personas()
+    if pers is None:
+        pytest.skip("product.html not on this machine")
+    assert not in_sel(pers["finance"], ex.owner_of("A8", "denial_specialist"), "a8_denial")
+    assert not in_sel(pers["poster"], ex.owner_of("A5", "biller"), "a5_prevention")
+    assert not in_sel(pers["denials"], ex.owner_of("A5", "biller"), "a5_prevention")
+    assert in_sel(pers["biller"], ex.owner_of("A5", "biller"), "a5_prevention")
+
+
+def test_queue_totals_use_the_site_owner_words():
+    p = payload_at(dt.date(2026, 10, 3))
+    assert set(k.split("|")[0] for k in p["queue_totals"]) <= {"biller", "billing", "ar_lead", "payment_poster", "finance", "front_desk", "patient_billing", "coder", "practice_manager",
+                                                               "provider", "credentialing", "revenue_assurance_lead"}
+
+
+def test_found_vs_planted_counts_only_holds_that_name_the_carc():
+    # a hold that predicted CARC 4 and 151 counts for both; one that predicted 198 counts for neither
+    assert ex._carcs_of("Predicted CARC 4, 151: R-EM-INJ-MOD25, R-UNIT-LIMIT") == ["4", "151"]
+    assert ex._carcs_of("Predicted CARC 198: R-AUTH-VISITS") == ["198"]
+    assert ex._carcs_of("CARC 4: Billing error; owner coder") == []          # a denial summary is not a prediction
+    rows = tr()
+    ids = fake_ids()
+    inp = inputs_from(rows, ids)
+    inp["findings"] = [dict(f, summary="Predicted CARC 4, 151: R-EM-INJ-MOD25, R-UNIT-LIMIT", finding_status="accepted") if f["agent_code"] == "A5" else f for f in inp["findings"]]
+    inp["fvp"] = {"4": {"planted": 10, "found": 4}, "151": {"planted": 20, "found": 5}, "96": {"planted": 10, "found": 0}}
+    f = {x["type"]: x for x in ex.build_payload(inp, dt.date(2026, 10, 5))["replay"]["found_vs_planted"]}
+    assert f["carc_4"]["precision"] == 1.0 and f["carc_151"]["precision"] == 1.0 and f["carc_96"]["precision"] is None
+    assert f["carc_4"]["recall"] == 0.4 and f["carc_151"]["recall"] == 0.25
+
+
+def test_the_found_query_counts_a_hold_before_the_denial_and_names_the_carc():
+    import inspect
+    src = inspect.getsource(ex.load_inputs)
+    assert "f.found_date < d.denial_date" in src and "Predicted CARC" in src and "predicted_denial" in src
+
+
 def test_default_output_is_out_ui_not_the_site_folder():
     import inspect
     src = inspect.getsource(ex.main)

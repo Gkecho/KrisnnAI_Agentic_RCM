@@ -76,6 +76,24 @@ class World:
             self.t[n] = [dict(zip(names, row)) for row in cur.fetchall()]
         cur.execute("SELECT practice_id FROM practice LIMIT 1")
         self.practice = cur.fetchone()[0]
+        self.has_ext = is_r2()
+        self.ext = {"line_units": [], "claim_dx": [], "auth": [], "appt_lines": [], "elig_other": []}
+        if self.has_ext:
+            # Facts the A5 pattern rules need that canon_compat does not expose (units per line, the claim's principal diagnosis, authorization windows).
+            # Read-only SELECTs on the R2 tables, tenant 1, schema-qualified. All of it is known when the claim is released (rule 9 is applied by the engine, by date).
+            log("reading claim_line units, claim diagnosis, authorization windows")
+            cur.execute("SELECT claim_line_id, units FROM public.claim_line WHERE tenant_id = 1")
+            self.ext["line_units"] = cur.fetchall()
+            cur.execute("SELECT c.claim_id, d.icd10_code FROM public.claim c LEFT JOIN public.diagnosis_code d ON d.diagnosis_code_id = c.principal_diagnosis_code_id WHERE c.tenant_id = 1")
+            self.ext["claim_dx"] = cur.fetchall()
+            cur.execute('SELECT patient_id, payer_id, primary_cpt_code_id, authorization_status, valid_from, valid_to, units_approved, decision_date FROM public."authorization" WHERE tenant_id = 1')
+            self.ext["auth"] = cur.fetchall()
+            # scheduled (future) appointments: every planned line, and eligibility checks that name another payer as primary
+            cur.execute("SELECT appointment_id, line_number, planned_cpt_code_id, planned_units FROM public.appointment_line WHERE tenant_id = 1 AND appointment_id IN "
+                        "(SELECT appointment_id FROM public.appointment WHERE tenant_id = 1 AND appointment_status = 'scheduled')")
+            self.ext["appt_lines"] = cur.fetchall()
+            cur.execute("SELECT eligibility_check_id, other_payer_id FROM public.eligibility_check WHERE tenant_id = 1 AND other_payer_id IS NOT NULL")
+            self.ext["elig_other"] = cur.fetchall()
         self.conn.close()
         t = self.t
         self.doc_types = {d["document_type"] for d in t["document"]}
@@ -127,8 +145,28 @@ class World:
         self.appt_auth = {}
         for x in t["appointment_details"]:
             self.appt_expected[x["appointment_id"]] += x["expected_charge"] or 0
-            if x["authorization_id"] and x["line_number"] == 1:
+            if x["authorization_id"] and (x["line_number"] == 1 or (self.has_ext and x["appointment_id"] not in self.appt_auth)):      # R2: any line of the appointment, not only line 1
                 self.appt_auth[x["appointment_id"]] = x["authorization_id"]
+        # A5 pattern-rule facts (empty outside R2: the rules then abstain, unknown is not "missing")
+        self.line_units = dict(self.ext["line_units"])
+        self.claim_dx = dict(self.ext["claim_dx"])
+        self.auth_by_key = defaultdict(list)
+        for pt, py, cp, st, vf, vt, ua, dd in self.ext["auth"]:
+            self.auth_by_key[(pt, py, cp)].append(dict(status=st, valid_from=vf, valid_to=vt, units_approved=ua or 0, decision_date=dd))
+        self.appt_lines = defaultdict(list)          # scheduled appointment -> [(line_number, cpt_code_id, planned_units)], all lines
+        for aid, ln_, cp, u in sorted(self.ext["appt_lines"], key=lambda x: (x[0], x[1])):
+            self.appt_lines[aid].append((ln_, cp, u))
+        self.elig_other = dict(self.ext["elig_other"])    # eligibility_check_id -> payer the check named as primary instead
+        self.checks_by_appt = defaultdict(list)
+        for ck in t["eligibility_check"]:
+            self.checks_by_appt[ck["appointment_id"]].append(ck)
+        self.line_hist = defaultdict(list)           # (patient, cpt_id) -> [(service_date, claim_detail_id, units, claim_id, payer_id)] in service order
+        if self.has_ext:
+            for c in t["claim"]:
+                for ln in self.cd[c["claim_id"]]:
+                    self.line_hist[(c["patient_id"], ln["cpt_code_id"])].append((c["service_date_from"], ln["claim_detail_id"], self.line_units.get(ln["claim_detail_id"]), c["claim_id"], c["payer_id"]))
+            for v in self.line_hist.values():
+                v.sort(key=lambda x: (x[0], x[1]))
         self.last_day = max(c["event_date"] for c in t["claim_status_history"])
         parents = ["payer", "provider", "appointment", "encounter", "bill", "claim", "denial", "authorization", "cpt_code", "staff", "patient", "coverage", "claim_details"]
         self.ids = {n: {r[n + "_id"] if n != "claim_details" else r["claim_detail_id"] for r in t[n]} for n in parents if n in t}
